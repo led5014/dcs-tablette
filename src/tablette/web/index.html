@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- Ajoutée à l'écran d'accueil de l'iPad, la page s'ouvre sans la barre
+     de Safari : toute la hauteur sert aux écrans. -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Tablette DCS">
+<meta name="theme-color" content="#0b0d0e">
+<title>DCS Tablette</title>
+<link rel="stylesheet" href="/style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✈</text></svg>">
+</head>
+<body>
+<header id="barre">
+  <span id="etat" class="etat inconnu" role="status">DCS : …</span>
+  <!-- Rempli d'après le profil de l'appareil : dispositions possibles, et
+       celles réservées aux grands écrans seulement s'il y a la place. -->
+  <nav id="modes" aria-label="Disposition"></nav>
+  <nav id="sieges" aria-label="Siège" hidden></nav>
+  <button id="bascule" class="bascule">Kneeboard</button>
+</header>
+
+<main id="scene" aria-label="Écrans du cockpit"></main>
+
+<section id="kneeboard" hidden aria-label="Kneeboard">
+  <div class="kb-barre">
+    <select id="kb-carnet" aria-label="Carnet"></select>
+    <button id="kb-prec" aria-label="Page précédente">‹</button>
+    <span id="kb-num"></span>
+    <button id="kb-suiv" aria-label="Page suivante">›</button>
+  </div>
+  <div id="kb-vue">
+    <canvas id="kb-direct" aria-label="Kneeboard de DCS en direct"></canvas>
+    <p id="kb-msg">En attente du kneeboard de DCS…</p>
+    <img id="kb-image" alt="Page de kneeboard" draggable="false">
+    <p id="kb-vide" hidden>Aucune page à afficher.<br>
+      Dépose des images PNG ou JPG dans <code>Saved Games\DCS\Kneeboard</code>
+      (ou son sous-dossier au nom de l'appareil), ou vole une mission qui en
+      embarque.</p>
+  </div>
+</section>
+
+<script src="/app.js"></script>
+</body>
+</html>

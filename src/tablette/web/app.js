@@ -1,0 +1,784 @@
+'use strict';
+
+// DCS Tablette — les écrans du cockpit sous le doigt, et le kneeboard à côté.
+//
+// Tout se construit d'après le profil de l'appareil piloté (/api/profil) :
+// les cadres et leurs boutons, les panneaux redessinés (UFC, IFEI, secours du
+// Hornet), les dispositions proposées. Changer d'avion dans DCS reconstruit
+// la page.
+//
+// Un bouton reste enfoncé dans le cockpit tant que le doigt est posé : la
+// page envoie l'appui au contact, le relâchement au décollement.
+
+const $ = (sel) => document.querySelector(sel);
+const attendre = (ms) => new Promise((fin) => setTimeout(fin, ms));
+
+const PERIODE_ETAT_MS = 1500;
+const PERIODE_IMAGE_MS = 33;        // au plus 30 images par seconde et par écran
+const PERIODE_PLANCHE_MS = 100;     // UFC, IFEI, aiguilles : 10 fois par seconde
+const ATTENTE_SANS_IMAGE_MS = 1500;
+const RATES_AVANT_MESSAGE = 3;
+const BORD = 0.62;                  // épaisseur de la couronne de boutons, en cases
+
+function element(balise, classe, texte) {
+  const el = document.createElement(balise);
+  if (classe) el.className = classe;
+  if (texte !== undefined) el.textContent = texte;
+  return el;
+}
+
+// --------------------------------------------------------------- mémoire
+// Disposition, siège et page retrouvés à la réouverture, par appareil. Le
+// stockage peut être refusé (navigation privée) : la page s'en passe.
+
+function lire(cle, defaut) {
+  try {
+    const v = localStorage.getItem('tablette.' + cle);
+    return v === null ? defaut : v;
+  } catch { return defaut; }
+}
+
+function retenir(cle, valeur) {
+  try { localStorage.setItem('tablette.' + cle, String(valeur)); } catch { /* sans mémoire */ }
+}
+
+// --------------------------------------------------------------- envoi
+// Les ordres partent l'un après l'autre. Envoyés en parallèle, un appui bref
+// pourrait voir son relâchement arriver AVANT l'appui : le bouton resterait
+// alors tenu dans le cockpit jusqu'au garde-fou du script Lua.
+
+let file = Promise.resolve();
+
+async function poster(url, corps) {
+  try {
+    const r = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(corps),
+    });
+    if (!r.ok) return false;
+    return (await r.json()).envoye === true;
+  } catch { return false; }
+}
+
+function enFile(url, corps) {
+  const envoi = file.then(() => poster(url, corps));
+  file = envoi;
+  return envoi;
+}
+
+// Relâcheurs des boutons tenus en ce moment : si la page passe en arrière-plan
+// (verrouillage de l'iPad, changement d'app), on relâche tout avant de partir.
+const tenus = new Set();
+const toutRelacher = () => [...tenus].forEach((relacher) => relacher());
+
+function brancherAppui(el, envoyer) {
+  let enfonce = false;
+  const relacher = () => {
+    if (!enfonce) return;
+    enfonce = false;
+    tenus.delete(relacher);
+    el.classList.remove('enfonce');
+    envoyer(false);
+  };
+  el.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    if (enfonce) return;
+    enfonce = true;
+    tenus.add(relacher);
+    el.classList.add('enfonce');
+    try { el.setPointerCapture(e.pointerId); } catch { /* pointeur déjà parti */ }
+    envoyer(true);
+  });
+  el.addEventListener('pointerup', relacher);
+  el.addEventListener('pointercancel', relacher);
+  el.addEventListener('lostpointercapture', relacher);
+  el.addEventListener('contextmenu', (e) => e.preventDefault());
+}
+
+// Un geste unique (cran de molette) : un seul envoi, et l'enfoncement visible
+// le temps du doigt.
+function brancherGeste(el, envoyer) {
+  el.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    el.classList.add('enfonce');
+    envoyer();
+  });
+  for (const fin of ['pointerup', 'pointercancel', 'pointerleave']) {
+    el.addEventListener(fin, () => el.classList.remove('enfonce'));
+  }
+  el.addEventListener('contextmenu', (e) => e.preventDefault());
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) toutRelacher();
+});
+
+// --------------------------------------------------------------- état
+
+let profil = null;
+let generation = 0;            // change à chaque reconstruction : les boucles d'avant s'arrêtent
+let dispositions = [];
+let disposition = null;
+let siege = '';
+let enKneeboard = false;
+let cadrans = null;
+const panneaux = new Map();    // id → élément
+const reserve = element('div');
+reserve.id = 'reserve';
+document.body.append(reserve);
+
+// --------------------------------------------------------------- dispositions
+
+const abrege = (libelle) => libelle.replace(' gauche', ' G').replace(' droit', ' D');
+
+function calculerDispositions(p) {
+  const ids = p.ecrans.map((e) => e.id);
+  const liste = [];
+  const g = p.ecrans.find((e) => e.id.endsWith('gauche'));
+  const d = p.ecrans.find((e) => e.id.endsWith('droit'));
+  if (g && d) liste.push({ id: 'deux', libelle: `2 ${g.libelle.split(' ')[0]}`, rangees: [[g.id, d.id]] });
+  for (const e of p.ecrans) liste.push({ id: e.id, libelle: abrege(e.libelle), rangees: [[e.id]] });
+  if (p.panneaux.includes('ufc')) liste.push({ id: 'ufc', libelle: 'UFC', rangees: [['ufc', 'ifei']] });
+  if (p.panneaux.includes('secours')) {
+    liste.push({ id: 'secours', libelle: 'Secours', rangees: [['secours']] });
+  }
+  // Réservées aux grands écrans : proposées seulement s'il y a la place.
+  if (ids.length >= 3) {
+    liste.push({ id: 'tous', libelle: `${ids.length} écrans`, rangees: [ids], min: [1200, 500] });
+  }
+  if (ids.length >= 2 && p.panneaux.length) {
+    liste.push({ id: 'planche', libelle: 'Planche', rangees: [ids, p.panneaux], min: [1500, 950] });
+  }
+  return liste;
+}
+
+function dispositionsPossibles() {
+  return dispositions.filter((d) => !d.min
+    || (window.innerWidth >= d.min[0] && window.innerHeight >= d.min[1]));
+}
+
+function dispositionCourante() {
+  const possibles = dispositionsPossibles();
+  return possibles.find((d) => d.id === disposition) || possibles[0] || null;
+}
+
+function rangeesAffichees(d) {
+  // iPad tenu en portrait : deux panneaux côte à côte passent l'un sous l'autre.
+  if (window.innerHeight > window.innerWidth && d.rangees.length === 1 && d.rangees[0].length === 2) {
+    return d.rangees[0].map((id) => [id]);
+  }
+  return d.rangees;
+}
+
+function ecranAffiche(id) {
+  if (document.hidden) return false;
+  if (id === 'kneeboard') return enKneeboard && carnet !== null && carnet.direct === true;
+  if (enKneeboard) return false;
+  const d = dispositionCourante();
+  return d !== null && d.rangees.some((r) => r.includes(id));
+}
+
+function appliquer() {
+  document.body.classList.toggle('en-kneeboard', enKneeboard);
+  $('#scene').hidden = enKneeboard;
+  $('#kneeboard').hidden = !enKneeboard;
+  const sansEcrans = dispositions.length === 0;
+  $('#bascule').hidden = sansEcrans;
+  $('#bascule').textContent = enKneeboard ? 'Écrans' : 'Kneeboard';
+
+  const courante = dispositionCourante();
+  const nav = $('#modes');
+  nav.textContent = '';
+  nav.hidden = sansEcrans;
+  for (const d of dispositionsPossibles()) {
+    const b = element('button', !enKneeboard && courante && d.id === courante.id ? 'actif' : '', d.libelle);
+    b.addEventListener('click', () => {
+      disposition = d.id;
+      retenir(`disposition.${profil.id}`, d.id);
+      if (enKneeboard) toutRelacher();
+      enKneeboard = false;
+      appliquer();
+    });
+    nav.append(b);
+  }
+
+  const scene = $('#scene');
+  for (const el of panneaux.values()) reserve.append(el);
+  scene.textContent = '';
+  if (!courante) {
+    scene.append(element('p', 'vide-appareil', `${profil ? profil.libelle : 'Cet appareil'} : `
+      + 'pas d\'écran à reprendre. Le kneeboard reste disponible.'));
+    return;
+  }
+  for (const rangee of rangeesAffichees(courante)) {
+    const r = element('div', 'rangee');
+    for (const id of rangee) {
+      const c = element('div', 'case');
+      if (panneaux.has(id)) c.append(panneaux.get(id));
+      r.append(c);
+    }
+    scene.append(r);
+  }
+}
+
+function construireSieges() {
+  const nav = $('#sieges');
+  nav.textContent = '';
+  nav.hidden = !profil.sieges.length;
+  const libelles = { pilote: 'Pilote', cpg: 'CPG' };
+  for (const s of profil.sieges) {
+    const b = element('button', s === siege ? 'actif' : '', libelles[s] || s);
+    b.addEventListener('click', () => {
+      toutRelacher();
+      siege = s;
+      retenir(`siege.${profil.id}`, s);
+      construireSieges();
+    });
+    nav.append(b);
+  }
+}
+
+window.addEventListener('resize', () => { if (profil) appliquer(); });
+
+// --------------------------------------------------------------- images
+
+async function demanderImage(id) {
+  let r;
+  try {
+    r = await fetch(`/api/video/${id}`, { cache: 'no-store' });
+  } catch { return { raison: 'Serveur injoignable' }; }
+  if (!r.ok) {
+    let raison = null;
+    try { raison = (await r.json()).detail; } catch { /* corps illisible */ }
+    return { raison: raison || "Pas d'image" };
+  }
+  try {
+    return { image: await createImageBitmap(await r.blob()) };
+  } catch { return { raison: 'Image illisible' }; }
+}
+
+// Une image n'est demandée qu'une fois la précédente affichée : le débit suit
+// ce que l'iPad et le Wi-Fi absorbent, sans jamais accumuler de retard. Un
+// écran caché (autre disposition, kneeboard, iPad en veille) ne demande rien.
+//
+// Contre le clignotement : l'image est décodée hors de l'écran puis peinte
+// d'un coup sur la toile, jamais de cadre vide entre deux images ; et un raté
+// isolé (DCS qui charge, Wi-Fi qui hoquette) laisse la dernière image en
+// place au lieu de basculer image ↔ message à chaque fois.
+async function boucleImage(id, conteneur, toile, msg, gen) {
+  const ctx = toile.getContext('2d');
+  let rates = 0;
+  while (gen === null || gen === generation) {
+    if (!ecranAffiche(id)) { await attendre(300); continue; }
+    const debut = performance.now();
+    const { image, raison } = await demanderImage(id);
+    if (image) {
+      if (toile.width !== image.width || toile.height !== image.height) {
+        toile.width = image.width;
+        toile.height = image.height;
+      }
+      ctx.drawImage(image, 0, 0);
+      image.close();
+      rates = 0;
+      conteneur.classList.add('avec-image');
+      const reste = PERIODE_IMAGE_MS - (performance.now() - debut);
+      if (reste > 0) await attendre(reste);
+      continue;
+    }
+    rates += 1;
+    msg.textContent = raison;
+    const durable = rates >= RATES_AVANT_MESSAGE;
+    if (durable) conteneur.classList.remove('avec-image');
+    await attendre(durable ? ATTENTE_SANS_IMAGE_MS : 200);
+  }
+}
+
+// --------------------------------------------------------------- cadres
+
+function construireCadre(e) {
+  const n = e.par_cote;
+  const rangee = e.boutons.filter((b) => b.cote === 'rangee');
+  const cadre = element('div', 'panneau cadre');
+  cadre.style.gridTemplateColumns = `${BORD}fr repeat(${n}, 1fr) ${BORD}fr`;
+  cadre.style.gridTemplateRows = `${BORD}fr repeat(${n}, 1fr) ${BORD}fr`
+    + (rangee.length ? ` ${BORD}fr` : '');
+  const lignes = n + 2 * BORD + (rangee.length ? BORD : 0);
+  cadre.style.setProperty('--ratio', String((n + 2 * BORD) / lignes));
+
+  const ecran = element('div', 'ecran');
+  ecran.style.gridColumn = `2 / ${n + 2}`;
+  ecran.style.gridRow = `2 / ${n + 2}`;
+  const toile = element('canvas', 'video');
+  const msg = element('div', 'ecran-msg', "En attente de l'image…");
+  const retour = element('div', 'ecran-retour');
+  ecran.append(toile, element('div', 'ecran-nom', e.libelle.toUpperCase()), msg, retour);
+  cadre.append(ecran);
+
+  // Rangée de touches fixes sous le cadre, réparties sur toute sa largeur.
+  const touchesFixes = element('div', 'touches-fixes');
+  if (rangee.length) {
+    touchesFixes.style.gridColumn = `1 / ${n + 3}`;
+    touchesFixes.style.gridRow = String(n + 3);
+    cadre.append(touchesFixes);
+  }
+  for (const b of e.boutons) {
+    const el = element('button', `pb cote-${b.cote}`, b.id);
+    el.setAttribute('aria-label', `${e.libelle}, ${b.id}`);
+    if (b.cote === 'rangee') {
+      touchesFixes.append(el);
+    } else {
+      // Grille (n + 2) × (n + 2) : la couronne porte les boutons, le centre l'écran.
+      const place = {
+        gauche: [1, 2 + b.rang], droite: [n + 2, 2 + b.rang],
+        haut: [2 + b.rang, 1], bas: [2 + b.rang, n + 2],
+      }[b.cote];
+      el.style.gridColumn = String(place[0]);
+      el.style.gridRow = String(place[1]);
+      cadre.append(el);
+    }
+    brancherAppui(el, (enfonce) => enFile('/api/bouton',
+      { ecran: e.id, bouton: b.id, enfonce, siege }).then((ok) => {
+      retour.textContent = ok ? `${b.id} ${enfonce ? 'enfoncé' : 'relâché'}` : `${b.id} : non transmis`;
+      retour.classList.toggle('erreur', !ok);
+    }));
+  }
+  boucleImage(e.id, ecran, toile, msg, generation);
+  return cadre;
+}
+
+// --------------------------------------------------------------- UFC
+
+function toucheUfc(touche, libelle, classe = 'touche') {
+  const el = element('button', classe, libelle);
+  brancherAppui(el, (enfonce) => enFile('/api/ufc', { touche, enfonce }));
+  return el;
+}
+
+function molette(touche, sens) {
+  const el = element('button', 'touche', sens > 0 ? '+' : '−');
+  el.setAttribute('aria-label', `${touche} ${sens > 0 ? 'cran suivant' : 'cran précédent'}`);
+  brancherGeste(el, () => enFile('/api/ufc', { touche, sens }));
+  return el;
+}
+
+function construireUfc() {
+  const p = element('div', 'panneau ufc');
+  const bloc = element('div', 'lcd ufc-bloc');
+  const champs = [element('span'), element('span'), element('span')];
+  bloc.append(...champs);
+
+  const clavier = element('div', 'ufc-clavier');
+  for (const t of ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'CLR', '0', 'ENT']) {
+    clavier.append(toucheUfc(t, t));
+  }
+  const options = element('div', 'ufc-options');
+  const fenetres = [];
+  for (let i = 1; i <= 5; i += 1) {
+    const el = toucheUfc(`OPT${i}`, '', 'touche option');
+    const repere = element('span', 'repere');
+    const texte = element('span', 'texte');
+    el.append(repere, texte);
+    fenetres.push({ repere, texte });
+    options.append(el);
+  }
+  const milieu = element('div', 'ufc-milieu');
+  milieu.append(clavier, options);
+
+  const fonctions = element('div', 'ufc-fonctions');
+  for (const [t, l] of [['AP', 'A/P'], ['IFF', 'IFF'], ['TCN', 'TCN'], ['ILS', 'ILS'],
+    ['DL', 'D/L'], ['BCN', 'BCN'], ['ONOFF', 'ON/OFF']]) fonctions.append(toucheUfc(t, l));
+
+  // Canaux COMM : le chiffre se tire (appui) ; − et + tournent la molette.
+  const bas = element('div', 'ufc-bas');
+  const canal1 = toucheUfc('COMM1_TIRER', '', 'touche canal');
+  const canal2 = toucheUfc('COMM2_TIRER', '', 'touche canal');
+  bas.append(molette('COMM1', -1), canal1, molette('COMM1', 1),
+    toucheUfc('IP', 'I/P'), toucheUfc('EMCON', 'EMCON'),
+    molette('COMM2', -1), canal2, molette('COMM2', 1));
+
+  p.append(bloc, milieu, fonctions, bas);
+  p.maj = (ufc) => {
+    p.classList.toggle('sans-donnees', !ufc);
+    if (!ufc) return;
+    ufc.bloc.forEach((t, i) => { champs[i].textContent = t; });
+    ufc.options.forEach((o, i) => {
+      fenetres[i].repere.textContent = o.repere;
+      fenetres[i].texte.textContent = o.texte;
+    });
+    canal1.textContent = ufc.comm1;
+    canal2.textContent = ufc.comm2;
+  };
+  return p;
+}
+
+// --------------------------------------------------------------- IFEI
+
+function construireIfei() {
+  const p = element('div', 'panneau ifei lcd');
+  const valeurs = {};
+  const champ = (cle, classe) => {
+    valeurs[cle] = element('span', classe);
+    return valeurs[cle];
+  };
+  for (const [libelle, g, d] of [['RPM', 'rpm_g', 'rpm_d'], ['TEMP', 'temp_g', 'temp_d'],
+    ['FF', 'ff_g', 'ff_d'], ['OIL', 'huile_g', 'huile_d']]) {
+    p.append(champ(g, 'valeur'), element('span', 'libelle', libelle), champ(d, 'valeur'));
+  }
+  p.append(element('span', 'large'));
+  p.append(champ('carburant_haut', 'large'), champ('carburant_bas', 'large'));
+  const ligne1 = element('div', 'petite');
+  ligne1.append(element('span', 'libelle', 'BINGO'), champ('bingo'), champ('codes'));
+  const ligne2 = element('div', 'petite');
+  ligne2.append(champ('horloge'), champ('chrono'));
+  p.append(ligne1, ligne2);
+  p.maj = (ifei) => {
+    p.classList.toggle('sans-donnees', !ifei);
+    if (!ifei) return;
+    for (const [cle, el] of Object.entries(valeurs)) {
+      if (cle in ifei) el.textContent = ifei[cle];
+    }
+    const heure = (h, m, s) => [h, m, s].filter((x) => x).join(':');
+    valeurs.horloge.textContent = heure(ifei.horloge_h, ifei.horloge_m, ifei.horloge_s);
+    valeurs.chrono.textContent = heure(ifei.chrono_h, ifei.chrono_m, ifei.chrono_s);
+  };
+  return p;
+}
+
+// --------------------------------------------------------------- secours
+
+const SVG = 'http://www.w3.org/2000/svg';
+
+function svg(balise, attributs = {}, parent = null) {
+  const el = document.createElementNS(SVG, balise);
+  for (const [k, v] of Object.entries(attributs)) el.setAttribute(k, v);
+  if (parent) parent.append(el);
+  return el;
+}
+
+const angleDe = (type, position) => cadrans.angles[type][0] + position * cadrans.angles[type][1];
+
+// Un cadran rond : graduations placées par le serveur avec les mêmes tables
+// que les aiguilles, une ou deux aiguilles, et une valeur lisible au centre.
+function cadran(def, aiguilles = ['#e8ecee']) {
+  const s = svg('svg', { viewBox: '-100 -100 200 200' });
+  svg('circle', { r: 96, fill: '#0c0e0f', stroke: '#3a4043', 'stroke-width': 3 }, s);
+  for (const g of def.graduations) {
+    const a = (g.angle - 90) * Math.PI / 180;
+    svg('line', { x1: 80 * Math.cos(a), y1: 80 * Math.sin(a), x2: 92 * Math.cos(a),
+      y2: 92 * Math.sin(a), stroke: '#c9d1d3', 'stroke-width': 3 }, s);
+    const t = svg('text', { x: 66 * Math.cos(a), y: 66 * Math.sin(a) + 6, fill: '#c9d1d3',
+      'font-size': 16, 'text-anchor': 'middle', 'font-family': 'sans-serif' }, s);
+    t.textContent = g.texte;
+  }
+  const valeur = svg('text', { y: 44, fill: '#7cff9a', 'font-size': 18, 'text-anchor': 'middle',
+    'font-family': 'monospace' }, s);
+  const traits = aiguilles.map((couleur) => {
+    const g = svg('g', {}, s);
+    svg('path', { d: 'M -4 12 L 0 -84 L 4 12 Z', fill: couleur }, g);
+    return g;
+  });
+  svg('circle', { r: 7, fill: '#3a4043' }, s);
+  return {
+    el: s,
+    tourner: (i, angle) => traits[i].setAttribute('transform', `rotate(${angle})`),
+    texte: (t) => { valeur.textContent = t; },
+  };
+}
+
+function horizon() {
+  const s = svg('svg', { viewBox: '-100 -100 200 200' });
+  const id = `sai${Math.random().toString(36).slice(2)}`;
+  const clip = svg('clipPath', { id }, svg('defs', {}, s));
+  svg('circle', { r: 92 }, clip);
+  const vue = svg('g', { 'clip-path': `url(#${id})` }, s);
+  const sphere = svg('g', {}, vue);
+  svg('rect', { x: -300, y: -300, width: 600, height: 300, fill: '#3c6fa8' }, sphere);
+  svg('rect', { x: -300, y: 0, width: 600, height: 300, fill: '#6b4a2b' }, sphere);
+  svg('line', { x1: -300, x2: 300, y1: 0, y2: 0, stroke: '#fff', 'stroke-width': 2 }, sphere);
+  for (const p of [-20, -10, 10, 20]) {
+    svg('line', { x1: -18, x2: 18, y1: -p * 2, y2: -p * 2, stroke: '#fff', 'stroke-width': 2 }, sphere);
+  }
+  svg('path', { d: 'M -50 0 H -14 L 0 12 L 14 0 H 50', fill: 'none', stroke: '#f0b43c',
+    'stroke-width': 5 }, s);
+  svg('circle', { r: 96, fill: 'none', stroke: '#3a4043', 'stroke-width': 6 }, s);
+  return {
+    el: s,
+    // Assiette : 2 unités par degré ; inclinaison : la sphère tourne à l'envers.
+    poser: (assiette, inclinaison) => sphere.setAttribute('transform',
+      `rotate(${-inclinaison}) translate(0 ${assiette * 2})`),
+  };
+}
+
+const VOYANTS_ROUGES = new Set(['FIRE G', 'FIRE D', 'APU FIRE', 'NO GO', 'ALT BASSE', 'SHOOT']);
+const VOYANTS_VERTS = new Set(['NOSE', 'LEFT', 'RIGHT', 'GO', 'READY', 'A/A', 'A/G', 'HALF',
+  'FULL', 'AOA CENTRE', 'APU READY', 'LOCK']);
+
+function construireSecours() {
+  const p = element('div', 'panneau secours');
+  const case_ = (titre, contenu) => {
+    const c = element('div', 'instrument');
+    c.append(contenu, element('span', 'titre', titre));
+    p.append(c);
+  };
+  const badin = cadran(cadrans.badin);
+  const alti = cadran(cadrans.altimetre);
+  const sai = horizon();
+  const vario = cadran(cadrans.vario);
+  const sonde = cadran(cadrans.sonde);
+  const hyd = cadran(cadrans.pression, ['#7cc7ff', '#ffb36b']);
+  const frein = cadran(cadrans.pression);
+  case_('VITESSE kt', badin.el);
+  case_('ALTITUDE ft', alti.el);
+  case_('HORIZON', sai.el);
+  case_('VARIO ×1000 ft/min', vario.el);
+  case_('SONDE ft', sonde.el);
+  case_('HYD G / D ×1000 psi', hyd.el);
+  case_('FREIN ×1000 psi', frein.el);
+  const calage = element('div', 'instrument lcd');
+  calage.style.alignItems = 'center';
+  calage.style.justifyContent = 'center';
+  p.append(calage);
+
+  const voyants = element('div', 'voyants');
+  const lampes = new Map();
+  p.append(voyants);
+
+  p.maj = (instr, etats) => {
+    p.classList.toggle('sans-donnees', !instr);
+    if (instr) {
+      badin.tourner(0, angleDe('tour', instr.badin.position));
+      badin.texte(Math.round(instr.badin.valeur));
+      alti.tourner(0, angleDe('tour', instr.altimetre.position));
+      alti.texte(instr.altimetre.valeur);
+      sai.poser(instr.sai.assiette, instr.sai.inclinaison);
+      vario.tourner(0, angleDe('vario', instr.vario.position));
+      vario.texte(Math.round(instr.vario.valeur));
+      sonde.tourner(0, angleDe('tour', instr.sonde.position));
+      sonde.texte(Math.round(instr.sonde.valeur));
+      hyd.tourner(0, angleDe('pression', instr.hydraulique.gauche.position));
+      hyd.tourner(1, angleDe('pression', instr.hydraulique.droite.position));
+      hyd.texte(`${Math.round(instr.hydraulique.gauche.valeur)} / ${Math.round(instr.hydraulique.droite.valeur)}`);
+      frein.tourner(0, angleDe('pression', instr.frein.position));
+      frein.texte(Math.round(instr.frein.valeur));
+      calage.textContent = `${instr.altimetre.calage.toFixed(2)} inHg`;
+    }
+    if (!etats) return;
+    for (const [nom, allume] of Object.entries(etats)) {
+      if (!lampes.has(nom)) {
+        const couleur = VOYANTS_ROUGES.has(nom) ? ' rouge' : VOYANTS_VERTS.has(nom) ? ' vert' : '';
+        const l = element('div', `voyant${couleur}`, nom);
+        lampes.set(nom, l);
+        voyants.append(l);
+      }
+      lampes.get(nom).classList.toggle('allume', allume);
+    }
+  };
+  return p;
+}
+
+async function bouclePlanche(gen) {
+  while (gen === generation) {
+    if (!['ufc', 'ifei', 'secours'].some((id) => ecranAffiche(id))) {
+      await attendre(300);
+      continue;
+    }
+    let d = null;
+    try {
+      const r = await fetch('/api/planche', { cache: 'no-store' });
+      if (r.ok) d = await r.json();
+    } catch { /* serveur injoignable : panneaux grisés */ }
+    if (gen !== generation) return;
+    if (panneaux.has('ufc')) panneaux.get('ufc').maj(d && d.ufc);
+    if (panneaux.has('ifei')) panneaux.get('ifei').maj(d && d.ifei);
+    if (panneaux.has('secours')) panneaux.get('secours').maj(d && d.instruments, d && d.voyants);
+    await attendre(PERIODE_PLANCHE_MS);
+  }
+}
+
+// --------------------------------------------------------------- profil
+
+async function chargerProfil() {
+  let p;
+  try {
+    p = await (await fetch('/api/profil', { cache: 'no-store' })).json();
+    if (p.panneaux.includes('secours') && !cadrans) {
+      cadrans = await (await fetch('/api/planche/cadrans', { cache: 'no-store' })).json();
+    }
+  } catch {
+    setTimeout(chargerProfil, 2000);
+    return;
+  }
+  generation += 1;
+  toutRelacher();
+  profil = p;
+  dispositions = calculerDispositions(p);
+  disposition = lire(`disposition.${p.id}`, dispositions.length ? dispositions[0].id : null);
+  siege = p.sieges.length ? lire(`siege.${p.id}`, p.sieges[0]) : '';
+  if (!p.sieges.includes(siege)) siege = p.sieges.length ? p.sieges[0] : '';
+
+  panneaux.clear();
+  reserve.textContent = '';
+  for (const e of p.ecrans) panneaux.set(e.id, construireCadre(e));
+  if (p.panneaux.includes('ufc')) panneaux.set('ufc', construireUfc());
+  if (p.panneaux.includes('ifei')) panneaux.set('ifei', construireIfei());
+  if (p.panneaux.includes('secours')) panneaux.set('secours', construireSecours());
+  if (p.panneaux.length) bouclePlanche(generation);
+
+  // Appareil sans écran repris : le kneeboard est tout ce qu'on peut offrir.
+  if (!dispositions.length && !enKneeboard) {
+    enKneeboard = true;
+    chargerCarnets();
+  }
+  construireSieges();
+  appliquer();
+}
+
+// --------------------------------------------------------------- état DCS
+
+async function rafraichirEtat() {
+  const el = $('#etat');
+  let classe = 'inconnu';
+  let texte;
+  try {
+    const e = await (await fetch('/api/etat', { cache: 'no-store' })).json();
+    const d = e.dcs;
+    if (!d.connecte) {
+      texte = `DCS : pas de signal — ${e.libelle}`;
+    } else if (!d.appareil) {
+      texte = 'DCS : pas dans un appareil';
+    } else if (e.profil === 'generique') {
+      classe = 'autre';
+      texte = `DCS : ${d.appareil} — pas de profil, kneeboard seul`;
+    } else {
+      classe = 'ok';
+      texte = `DCS : ${e.libelle}`;
+    }
+    if (profil && e.profil !== profil.id) chargerProfil();
+  } catch {
+    classe = 'erreur';
+    texte = 'Serveur injoignable';
+  }
+  el.className = 'etat ' + classe;
+  el.textContent = texte;
+}
+
+// --------------------------------------------------------------- kneeboard
+
+// En tête, le kneeboard de DCS lui-même, capturé en direct : les pages que
+// DCS fabrique (carte, points, fréquences) n'existent nulle part en fichier.
+// Ses flèches tournent les pages DANS DCS, comme les touches [ et ].
+const KNEEBOARD_DCS = { id: 'dcs', titre: 'Kneeboard DCS (en direct)', direct: true };
+
+let carnets = [];
+let carnet = null;
+let page = 0;
+
+async function chargerCarnets() {
+  let fichiers = [];
+  try {
+    fichiers = await (await fetch('/api/kneeboard', { cache: 'no-store' })).json();
+  } catch { fichiers = []; }
+  carnets = [KNEEBOARD_DCS, ...fichiers];
+  const select = $('#kb-carnet');
+  select.textContent = '';
+  for (const c of carnets) {
+    const opt = element('option', '', c.direct ? c.titre : `${c.titre} (${c.pages})`);
+    opt.value = c.id;
+    select.append(opt);
+  }
+  const memoire = lire('carnet', '');
+  carnet = carnets.find((c) => c.id === memoire) || carnets[0];
+  page = carnet.id === memoire ? Number(lire('page', '0')) || 0 : 0;
+  select.value = carnet.id;
+  afficherPage();
+}
+
+function afficherPage() {
+  const vue = $('#kb-vue');
+  const img = $('#kb-image');
+  vue.classList.toggle('direct', carnet.direct === true);
+  retenir('carnet', carnet.id);
+  if (carnet.direct) {
+    img.hidden = true;
+    $('#kb-vide').hidden = true;
+    $('#kb-num').textContent = 'DCS';
+    const tournable = !profil || profil.kneeboard;
+    $('#kb-prec').disabled = $('#kb-suiv').disabled = !tournable;
+    return;
+  }
+  const vide = carnet.pages === 0;
+  img.hidden = vide;
+  $('#kb-vide').hidden = !vide;
+  if (vide) {
+    $('#kb-num').textContent = '';
+    $('#kb-prec').disabled = $('#kb-suiv').disabled = true;
+    return;
+  }
+  page = Math.max(0, Math.min(page, carnet.pages - 1));
+  img.src = `${carnet.url}/${page}`;
+  $('#kb-num').textContent = `${page + 1} / ${carnet.pages}`;
+  $('#kb-prec').disabled = page === 0;
+  $('#kb-suiv').disabled = page === carnet.pages - 1;
+  if (page + 1 < carnet.pages) new Image().src = `${carnet.url}/${page + 1}`;
+  retenir('page', page);
+}
+
+function tourner(sens) {
+  if (!carnet) return;
+  if (carnet.direct) {
+    if (profil && profil.kneeboard) poster('/api/kneeboard/dcs/page', { sens });
+    return;
+  }
+  const suivante = page + sens;
+  if (suivante < 0 || suivante >= carnet.pages) return;
+  page = suivante;
+  afficherPage();
+}
+
+function brancherKneeboard() {
+  $('#kb-carnet').addEventListener('change', (e) => {
+    carnet = carnets.find((c) => c.id === e.target.value) || null;
+    page = 0;
+    afficherPage();
+  });
+  $('#kb-prec').addEventListener('click', () => tourner(-1));
+  $('#kb-suiv').addEventListener('click', () => tourner(1));
+
+  // Balayage horizontal pour tourner la page ; un appui sur le tiers gauche
+  // ou droit fait de même, pour qui préfère taper que glisser.
+  const vue = $('#kb-vue');
+  let depart = null;
+  vue.addEventListener('pointerdown', (e) => { depart = { x: e.clientX, y: e.clientY }; });
+  vue.addEventListener('pointerup', (e) => {
+    if (!depart) return;
+    const dx = e.clientX - depart.x;
+    const dy = e.clientY - depart.y;
+    depart = null;
+    if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy)) {
+      tourner(dx < 0 ? 1 : -1);
+    } else if (Math.abs(dx) < 10 && Math.abs(dy) < 10) {
+      const largeur = vue.getBoundingClientRect().width;
+      if (e.clientX < largeur / 3) tourner(-1);
+      else if (e.clientX > (2 * largeur) / 3) tourner(1);
+    }
+  });
+  vue.addEventListener('pointercancel', () => { depart = null; });
+
+  // Un seul geste pour jeter un œil au kneeboard et revenir aux écrans.
+  $('#bascule').addEventListener('click', () => {
+    // Les écrans vont disparaître : rien ne doit y rester enfoncé.
+    if (!enKneeboard) toutRelacher();
+    enKneeboard = !enKneeboard;
+    if (enKneeboard) chargerCarnets();
+    appliquer();
+  });
+}
+
+// --------------------------------------------------------------- démarrage
+
+brancherKneeboard();
+chargerProfil();
+boucleImage('kneeboard', $('#kb-vue'), $('#kb-direct'), $('#kb-msg'), null);
+rafraichirEtat();
+setInterval(rafraichirEtat, PERIODE_ETAT_MS);

@@ -1,0 +1,521 @@
+:root {
+  --fond: #0b0d0e;
+  --barre-fond: #15181a;
+  --texte: #c9d1d3;
+  --discret: #7d878b;
+  --vert: #3ddc6a;
+  --vert-lcd: #7cff9a;
+  --ambre: #f0b43c;
+  --rouge: #ef5a4f;
+  --cadre: #2c3032;
+  --cadre-bord: #1b1e1f;
+  --bouton: #3d4245;
+  --bouton-haut: #565c60;
+  --ecran: #040706;
+  --barre: 46px;
+  --marge: 8px;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--fond);
+  color: var(--texte);
+  font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+  /* Pas de zoom au double appui, pas de sélection de texte sous le doigt,
+     pas de menu « copier » sur appui long : c'est un panneau, pas une page. */
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  overflow: hidden;
+}
+
+button, select {
+  font: inherit;
+  color: inherit;
+}
+
+/* ---------------------------------------------------------------- barre */
+
+#barre {
+  height: var(--barre);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 max(var(--marge), env(safe-area-inset-right)) 0 max(var(--marge), env(safe-area-inset-left));
+  background: var(--barre-fond);
+  border-bottom: 1px solid #23272a;
+}
+
+.etat {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.etat::before {
+  content: "";
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  margin-right: 8px;
+  background: var(--discret);
+  vertical-align: 1px;
+}
+.etat.ok::before { background: var(--vert); }
+.etat.autre::before { background: var(--ambre); }
+.etat.erreur::before { background: var(--rouge); }
+
+#modes, #sieges {
+  display: flex;
+  background: #0f1213;
+  border: 1px solid #2a2f31;
+  border-radius: 9px;
+  padding: 2px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+#sieges[hidden] { display: none; }
+#modes button, #sieges button, .bascule {
+  min-height: 34px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  font-size: 14px;
+  white-space: nowrap;
+}
+#modes button.actif, #sieges button.actif {
+  background: #2d3335;
+  color: #fff;
+}
+.bascule {
+  background: #24433a;
+  color: #dff5ea;
+}
+.bascule[hidden] { display: none; }
+body.en-kneeboard .bascule { background: #3a3f42; }
+body.en-kneeboard #modes { opacity: .45; }
+
+@media (max-width: 760px) {
+  #modes button, #sieges button, .bascule { padding: 0 8px; font-size: 13px; }
+}
+
+/* ---------------------------------------------------------------- scène */
+
+/* Une disposition = des rangées de cases. Chaque case est un conteneur : le
+   panneau qu'elle porte prend la plus grande taille qui y tient, à ses
+   propres proportions. */
+#scene {
+  height: calc(100vh - var(--barre));
+  height: calc(100dvh - var(--barre));
+  display: flex;
+  flex-direction: column;
+  gap: var(--marge);
+  padding: var(--marge);
+}
+#scene[hidden] { display: none; }
+.rangee {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: var(--marge);
+}
+.case {
+  flex: 1;
+  min-width: 0;
+  container-type: size;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.panneau { display: none; }
+.case > .panneau {
+  display: grid;
+  --taille: min(100cqw, calc(100cqh * var(--ratio, 1)));
+  width: var(--taille);
+  aspect-ratio: var(--ratio, 1);
+}
+#reserve { display: none; }
+
+.vide-appareil {
+  margin: auto;
+  max-width: 34em;
+  text-align: center;
+  line-height: 1.6;
+  color: var(--discret);
+}
+
+/* ---------------------------------------------------------------- cadres */
+
+/* La couronne de boutons est fine (0,62 d'une case) : l'écran occupe
+   l'essentiel du cadre, les boutons restent au-dessus des 44 points qu'Apple
+   recommande pour un doigt. Colonnes et rangées sont posées par la page,
+   d'après le nombre de boutons par côté de l'appareil. */
+.cadre {
+  padding: 0.8%;
+  background: linear-gradient(160deg, #353a3c, var(--cadre) 40%, #24282a);
+  border: 1px solid var(--cadre-bord);
+  border-radius: 3.5%;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, .55), inset 0 1px 0 rgba(255, 255, 255, .06);
+}
+
+.ecran {
+  position: relative;
+  overflow: hidden;
+  margin: 1.2%;
+  background:
+    repeating-linear-gradient(0deg, rgba(61, 220, 106, .025) 0 2px, transparent 2px 4px),
+    var(--ecran);
+  border: 2px solid #0d1010;
+  border-radius: 2%;
+  box-shadow: inset 0 0 calc(var(--taille) * .05) rgba(0, 0, 0, .9);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: calc(var(--taille) * .02);
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  color: var(--vert);
+  text-align: center;
+  padding: 6%;
+}
+.ecran-nom {
+  font-size: calc(var(--taille) * .045);
+  letter-spacing: .12em;
+  text-shadow: 0 0 6px rgba(61, 220, 106, .45);
+}
+.ecran-msg {
+  font-size: calc(var(--taille) * .026);
+  color: #2f8a4a;
+}
+.ecran-retour {
+  min-height: 1.3em;
+  font-size: calc(var(--taille) * .03);
+  color: #9be8b3;
+}
+.ecran-retour.erreur { color: var(--ambre); }
+
+/* L'image de DCS remplit l'écran ; les textes d'attente s'effacent, seul le
+   retour d'appui reste, discret, en bas. */
+.video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: none;
+  pointer-events: none;
+}
+.ecran.avec-image .video { display: block; }
+/* Le verre des écrans est arrondi (rayon ≈ 1/6 du côté, mesuré sur l'export
+   du Hornet) : en arrondissant pareil, les coins où DCS laisse voir le
+   cockpit tombent sur le cadre, comme dans l'avion. */
+.ecran.avec-image {
+  border-radius: 17%;
+  padding: 0;
+}
+.ecran.avec-image .ecran-nom,
+.ecran.avec-image .ecran-msg { display: none; }
+.ecran.avec-image .ecran-retour {
+  position: absolute;
+  bottom: 2%;
+  left: 50%;
+  transform: translateX(-50%);
+  min-height: 0;
+  padding: 0 .5em;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, .55);
+  font-size: calc(var(--taille) * .022);
+}
+.ecran.avec-image .ecran-retour:empty { display: none; }
+
+.pb, .touche {
+  border: 1px solid #191c1d;
+  border-radius: 12%;
+  background: linear-gradient(180deg, var(--bouton-haut), var(--bouton) 55%, #34393b);
+  box-shadow: 0 3px 0 #141617, inset 0 1px 0 rgba(255, 255, 255, .12);
+  color: #8e979b;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  /* Le doigt posé sur un bouton ne doit ni faire défiler ni zoomer. */
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+  cursor: pointer;
+  padding: 0;
+}
+.pb {
+  margin: 14% 10%;
+  font-size: calc(var(--taille) * .022);
+}
+/* Sur les côtés, la case est étroite et haute ; en haut et en bas, large et
+   basse : les marges suivent, pour que le bouton garde une forme de touche. */
+.pb.cote-gauche, .pb.cote-droite { margin: 18% 12%; }
+.pb.cote-haut, .pb.cote-bas { margin: 12% 18%; }
+.touches-fixes {
+  display: flex;
+  gap: 1.5%;
+  padding: 1.2% 1%;
+}
+.pb.cote-rangee { flex: 1; margin: 0; font-size: calc(var(--taille) * .02); color: #aab3b7; }
+.pb.enfonce, .touche.enfonce {
+  transform: translateY(2px);
+  background: linear-gradient(180deg, #2a2e30, #303537);
+  box-shadow: 0 1px 0 #141617, inset 0 2px 5px rgba(0, 0, 0, .6);
+  color: var(--vert);
+}
+
+/* ---------------------------------------------------------------- UFC */
+
+.ufc {
+  --ratio: 1.08;
+  grid-template-rows: 1.3fr 5fr 1fr 1.25fr;
+  gap: 2.2%;
+  padding: 2.5%;
+  background: linear-gradient(160deg, #353a3c, var(--cadre) 40%, #24282a);
+  border: 1px solid var(--cadre-bord);
+  border-radius: 3%;
+  font-size: calc(var(--taille) * .034);
+}
+.lcd {
+  background: #050a06;
+  border: 2px solid #0d1010;
+  border-radius: 4px;
+  box-shadow: inset 0 0 12px rgba(0, 0, 0, .9);
+  color: var(--vert-lcd);
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  text-shadow: 0 0 6px rgba(124, 255, 154, .35);
+  white-space: pre;
+  overflow: hidden;
+}
+.ufc-bloc {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 4%;
+  font-size: calc(var(--taille) * .07);
+}
+.ufc-milieu {
+  display: grid;
+  grid-template-columns: 1fr 1.05fr;
+  gap: 3%;
+  min-height: 0;
+}
+.ufc-clavier {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(4, 1fr);
+  gap: 5%;
+}
+.ufc-options {
+  display: grid;
+  grid-template-rows: repeat(5, 1fr);
+  gap: 4%;
+}
+.touche {
+  font-size: calc(var(--taille) * .045);
+  color: #d5dcdf;
+}
+.touche.option {
+  display: flex;
+  align-items: center;
+  gap: 4%;
+  padding: 0 6%;
+  background: #050a06;
+  color: var(--vert-lcd);
+  font-size: calc(var(--taille) * .05);
+  text-align: left;
+  white-space: pre;
+  border: 2px solid #3a4043;
+}
+.touche.option .repere { width: .6em; color: var(--vert-lcd); }
+.ufc-fonctions {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 1.5%;
+}
+.ufc-fonctions .touche { font-size: calc(var(--taille) * .03); }
+.ufc-bas {
+  display: grid;
+  grid-template-columns: 0.55fr 1.2fr 0.55fr 0.9fr 0.9fr 0.55fr 1.2fr 0.55fr;
+  gap: 1.5%;
+}
+.ufc-bas .touche { font-size: calc(var(--taille) * .034); }
+.touche.canal {
+  background: #050a06;
+  color: var(--vert-lcd);
+  border: 2px solid #3a4043;
+  font-size: calc(var(--taille) * .06);
+}
+
+/* ---------------------------------------------------------------- IFEI */
+
+.ifei {
+  --ratio: 0.92;
+  grid-template-rows: repeat(4, 1fr) 0.35fr 1.2fr 1.2fr 0.9fr 0.9fr;
+  grid-template-columns: 1fr 1fr 1fr;
+  column-gap: 4%;
+  padding: 4%;
+  font-size: calc(var(--taille) * .08);
+  align-items: center;
+  text-align: center;
+}
+.ifei .libelle {
+  font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-size: calc(var(--taille) * .045);
+  color: #b8c2c6;
+  letter-spacing: .08em;
+}
+.ifei .valeur { text-align: right; padding-right: 8%; }
+.ifei .large { grid-column: 1 / 4; text-align: right; padding-right: 6%; font-size: calc(var(--taille) * .1); }
+.ifei .petite {
+  font-size: calc(var(--taille) * .06);
+  grid-column: span 3;
+  display: flex;
+  justify-content: space-between;
+  padding: 0 4%;
+}
+
+/* ---------------------------------------------------------------- secours */
+
+.secours {
+  --ratio: 1.45;
+  grid-template-columns: repeat(4, 1fr);
+  grid-template-rows: 1fr 1fr 0.9fr;
+  gap: 2%;
+  padding: 2%;
+  background: #1a1d1f;
+  border: 1px solid var(--cadre-bord);
+  border-radius: 2.5%;
+}
+.instrument {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-height: 0;
+}
+.instrument svg { width: 100%; height: 100%; }
+.instrument .titre {
+  position: absolute;
+  bottom: 2%;
+  font-size: calc(var(--taille) * .018);
+  color: var(--discret);
+  letter-spacing: .08em;
+}
+.voyants {
+  grid-column: 1 / 5;
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 1.5% 1%;
+  align-content: center;
+}
+.voyant {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.5em;
+  padding: 2% 2%;
+  border-radius: 3px;
+  background: #121516;
+  border: 1px solid #262b2d;
+  color: #3b4245;
+  font-size: calc(var(--taille) * .015);
+  font-weight: 600;
+  line-height: 1.1;
+  text-align: center;
+  overflow: hidden;
+}
+.voyant.allume { color: #1a1300; background: var(--ambre); box-shadow: 0 0 8px rgba(240, 180, 60, .6); }
+.voyant.rouge.allume { background: var(--rouge); color: #fff; box-shadow: 0 0 8px rgba(239, 90, 79, .7); }
+.voyant.vert.allume { background: var(--vert); color: #032; box-shadow: 0 0 8px rgba(61, 220, 106, .6); }
+.sans-donnees { opacity: .45; }
+
+/* ------------------------------------------------------------- kneeboard */
+
+#kneeboard {
+  height: calc(100vh - var(--barre));
+  height: calc(100dvh - var(--barre));
+  display: flex;
+  flex-direction: column;
+}
+#kneeboard[hidden] { display: none; }
+
+.kb-barre {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px var(--marge);
+}
+#kb-carnet {
+  flex: 1;
+  min-width: 0;
+  min-height: 40px;
+  padding: 0 10px;
+  background: #15181a;
+  border: 1px solid #2a2f31;
+  border-radius: 8px;
+}
+.kb-barre button {
+  width: 52px;
+  min-height: 40px;
+  border: 1px solid #2a2f31;
+  border-radius: 8px;
+  background: #1d2123;
+  font-size: 24px;
+  line-height: 1;
+}
+.kb-barre button:disabled { opacity: .3; }
+#kb-num {
+  min-width: 64px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  color: var(--discret);
+}
+
+#kb-vue {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 var(--marge) var(--marge);
+  touch-action: pan-y;
+}
+#kb-image {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 4px;
+  background: #fff;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, .5);
+}
+/* Kneeboard de DCS en direct : la toile prend toute la hauteur et garde les
+   proportions de la page (2:3). Hors du mode direct, elle s'efface. */
+#kb-direct, #kb-msg { display: none; }
+#kb-vue.direct.avec-image #kb-direct {
+  display: block;
+  height: 100%;
+  max-width: 100%;
+  border-radius: 4px;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, .5);
+}
+#kb-vue.direct:not(.avec-image) #kb-msg {
+  display: block;
+  max-width: 30em;
+  text-align: center;
+  line-height: 1.6;
+  color: var(--discret);
+}
+#kb-vide {
+  max-width: 34em;
+  text-align: center;
+  line-height: 1.6;
+  color: var(--discret);
+}
+#kb-vide code { color: var(--texte); }
