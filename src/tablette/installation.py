@@ -11,12 +11,14 @@ Ce qui est touché, et rien d'autre :
 - Saved Games/DCS/Config/MonitorSetup/tablette.lua, la configuration
   « Tablette DCS » ;
 - Saved Games/DCS/Config/options.lua, DCS fermé seulement : configuration
-  d'écrans, résolution, fenêtré (copie de l'original à côté).
+  d'écrans, résolution, fenêtré (copie de l'original à côté) ;
+- le raccourci « DCS Tablette » sur le bureau, depuis l'exécutable seulement.
 Jamais le dossier d'installation de DCS : le contrôle d'intégrité du
 multijoueur ne voit rien.
 """
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 import sys
@@ -25,11 +27,13 @@ from pathlib import Path
 from typing import Callable, List, Optional, Sequence, Tuple
 
 from .capture import moniteurs
+from .config import BUREAU, dossier_windows
 from .ecrans_dcs import (NOM_AFFICHE, NOM_FICHIER, PasDExport, disposition_essai,
                          disposition_second_ecran, generer, options_affichage,
                          regler_options, retablir_options)
 
 SCRIPTS = ("DCS-Tablette-Export.lua", "DCS-Tablette-Appareils.lua")
+RACCOURCI = "DCS Tablette.lnk"
 ENTETE = "-- DCS Tablette -- ecrans et boutons du cockpit sur l'iPad"
 LIGNE = ("pcall(function() local dt_lfs=require('lfs'); "
          "dofile(dt_lfs.writedir()..[[Scripts\\DCS-Tablette-Export.lua]]) end)")
@@ -210,8 +214,33 @@ def retirer_ecrans(saved_games: Path, ouvert: Callable[[], bool] = dcs_ouvert) -
     return lignes
 
 
+def dossier_bureau() -> Path:
+    return dossier_windows(BUREAU) or Path.home() / "Desktop"
+
+
+def creer_raccourci(cible: Path, dossier: Optional[Path] = None) -> Path:
+    """Raccourci « DCS Tablette » vers l'exécutable, sur le bureau : un
+    double-clic pour lancer la tablette, avec son icône.
+
+    Windows ne crée un .lnk que par COM : PowerShell s'en charge. Les chemins
+    passent par l'environnement, rien à échapper dans la commande.
+    """
+    lien = (dossier or dossier_bureau()) / RACCOURCI
+    commande = ("$r = (New-Object -ComObject WScript.Shell).CreateShortcut($env:DT_LIEN); "
+                "$r.TargetPath = $env:DT_CIBLE; $r.WorkingDirectory = $env:DT_DOSSIER; "
+                "$r.IconLocation = $env:DT_CIBLE + ',0'; "
+                "$r.Description = 'Les ecrans du cockpit de DCS sur la tablette'; $r.Save()")
+    environnement = dict(os.environ, DT_LIEN=str(lien), DT_CIBLE=str(cible),
+                         DT_DOSSIER=str(cible.parent))
+    subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", commande],
+                   env=environnement, capture_output=True, check=True, timeout=60)
+    if not lien.exists():
+        raise OSError("PowerShell n'a rien écrit")
+    return lien
+
+
 def installer(saved_games: Path, essai: bool = False) -> int:
-    """`DCS-Tablette.exe installer` : scripts puis écrans."""
+    """`DCS-Tablette.exe installer` : scripts, écrans, raccourci."""
     if not saved_games.is_dir():
         print(f"Dossier de DCS introuvable ({saved_games}).")
         print("Lance DCS une fois pour qu'il le crée, puis recommence.")
@@ -223,8 +252,16 @@ def installer(saved_games: Path, essai: bool = False) -> int:
     complet, lignes = configurer_ecrans(saved_games, essai)
     for ligne in lignes:
         print("  " + ligne)
+    lancer = "DCS-Tablette.exe"
+    # Depuis le code source, pas de raccourci : il pointerait vers Python.
+    if getattr(sys, "frozen", False):
+        try:
+            creer_raccourci(Path(sys.executable))
+            lancer = "« DCS Tablette » (raccourci posé sur le bureau)"
+        except (OSError, subprocess.SubprocessError) as e:
+            print(f"\nRaccourci sur le bureau non créé ({e}).")
     if complet:
-        print("\nInstallation terminée. Lance DCS-Tablette.exe et ouvre sur l'iPad "
+        print(f"\nInstallation terminée. Lance {lancer} et ouvre sur la tablette "
               "l'adresse qu'il affiche.")
     else:
         print("\nScripts installés ; les écrans restent à régler (voir ci-dessus).")
@@ -234,6 +271,10 @@ def installer(saved_games: Path, essai: bool = False) -> int:
 def desinstaller(saved_games: Path) -> int:
     """`DCS-Tablette.exe desinstaller` : l'inverse d'`installer`."""
     lignes = desinstaller_scripts(saved_games) + retirer_ecrans(saved_games)
+    lien = dossier_bureau() / RACCOURCI
+    if lien.exists():
+        lien.unlink()
+        lignes.append(f"Supprimé : {lien}")
     for ligne in lignes or ["Rien à retirer : la tablette n'était pas installée."]:
         print("  " + ligne)
     print("\nOn peut maintenant supprimer le dossier de DCS Tablette.")

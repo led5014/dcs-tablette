@@ -1,9 +1,11 @@
-DCS TABLETTE — les écrans du cockpit sur l'iPad
-================================================
+DCS TABLETTE — les écrans du cockpit sur la tablette
+====================================================
 
-Les écrans de l'appareil (DDI, MFD, MPD…) s'affichent sur un iPad, ou tout
-navigateur du réseau local, avec leurs boutons sous le doigt. La page
-s'adapte toute seule à l'appareil piloté dans DCS.
+Les écrans de l'appareil (DDI, MFD, MPD…) s'affichent sur un iPad, une
+tablette Android, un téléphone ou le navigateur d'un autre PC, avec leurs
+boutons sous le doigt. La page s'adapte toute seule à l'appareil piloté dans
+DCS et à la taille de l'écran : un ou deux écrans sur un téléphone, trois ou
+toute la planche sur un grand écran.
 
 Pas de Python à installer, pas de connexion internet : tout reste sur le PC
 et le Wi-Fi de la maison.
@@ -26,35 +28,41 @@ Une prise HDMI factice branchée sur la carte graphique fait la même chose.
 
 INSTALLATION
 ------------
-  1. Fermer DCS.
-  2. Double-cliquer « Installer.bat ».
+  1. Placer ce dossier là où il restera (par exemple dans Documents) : le
+     raccourci du bureau pointera dessus.
+  2. Fermer DCS.
+  3. Double-cliquer « Installer.bat ».
      Il copie deux scripts dans Saved Games\DCS\Scripts, ajoute une ligne à
-     Export.lua (copie de l'ancien à côté) et choisit dans DCS la
-     configuration d'écrans « Tablette DCS » (copie des réglages d'origine).
+     Export.lua (copie de l'ancien à côté), choisit dans DCS la
+     configuration d'écrans « Tablette DCS » (copie des réglages d'origine)
+     et pose un raccourci « DCS Tablette » sur le bureau.
      Tacview, SRS et les autres outils continuent de marcher.
-  3. Si Windows affiche « Windows a protégé votre ordinateur » : cliquer
+  4. Si Windows affiche « Windows a protégé votre ordinateur » : cliquer
      « Informations complémentaires » puis « Exécuter quand même ».
      L'exécutable n'est pas signé ; le code source est sur GitHub.
 
 
 EN VOL
 ------
-  1. Double-cliquer « DCS-Tablette.exe ». La fenêtre affiche une adresse,
-     par exemple http://192.168.1.20:8320
+  1. Double-cliquer « DCS Tablette » sur le bureau. La fenêtre affiche une
+     adresse, par exemple http://192.168.1.20:8320
      Au premier lancement, Windows demande d'autoriser le programme sur le
      réseau : accepter pour le réseau PRIVÉ.
-  2. Sur l'iPad (même Wi-Fi), ouvrir cette adresse dans Safari, puis
-     Partager → « Sur l'écran d'accueil » pour l'avoir en plein écran.
+  2. Sur la tablette ou le téléphone (même Wi-Fi), ouvrir cette adresse :
+     - iPad, iPhone : Safari, puis Partager → « Sur l'écran d'accueil » ;
+     - Android : Chrome, puis ⋮ → « Ajouter à l'écran d'accueil », ou le
+       bouton ⛶ en haut à droite pour le plein écran.
+     Ouverte depuis l'écran d'accueil, la page prend tout l'écran.
   3. Lancer DCS et une mission : la page se met à l'appareil piloté.
-     Le kneeboard (RShift+K) est aussi sur l'iPad.
+     Le kneeboard (RShift+K) est aussi sur la tablette.
 
-Fermer la fenêtre de DCS-Tablette.exe arrête tout.
+Fermer la fenêtre de DCS Tablette arrête tout.
 
 
 SI ÇA NE MARCHE PAS
 -------------------
-- La page ne s'ouvre pas sur l'iPad : le Wi-Fi du PC est peut-être en réseau
-  « Public » dans Windows ; le passer en « Privé ».
+- La page ne s'ouvre pas sur la tablette : le Wi-Fi du PC est peut-être en
+  réseau « Public » dans Windows ; le passer en « Privé ».
 - Les écrans restent noirs : relancer DCS après l'installation (il ne lit la
   configuration d'écrans qu'au démarrage), et vérifier dans Options → Système
   → Moniteurs que « Tablette DCS » est choisi.
@@ -65,8 +73,8 @@ SI ÇA NE MARCHE PAS
 DÉSINSTALLATION
 ---------------
 DCS fermé, double-cliquer « Desinstaller.bat » : il retire la ligne
-d'Export.lua et les scripts, et remet l'affichage de DCS d'avant. Supprimer
-ensuite ce dossier.
+d'Export.lua, les scripts et le raccourci du bureau, et remet l'affichage de
+DCS d'avant. Supprimer ensuite ce dossier.
 
 
 Outil communautaire, sans lien avec Eagle Dynamics.

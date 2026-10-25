@@ -437,6 +437,13 @@ class TestInstallation(unittest.TestCase):
         self.assertFalse((self.saved / "Config" / "MonitorSetup").exists())
         self.assertIn('"1camera"', lire(self.saved / "Config" / "options.lua"))
 
+    @unittest.skipUnless(sys.platform == "win32", "raccourci Windows")
+    def test_raccourci_vers_l_executable(self):
+        from tablette.installation import RACCOURCI, creer_raccourci
+        lien = creer_raccourci(Path(sys.executable), self.saved)
+        self.assertEqual(lien, self.saved / RACCOURCI)
+        self.assertTrue(lien.read_bytes().startswith(b"L\x00\x00\x00"))   # en-tête d'un .lnk
+
     def test_dcs_ouvert_options_lua_intact(self):
         from tablette.installation import configurer_ecrans
         avant = lire(self.saved / "Config" / "options.lua")
@@ -746,6 +753,19 @@ class TestApiTablette(unittest.TestCase):
         self.lua.ecoute.settimeout(0.3)
         with self.assertRaises(socket.timeout):
             self.lua.recevoir()
+
+    def test_page_installable_sur_l_ecran_d_accueil(self):
+        """Android lit le manifeste, iOS l'icône 180 : nom, icône, plein écran."""
+        page = self.client.get("/").text
+        self.assertIn('href="/manifest.webmanifest"', page)
+        self.assertIn('href="/icone-180.png"', page)
+        manifeste = self.client.get("/manifest.webmanifest").json()
+        self.assertEqual(manifeste["display"], "fullscreen")
+        for icone in manifeste["icons"] + [{"src": "/icone-180.png"}]:
+            r = self.client.get(icone["src"])
+            self.assertEqual(r.status_code, 200, icone["src"])
+            self.assertTrue(r.content.startswith(b"\x89PNG"), icone["src"])
+        self.assertEqual(self.client.get("/icone-64.png").status_code, 404)
 
     def test_appui_puis_relachement_arrivent_au_script(self):
         self.assertEqual(self.bouton("ddi_gauche", "18").json(), {"envoye": True})

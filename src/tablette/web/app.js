@@ -20,6 +20,12 @@ const ATTENTE_SANS_IMAGE_MS = 1500;
 const RATES_AVANT_MESSAGE = 3;
 const BORD = 0.62;                  // épaisseur de la couronne de boutons, en cases
 
+// Largeur, en pixels CSS, sous laquelle un panneau devient pénible au doigt
+// ou à l'œil (boutons d'un cadre sous ~28 px de haut, touches de l'UFC sous
+// ~40 px, voyants illisibles). Une disposition à plusieurs panneaux n'est
+// proposée que si chacun l'atteint sur l'écran où la page est ouverte.
+const CONFORT = { cadre: 280, ufc: 290, ifei: 200, secours: 520, secoursEtroit: 330 };
+
 function element(balise, classe, texte) {
   const el = document.createElement(balise);
   if (classe) el.className = classe;
@@ -110,8 +116,11 @@ function brancherGeste(el, envoyer) {
   el.addEventListener('contextmenu', (e) => e.preventDefault());
 }
 
+// Page cachée (iPad verrouillé, autre app) : rien ne doit rester enfoncé. De
+// retour : elle a pu tourner entre-temps, on redispose.
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) toutRelacher();
+  else redisposer();
 });
 
 // --------------------------------------------------------------- état
@@ -123,12 +132,17 @@ let disposition = null;
 let siege = '';
 let enKneeboard = false;
 let cadrans = null;
-const panneaux = new Map();    // id → élément
+const panneaux = new Map();    // id → élément, qui porte ses formes possibles (.formes)
+const affiches = new Set();    // panneaux sur la scène en ce moment
 const reserve = element('div');
 reserve.id = 'reserve';
 document.body.append(reserve);
 
 // --------------------------------------------------------------- dispositions
+// Une disposition est une liste ordonnée de panneaux. Où les mettre se décide
+// à l'affichage, d'après la place réelle : un iPad en paysage aligne deux
+// écrans, le même en portrait les empile, un téléphone en paysage les serre,
+// un grand écran en montre plus. Aucune taille d'appareil n'est écrite ici.
 
 const abrege = (libelle) => libelle.replace(' gauche', ' G').replace(' droit', ' D');
 
@@ -137,46 +151,110 @@ function calculerDispositions(p) {
   const liste = [];
   const g = p.ecrans.find((e) => e.id.endsWith('gauche'));
   const d = p.ecrans.find((e) => e.id.endsWith('droit'));
-  if (g && d) liste.push({ id: 'deux', libelle: `2 ${g.libelle.split(' ')[0]}`, rangees: [[g.id, d.id]] });
-  for (const e of p.ecrans) liste.push({ id: e.id, libelle: abrege(e.libelle), rangees: [[e.id]] });
-  if (p.panneaux.includes('ufc')) liste.push({ id: 'ufc', libelle: 'UFC', rangees: [['ufc', 'ifei']] });
+  if (g && d) liste.push({ id: 'deux', libelle: `2 ${g.libelle.split(' ')[0]}`, ids: [g.id, d.id] });
+  // `toujours` : proposée même à l'étroit (petit téléphone), plutôt que de
+  // priver de l'écran ou du panneau ; les autres sont des regroupements.
+  for (const e of p.ecrans) {
+    liste.push({ id: e.id, libelle: abrege(e.libelle), ids: [e.id], toujours: true });
+  }
+  if (p.panneaux.includes('ufc')) {
+    liste.push({ id: 'ufc', libelle: 'UFC', ids: ['ufc', 'ifei'], toujours: true });
+  }
   if (p.panneaux.includes('secours')) {
-    liste.push({ id: 'secours', libelle: 'Secours', rangees: [['secours']] });
+    liste.push({ id: 'secours', libelle: 'Secours', ids: ['secours'], toujours: true });
   }
-  // Réservées aux grands écrans : proposées seulement s'il y a la place.
-  if (ids.length >= 3) {
-    liste.push({ id: 'tous', libelle: `${ids.length} écrans`, rangees: [ids], min: [1200, 500] });
-  }
+  if (ids.length >= 3) liste.push({ id: 'tous', libelle: `${ids.length} écrans`, ids });
   if (ids.length >= 2 && p.panneaux.length) {
-    liste.push({ id: 'planche', libelle: 'Planche', rangees: [ids, p.panneaux], min: [1500, 950] });
+    liste.push({ id: 'planche', libelle: 'Planche', ids: [...ids, ...p.panneaux] });
   }
   return liste;
 }
 
-function dispositionsPossibles() {
-  return dispositions.filter((d) => !d.min
-    || (window.innerWidth >= d.min[0] && window.innerHeight >= d.min[1]));
+// La place pour les panneaux : la zone sous la barre, moins ses marges (qui
+// incluent encoches et barre d'accueil). Mesurée sur la scène ou, kneeboard
+// ouvert, sur le kneeboard, qui occupe la même zone.
+function espace() {
+  const zone = (enKneeboard ? $('#kneeboard') : $('#scene')).getBoundingClientRect();
+  const s = getComputedStyle($('#scene'));
+  const marge = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--marge')) || 8;
+  return {
+    largeur: zone.width - parseFloat(s.paddingLeft) - parseFloat(s.paddingRight),
+    hauteur: zone.height - parseFloat(s.paddingTop) - parseFloat(s.paddingBottom),
+    marge,
+  };
 }
 
-function dispositionCourante() {
-  const possibles = dispositionsPossibles();
-  return possibles.find((d) => d.id === disposition) || possibles[0] || null;
+// Toutes les façons de couper la liste en rangées (dans l'ordre), avec toutes
+// les formes de chaque panneau. Chaque panneau est noté par sa largeur
+// rapportée à sa largeur de confort. On préfère un agencement où tous sont
+// confortables (note ≥ 1) ; entre ceux-là, celui où ils sont le plus grands
+// dans l'ensemble (moyenne géométrique des notes) ; et s'il n'y en a aucun,
+// celui où le moins bien servi l'est le mieux. Au plus 7 panneaux, soit 64
+// découpages : instantané.
+function meilleurAgencement(a, b) {
+  if (!b) return true;
+  const egal = (x, y) => Math.abs(x - y) <= 0.001 * Math.max(Math.abs(x), Math.abs(y), 1);
+  if ((a.score >= 1) !== (b.score >= 1)) return a.score >= 1;
+  const [va, vb] = a.score >= 1 ? [a.ensemble, b.ensemble] : [a.score, b.score];
+  if (!egal(va, vb)) return va > vb;
+  // À égalité, la première rangée la plus remplie : deux DDI en haut et
+  // l'AMPCD dessous, comme dans le cockpit, plutôt que l'inverse.
+  return a.rangees[0].length > b.rangees[0].length;
 }
 
-function rangeesAffichees(d) {
-  // iPad tenu en portrait : deux panneaux côte à côte passent l'un sous l'autre.
-  if (window.innerHeight > window.innerWidth && d.rangees.length === 1 && d.rangees[0].length === 2) {
-    return d.rangees[0].map((id) => [id]);
+function agencer(ids, { largeur, hauteur, marge }) {
+  const formes = ids.map((id) => panneaux.get(id).formes);
+  const choix = formes.reduce((acc, f) => acc.flatMap((c) => f.map((x) => c.concat([x]))), [[]]);
+  const n = ids.length;
+  let meilleur = null;
+  for (const c of choix) {
+    for (let masque = 0; masque < 2 ** (n - 1); masque += 1) {
+      const rangees = [[0]];
+      for (let i = 1; i < n; i += 1) {
+        if (masque & (1 << (i - 1))) rangees.push([i]);
+        else rangees[rangees.length - 1].push(i);
+      }
+      // Hauteur de chaque rangée à pleine largeur, puis tout réduit d'un même
+      // facteur si l'ensemble dépasse en hauteur.
+      const naturelles = rangees.map((r) => (largeur - marge * (r.length - 1))
+        / r.reduce((s, i) => s + c[i].ratio, 0));
+      const libre = hauteur - marge * (rangees.length - 1);
+      const k = Math.min(1, libre / naturelles.reduce((a, b) => a + b, 0));
+      const h = naturelles.map((x) => Math.floor(x * k));
+      let score = Infinity;
+      let ensemble = 0;
+      rangees.forEach((r, j) => r.forEach((i) => {
+        const note = (h[j] * c[i].ratio) / c[i].confort;
+        score = Math.min(score, note);
+        ensemble += Math.log(Math.max(note, 1e-6));
+      }));
+      const candidat = {
+        score,
+        ensemble,
+        rangees: rangees.map((r, j) => r.map((i) => ({
+          id: ids[i], forme: c[i], hauteur: h[j], largeur: Math.floor(h[j] * c[i].ratio),
+        }))),
+      };
+      if (meilleurAgencement(candidat, meilleur)) meilleur = candidat;
+    }
   }
-  return d.rangees;
+  return meilleur;
+}
+
+// Les dispositions qui tiennent sur cet écran, chacune avec son agencement.
+function dispositionsPossibles() {
+  const place = espace();
+  if (place.largeur <= 0 || place.hauteur <= 0) return [];
+  return dispositions
+    .filter((d) => d.ids.every((id) => panneaux.has(id)))
+    .map((d) => ({ d, agencement: agencer(d.ids, place) }))
+    .filter(({ d, agencement }) => d.toujours || agencement.score >= 1);
 }
 
 function ecranAffiche(id) {
   if (document.hidden) return false;
   if (id === 'kneeboard') return enKneeboard && carnet !== null && carnet.direct === true;
-  if (enKneeboard) return false;
-  const d = dispositionCourante();
-  return d !== null && d.rangees.some((r) => r.includes(id));
+  return !enKneeboard && affiches.has(id);
 }
 
 function appliquer() {
@@ -187,12 +265,13 @@ function appliquer() {
   $('#bascule').hidden = sansEcrans;
   $('#bascule').textContent = enKneeboard ? 'Écrans' : 'Kneeboard';
 
-  const courante = dispositionCourante();
+  const possibles = dispositionsPossibles();
+  const courante = possibles.find((x) => x.d.id === disposition) || possibles[0] || null;
   const nav = $('#modes');
   nav.textContent = '';
   nav.hidden = sansEcrans;
-  for (const d of dispositionsPossibles()) {
-    const b = element('button', !enKneeboard && courante && d.id === courante.id ? 'actif' : '', d.libelle);
+  for (const { d } of possibles) {
+    const b = element('button', !enKneeboard && courante && d.id === courante.d.id ? 'actif' : '', d.libelle);
     b.addEventListener('click', () => {
       disposition = d.id;
       retenir(`disposition.${profil.id}`, d.id);
@@ -202,21 +281,35 @@ function appliquer() {
     });
     nav.append(b);
   }
+  // Barre trop étroite pour toutes les dispositions (téléphone) : celle en
+  // cours reste en vue. À la main : scrollIntoView ferait défiler la page.
+  const actif = nav.querySelector('.actif');
+  if (actif && nav.scrollWidth > nav.clientWidth) {
+    nav.scrollLeft = actif.offsetLeft - (nav.clientWidth - actif.offsetWidth) / 2;
+  }
 
   const scene = $('#scene');
   for (const el of panneaux.values()) reserve.append(el);
   scene.textContent = '';
+  affiches.clear();
+  if (enKneeboard) return;
   if (!courante) {
-    scene.append(element('p', 'vide-appareil', `${profil ? profil.libelle : 'Cet appareil'} : `
-      + 'pas d\'écran à reprendre. Le kneeboard reste disponible.'));
+    if (sansEcrans) {
+      scene.append(element('p', 'vide-appareil', `${profil ? profil.libelle : 'Cet appareil'} : `
+        + 'pas d\'écran à reprendre. Le kneeboard reste disponible.'));
+    }
     return;
   }
-  for (const rangee of rangeesAffichees(courante)) {
+  for (const rangee of courante.agencement.rangees) {
     const r = element('div', 'rangee');
-    for (const id of rangee) {
-      const c = element('div', 'case');
-      if (panneaux.has(id)) c.append(panneaux.get(id));
-      r.append(c);
+    for (const place of rangee) {
+      const el = panneaux.get(place.id);
+      el.style.width = `${place.largeur}px`;
+      el.style.height = `${place.hauteur}px`;
+      el.style.setProperty('--taille', `${place.largeur}px`);
+      for (const f of el.formes) if (f.classe) el.classList.toggle(f.classe, f === place.forme);
+      affiches.add(place.id);
+      r.append(el);
     }
     scene.append(r);
   }
@@ -239,9 +332,41 @@ function construireSieges() {
   }
 }
 
-window.addEventListener('resize', () => { if (profil) appliquer(); });
+// Rotation, fenêtre redimensionnée, barre du navigateur qui se replie : on
+// redispose une fois la rafale d'évènements passée. Un délai plutôt que
+// requestAnimationFrame, suspendu tant que la page n'est pas affichée : elle
+// doit reprendre à la bonne taille, même tournée pendant qu'elle était cachée.
+let redispositionPrevue = 0;
+function redisposer() {
+  if (!profil) return;
+  clearTimeout(redispositionPrevue);
+  redispositionPrevue = setTimeout(appliquer, 60);
+}
+window.addEventListener('resize', redisposer);
+window.addEventListener('orientationchange', redisposer);
+if (window.ResizeObserver) new ResizeObserver(redisposer).observe(document.body);
 
 // --------------------------------------------------------------- images
+
+// Safari d'avant iOS 15 n'a pas createImageBitmap : une <img> hors de la page
+// décode aussi bien ; sa mémoire est rendue une fois l'image peinte (close).
+async function decoder(blob) {
+  if (window.createImageBitmap) return createImageBitmap(blob);
+  const url = URL.createObjectURL(blob);
+  const img = new Image();
+  img.src = url;
+  try {
+    await (img.decode ? img.decode() : new Promise((ok, ko) => {
+      img.onload = ok;
+      img.onerror = ko;
+    }));
+  } catch (e) {
+    URL.revokeObjectURL(url);
+    throw e;
+  }
+  img.close = () => URL.revokeObjectURL(url);
+  return img;
+}
 
 async function demanderImage(id) {
   let r;
@@ -254,7 +379,7 @@ async function demanderImage(id) {
     return { raison: raison || "Pas d'image" };
   }
   try {
-    return { image: await createImageBitmap(await r.blob()) };
+    return { image: await decoder(await r.blob()) };
   } catch { return { raison: 'Image illisible' }; }
 }
 
@@ -304,7 +429,7 @@ function construireCadre(e) {
   cadre.style.gridTemplateRows = `${BORD}fr repeat(${n}, 1fr) ${BORD}fr`
     + (rangee.length ? ` ${BORD}fr` : '');
   const lignes = n + 2 * BORD + (rangee.length ? BORD : 0);
-  cadre.style.setProperty('--ratio', String((n + 2 * BORD) / lignes));
+  cadre.formes = [{ ratio: (n + 2 * BORD) / lignes, classe: '', confort: CONFORT.cadre }];
 
   const ecran = element('div', 'ecran');
   ecran.style.gridColumn = `2 / ${n + 2}`;
@@ -364,6 +489,7 @@ function molette(touche, sens) {
 
 function construireUfc() {
   const p = element('div', 'panneau ufc');
+  p.formes = [{ ratio: 1.08, classe: '', confort: CONFORT.ufc }];
   const bloc = element('div', 'lcd ufc-bloc');
   const champs = [element('span'), element('span'), element('span')];
   bloc.append(...champs);
@@ -416,6 +542,7 @@ function construireUfc() {
 
 function construireIfei() {
   const p = element('div', 'panneau ifei lcd');
+  p.formes = [{ ratio: 0.92, classe: '', confort: CONFORT.ifei }];
   const valeurs = {};
   const champ = (cle, classe) => {
     valeurs[cle] = element('span', classe);
@@ -516,6 +643,10 @@ const VOYANTS_VERTS = new Set(['NOSE', 'LEFT', 'RIGHT', 'GO', 'READY', 'A/A', 'A
 
 function construireSecours() {
   const p = element('div', 'panneau secours');
+  // En largeur (4 instruments par rangée) ou en hauteur (3) : la page prend
+  // celle qui laisse les instruments les plus grands sur l'écran du moment.
+  p.formes = [{ ratio: 1.45, classe: '', confort: CONFORT.secours },
+    { ratio: 0.76, classe: 'etroit', confort: CONFORT.secoursEtroit }];
   const case_ = (titre, contenu) => {
     const c = element('div', 'instrument');
     c.append(contenu, element('span', 'titre', titre));
@@ -775,8 +906,32 @@ function brancherKneeboard() {
   });
 }
 
+// --------------------------------------------------------------- plein écran
+// Android, navigateur du PC : un bouton cache la barre du navigateur. Masqué
+// quand la page est ouverte depuis l'écran d'accueil (déjà plein écran) et
+// sur iPhone, où Safari ne le permet pas.
+
+function brancherPleinEcran() {
+  const racine = document.documentElement;
+  const demander = racine.requestFullscreen || racine.webkitRequestFullscreen;
+  const quitter = document.exitFullscreen || document.webkitExitFullscreen;
+  const actuel = () => document.fullscreenElement || document.webkitFullscreenElement;
+  const autonome = navigator.standalone === true || (window.matchMedia
+    && window.matchMedia('(display-mode: standalone), (display-mode: fullscreen)').matches);
+  const permis = document.fullscreenEnabled || document.webkitFullscreenEnabled;
+  const bouton = $('#plein');
+  bouton.hidden = !demander || !permis || autonome;
+  bouton.addEventListener('click', () => {
+    try {
+      const r = actuel() ? quitter.call(document) : demander.call(racine);
+      if (r && r.catch) r.catch(() => {});
+    } catch { /* refusé : la page reste dans sa fenêtre */ }
+  });
+}
+
 // --------------------------------------------------------------- démarrage
 
+brancherPleinEcran();
 brancherKneeboard();
 chargerProfil();
 boucleImage('kneeboard', $('#kb-vue'), $('#kb-direct'), $('#kb-msg'), null);

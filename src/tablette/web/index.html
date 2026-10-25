@@ -3,25 +3,29 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<!-- Ajoutée à l'écran d'accueil de l'iPad, la page s'ouvre sans la barre
-     de Safari : toute la hauteur sert aux écrans. -->
+<!-- Ajoutée à l'écran d'accueil (iPad, iPhone, Android), la page s'ouvre
+     sans la barre du navigateur : toute la hauteur sert aux écrans. -->
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Tablette DCS">
+<meta name="apple-mobile-web-app-title" content="DCS Tablette">
 <meta name="theme-color" content="#0b0d0e">
 <title>DCS Tablette</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icone-180.png">
+<link rel="icon" type="image/png" sizes="192x192" href="/icone-192.png">
 <link rel="stylesheet" href="/style.css">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✈</text></svg>">
 </head>
 <body>
 <header id="barre">
   <span id="etat" class="etat inconnu" role="status">DCS : …</span>
-  <!-- Rempli d'après le profil de l'appareil : dispositions possibles, et
-       celles réservées aux grands écrans seulement s'il y a la place. -->
+  <!-- Rempli d'après le profil de l'appareil et la place disponible : une
+       disposition n'est proposée que si chacun de ses panneaux reste
+       confortable au doigt sur cet écran-là. -->
   <nav id="modes" aria-label="Disposition"></nav>
   <nav id="sieges" aria-label="Siège" hidden></nav>
   <button id="bascule" class="bascule">Kneeboard</button>
+  <button id="plein" class="plein" hidden aria-label="Plein écran">⛶</button>
 </header>
 
 <main id="scene" aria-label="Écrans du cockpit"></main>

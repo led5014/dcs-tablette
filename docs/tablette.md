@@ -40,8 +40,8 @@ Lua en dépend) et `scripts\installer_dcs.py`.
 
 Pour l'escadron : le zip des Releases du dépôt public
 (`DCS-Tablette.exe` + `Installer.bat`), sans Python. `Installer.bat` lance
-`DCS-Tablette.exe installer`, qui fait les étapes 2 et 4 ci-dessous ;
-`Desinstaller.bat` les défait. Le mode d'emploi est dans le README du dépôt
+`DCS-Tablette.exe installer`, qui fait les étapes 2 et 4 ci-dessous et pose
+le raccourci « DCS Tablette » sur le bureau ; `Desinstaller.bat` les défait. Le mode d'emploi est dans le README du dépôt
 public (source : `distribution/tablette/depot/README.md`).
 
 Publier une version : `scripts\publier_tablette.py` recopie la tablette, et
@@ -82,10 +82,18 @@ bas de la vue : pour essayer, pas pour voler.
 
 ## Sur l'iPad
 
-- **Dispositions** (barre du haut), selon l'appareil : deux écrans côte à
-  côte, un écran seul, UFC + IFEI, Secours. Sur un grand écran (navigateur du
-  PC, iPad Pro), « 3 écrans » et « Planche » (tous les écrans et panneaux
-  ensemble) apparaissent quand il y a la place.
+- **Dispositions** (barre du haut), selon l'appareil : deux écrans, un écran
+  seul, UFC + IFEI, Secours, « 3 écrans », « Planche » (tous les écrans et
+  panneaux). La page essaie chaque façon de répartir les panneaux en rangées
+  sur la place réelle (téléphone, tablette, PC, portrait ou paysage) et ne
+  propose un regroupement que si chaque panneau y garde sa largeur de
+  confort (`CONFORT` dans `web/app.js`) ; un écran seul, l'UFC et le Secours
+  restent toujours proposés. Le Secours a deux formes, en largeur et en
+  hauteur. Aucune taille d'appareil n'est écrite en dur, et la page ne
+  dépend d'aucune fonction récente des navigateurs (tailles posées en
+  pixels par le script, pas de « container queries »).
+- **Écran d'accueil** : manifeste et icônes (`scripts/generer_icones.py`)
+  pour Android et iOS ; bouton ⛶ (plein écran) là où le navigateur le permet.
 - **Boutons** : enfoncés dans le cockpit tant que le doigt est posé.
 - **Kneeboard** : un bouton bascule vers lui et revient. En tête, le kneeboard
   de DCS en direct (RShift+K pour l'ouvrir) ; puis les pages de la mission en

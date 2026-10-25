@@ -46,7 +46,8 @@ exe = EXE(
     [],
     exclude_binaries=True,
     name="DCS-Tablette",
-    console=True,          # la console affiche l'adresse à taper sur l'iPad
+    icon=str(PROJECT / "distribution" / "tablette" / "dcs_tablette.ico"),
+    console=True,          # la console affiche l'adresse à taper sur la tablette
     debug=False,
     strip=False,
     upx=False,

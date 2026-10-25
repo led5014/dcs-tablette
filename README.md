@@ -1,7 +1,8 @@
 # DCS Tablette
 
-Les écrans du cockpit de DCS World sur un iPad, avec leurs boutons sous le
-doigt. La page s'adapte toute seule à l'appareil piloté.
+Les écrans du cockpit de DCS World sur une tablette, avec leurs boutons sous
+le doigt. La page s'adapte toute seule à l'appareil piloté et à l'écran qui
+l'affiche : iPad, tablette Android, téléphone, navigateur d'un autre PC.
 
 - **Écrans en direct** : DDI, MFD, MPD… recopiés depuis DCS, sans scintillement.
 - **Boutons tactiles** : chaque appui est joué dans le cockpit, tant que le
@@ -9,8 +10,10 @@ doigt. La page s'adapte toute seule à l'appareil piloté.
 - **Planche avant du Hornet** redessinée : UFC tactile, IFEI, instruments de
   secours, voyants.
 - **Kneeboard** : celui de DCS en direct, et les pages des missions.
-- **Plusieurs dispositions** : deux écrans côte à côte sur un iPad standard,
-  toute la planche d'un coup sur un grand écran.
+- **Toutes les tailles d'écran** : la page ne propose que les dispositions
+  qui restent confortables au doigt sur l'écran utilisé — un ou deux écrans
+  sur un téléphone, trois sur une tablette en paysage, toute la planche sur
+  un grand écran — et se réarrange quand on la fait pivoter.
 
 Pas de Python à installer, rien sur internet : le serveur tourne sur le PC,
 l'iPad s'y connecte par le Wi-Fi de la maison.
@@ -56,19 +59,28 @@ Une prise HDMI factice fait la même chose.
 ### 2. Installer
 
 1. Fermer DCS.
-2. Extraire le zip où on veut, puis double-cliquer **`Installer.bat`**.
+2. Extraire le zip là où il restera (par exemple dans Documents), puis
+   double-cliquer **`Installer.bat`**. Il pose aussi un raccourci
+   **DCS Tablette** sur le bureau.
 3. Si Windows affiche « Windows a protégé votre ordinateur » : *Informations
    complémentaires* → *Exécuter quand même*. L'exécutable n'est pas signé ; il
    est construit à partir de ce dépôt (`scripts/construire_tablette.py`).
 
 ### 3. En vol
 
-1. Double-cliquer **`DCS-Tablette.exe`** : la fenêtre affiche l'adresse à
-   ouvrir sur l'iPad (`http://192.168.x.x:8320`). Au premier lancement,
-   autoriser le programme sur le réseau **privé**.
-2. Sur l'iPad, ouvrir l'adresse dans Safari, puis *Partager* → *Sur l'écran
-   d'accueil* pour l'avoir en plein écran.
+1. Double-cliquer **DCS Tablette** sur le bureau : la fenêtre affiche
+   l'adresse à ouvrir sur la tablette (`http://192.168.x.x:8320`). Au premier
+   lancement, autoriser le programme sur le réseau **privé**.
+2. Sur la tablette ou le téléphone, ouvrir l'adresse :
+   - iPad, iPhone : Safari, puis *Partager* → *Sur l'écran d'accueil* ;
+   - Android : Chrome, puis ⋮ → *Ajouter à l'écran d'accueil*, ou le bouton
+     ⛶ pour le plein écran.
 3. Lancer DCS et une mission.
+
+Navigateurs : la page évite les fonctions récentes, pour tourner aussi sur
+les iPad restés sous un ancien iOS et sur les Android d'entrée de gamme.
+Essayée dans Chrome aux tailles des téléphones, tablettes et écrans de PC
+courants ; un retour sur votre appareil est bienvenu.
 
 ## Ce que l'installation modifie
 
@@ -81,6 +93,7 @@ DCS (le contrôle d'intégrité du multijoueur n'est pas concerné) :
 | `Scripts\Export.lua` | une ligne ajoutée à la fin ; Tacview, SRS… intacts | `Export.lua.avant-tablette-<date>` |
 | `Config\MonitorSetup\tablette.lua` | configuration d'écrans « Tablette DCS » | — |
 | `Config\options.lua` | configuration d'écrans, résolution, fenêtré | `options.lua.avant-tablette` |
+| Bureau | raccourci « DCS Tablette » | — |
 
 Le script Lua n'accepte que les commandes des boutons affichés (une liste
 blanche par appareil) et relâche tout bouton tenu plus de 5 secondes.

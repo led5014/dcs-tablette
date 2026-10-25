@@ -12,7 +12,7 @@ from typing import Dict, List, Optional, Tuple
 from urllib.parse import quote
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, Response
 
 from . import appareils, planche
 from .appareils import Profil
@@ -198,5 +198,23 @@ def create_app(cfg: Optional[Config] = None, pont: Optional[PontDCS] = None,
     def style_css():
         return FileResponse(WEB_DIR / "style.css", media_type="text/css",
                             headers=_SANS_CACHE)
+
+    # Ajoutée à l'écran d'accueil (Android, iPad, iPhone) : nom, icône, et
+    # ouverture en plein écran, sans la barre du navigateur.
+    @app.get("/manifest.webmanifest")
+    def manifeste():
+        return JSONResponse({
+            "name": "DCS Tablette", "short_name": "DCS Tablette", "start_url": "/",
+            "display": "fullscreen", "orientation": "any",
+            "background_color": "#0b0d0e", "theme_color": "#0b0d0e",
+            "icons": [{"src": f"/icone-{c}.png", "sizes": f"{c}x{c}", "type": "image/png"}
+                      for c in (192, 512)],
+        }, media_type="application/manifest+json")
+
+    @app.get("/icone-{cote}.png")
+    def icone(cote: int):
+        if cote not in (180, 192, 512):
+            raise HTTPException(404, "pas d'icône à cette taille")
+        return FileResponse(WEB_DIR / f"icone-{cote}.png", media_type="image/png")
 
     return app

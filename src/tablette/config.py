@@ -17,13 +17,14 @@ PORT_ORDRES = 7790       # le script Lua écoute ici
 PORT_ETAT = 7791         # le serveur écoute ici
 
 SAVED_GAMES = uuid.UUID("4C5C32FF-BB9D-43B0-B5B4-2D72E54EAAA4")   # FOLDERID_SavedGames
+BUREAU = uuid.UUID("B4BFCC3A-DB2C-424C-B029-7FE99A87C641")        # FOLDERID_Desktop
 
 
-def _saved_games_windows() -> Optional[Path]:
-    """« Parties enregistrées » tel que Windows le connaît : on a pu le
-    déplacer sur un autre disque ou dans OneDrive."""
+def dossier_windows(dossier: uuid.UUID) -> Optional[Path]:
+    """Un dossier connu de Windows (Parties enregistrées, Bureau) là où il est
+    vraiment : on a pu le déplacer sur un autre disque ou dans OneDrive."""
     try:
-        guid = (ctypes.c_ubyte * 16).from_buffer_copy(SAVED_GAMES.bytes_le)
+        guid = (ctypes.c_ubyte * 16).from_buffer_copy(dossier.bytes_le)
         chemin = ctypes.c_wchar_p()
         if ctypes.windll.shell32.SHGetKnownFolderPath(ctypes.byref(guid), 0, None,
                                                       ctypes.byref(chemin)) != 0:
@@ -38,7 +39,7 @@ def _saved_games_windows() -> Optional[Path]:
 
 def dossier_saved_games() -> Path:
     """Saved Games/DCS, ou DCS.openbeta pour une installation bêta seule."""
-    racine = _saved_games_windows() or Path.home() / "Saved Games"
+    racine = dossier_windows(SAVED_GAMES) or Path.home() / "Saved Games"
     for nom in ("DCS", "DCS.openbeta"):
         if (racine / nom).is_dir():
             return racine / nom
