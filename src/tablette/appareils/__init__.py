@@ -40,6 +40,12 @@ class Ecran:
     appareils: Dict[str, int]  # siège ("" si une seule place) → appareil DCS
     boutons: Tuple[Bouton, ...] = ()
     par_cote: int = 5
+    # Rayon des coins du verre, en fraction du côté : la tablette arrondit
+    # l'image pareil, pour que les coins où DCS laisse voir le cockpit tombent
+    # sur le cadre. Mesuré sur les DDI du Hornet (0,17) ; ailleurs, coins
+    # presque droits — l'écran de l'Apache est quasi carré, et arrondir sans
+    # l'avoir mesuré rognerait des symboles.
+    arrondi: float = 0.02
 
     def appareil(self, siege: str) -> Optional[int]:
         if siege in self.appareils:
@@ -78,6 +84,7 @@ class Profil:
             "kneeboard": self.kneeboard is not None,
             "panneaux": list(self.panneaux),
             "ecrans": [{"id": e.id, "libelle": e.libelle, "par_cote": e.par_cote,
+                        "arrondi": e.arrondi,
                         "boutons": [{"id": b.id, "cote": b.cote, "rang": b.rang}
                                     for b in e.boutons]}
                        for e in self.ecrans],

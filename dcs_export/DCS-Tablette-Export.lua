@@ -47,10 +47,17 @@ local PERIODE_RAPPEL_TEXTE_S = 2.0
 -- garde enfoncé aussi longtemps.
 local LIMITE_APPUI_S = 5.0
 
+-- Démarrage manqué (port pris, LuaSocket pas encore là, LuaExportStart
+-- jamais reçu) : on réessaie pendant le vol plutôt que d'abandonner la
+-- mission entière. Vu en vrai : un vol entier sans un mot, et rien pour
+-- savoir pourquoi — d'où aussi le journal (dcs.log, « DCS-TABLETTE »).
+local REESSAI_S = 5.0
+
 local socket = nil
 local ecoute = nil
 local envoi = nil
-local actif = true
+local prochainEssai = 0
+local dits = {}               -- messages de panne déjà écrits dans dcs.log
 local appareil = nil
 local profil = nil
 local prochainEtat = 0
@@ -64,7 +71,7 @@ local enfonces = {}           -- "35:3011" -> { appareil, commande, depuis }
 -- toujours dans ses chemins de recherche : même démarche que le script de
 -- débrief, qui la tient elle-même de SRS et de Tacview. Sans lui, rien
 -- n'est possible ici et le script se met en retrait.
-do
+local function obtenirSocket()
   local function tenter()
     local ok, s = pcall(require, "socket")
     if ok and type(s) == "table" and type(s.udp) == "function" then
@@ -72,17 +79,20 @@ do
     end
     return nil
   end
-  socket = tenter()
-  if not socket then
+  local s = tenter()
+  if not s then
     pcall(function()
       local lfs = require("lfs")
       local racine = lfs.currentdir()
       package.path = package.path .. ";" .. racine .. "/LuaSocket/?.lua"
-      package.cpath = package.cpath .. ";" .. racine .. "/bin/?.dll"
+      package.cpath = package.cpath .. ";" .. racine .. "/LuaSocket/?.dll;"
+        .. racine .. "/bin/?.dll"
     end)
-    socket = tenter()
+    s = tenter()
   end
+  return s
 end
+socket = obtenirSocket()
 
 -- La liste blanche par appareil, posée à côté de ce script. Sans elle, le
 -- script annonce l'appareil mais n'agit sur rien.
@@ -101,6 +111,27 @@ local function sur(f, ...)
   local ok, res = pcall(f, ...)
   if ok then return res end
   return nil
+end
+
+--- Une ligne dans dcs.log, sous « DCS-TABLETTE » : ce que fait le script,
+--- et surtout pourquoi il ne fait rien quand c'est le cas.
+local function journal(message, erreur)
+  pcall(function()
+    log.write("DCS-TABLETTE", erreur and log.ERROR or log.INFO, message)
+  end)
+end
+
+--- Une panne n'est écrite qu'une fois par mission : on réessaie toutes les
+--- 5 s, le journal n'a pas à le répéter.
+local function panne(message)
+  if dits[message] then return end
+  dits[message] = true
+  journal(message, true)
+end
+
+local function horloge()
+  if socket then return socket.gettime() end
+  return os.clock()
 end
 
 local function fermer()
@@ -129,6 +160,13 @@ local function annoncer()
     appareil = nom
     profil = nom and APPAREILS[nom] or nil
     derniersTextes = {}
+    if nom then
+      journal("appareil pilote : " .. nom
+        .. (profil and "" or " (sans profil : kneeboard seulement)"))
+    else
+      journal("aucun appareil pilote (hors cockpit, ou export de l'appareil "
+        .. "interdit par le serveur)")
+    end
   end
   envoyer("etat " .. tostring(appareil or "-"))
 end
@@ -193,37 +231,68 @@ end
 -- Points d'entrée DCS
 -- ---------------------------------------------------------------------------
 
-function DCSTablette.start()
+--- Ouvre ce qui manque encore : l'envoi (annonce de l'appareil, textes,
+--- aiguilles) et l'écoute des appuis. Les deux sont indépendants : un port
+--- d'écoute pris n'empêche pas d'annoncer l'appareil, et la tablette garde
+--- le bon profil même quand ses boutons ne peuvent pas agir.
+local function demarrer()
+  if not socket then socket = obtenirSocket() end
   if not socket then
-    actif = false
+    panne("LuaSocket introuvable : la tablette ne recoit rien de DCS")
     return
   end
-  local ok = pcall(function()
-    ecoute = socket.udp()
-    -- setsockname ne lève pas : il rend nil et un message. Un port déjà pris
-    -- (deuxième instance de DCS) doit désactiver le script, pas le fausser.
-    local lie, err = ecoute:setsockname("127.0.0.1", PORT_ORDRES)
-    if not lie then error(err) end
-    ecoute:settimeout(0)
-    envoi = socket.udp()
-    envoi:settimeout(0)
-  end)
-  if not ok then
-    actif = false
-    fermer()
+  if not envoi then
+    local ok = pcall(function()
+      local s = socket.udp()
+      s:settimeout(0)
+      envoi = s
+    end)
+    if not ok then
+      panne("envoi UDP impossible : la tablette ne recoit rien de DCS")
+    end
+  end
+  if not ecoute then
+    local ok, err = pcall(function()
+      local s = socket.udp()
+      -- setsockname ne lève pas : il rend nil et un message.
+      local lie, e = s:setsockname("127.0.0.1", PORT_ORDRES)
+      if not lie then
+        pcall(function() s:close() end)
+        error(e)
+      end
+      s:settimeout(0)
+      ecoute = s
+    end)
+    if ok then
+      journal("pret : appuis de la tablette ecoutes sur 127.0.0.1:" .. PORT_ORDRES)
+    else
+      panne("port " .. PORT_ORDRES .. " indisponible (" .. tostring(err) .. ") : "
+        .. "boutons de la tablette inactifs, nouvel essai toutes les 5 s")
+    end
   end
 end
 
+function DCSTablette.start()
+  dits = {}
+  appareil = nil
+  prochainEssai = 0
+  demarrer()
+end
+
 function DCSTablette.frame()
-  if not actif or not ecoute then return end
-  local maintenant = socket.gettime()
+  local maintenant = horloge()
+  if (not envoi or not ecoute) and maintenant >= prochainEssai then
+    prochainEssai = maintenant + REESSAI_S
+    demarrer()
+  end
+  if not envoi then return end
   if maintenant >= prochainEtat then
     prochainEtat = maintenant + PERIODE_ETAT_S
     annoncer()
   end
   -- Lecture non bloquante : sans ordre en attente, receive rend nil aussitôt.
   -- La borne évite qu'un flot anormal de datagrammes retienne l'image.
-  for _ = 1, 10 do
+  for _ = 1, (ecoute and 10 or 0) do
     local message = ecoute:receive()
     if not message then break end
     traiter(message, maintenant)
@@ -256,6 +325,8 @@ function DCSTablette.stop()
   enfonces = {}
   fermer()
 end
+
+journal("charge (LuaSocket : " .. (socket and "oui" or "pas encore") .. ")")
 
 -- Chaînage : on conserve les fonctions déjà installées par Tacview, SRS et
 -- le script de débrief. Ne JAMAIS écraser sans rappeler l'ancienne, sous

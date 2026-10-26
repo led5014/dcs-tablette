@@ -54,7 +54,23 @@ EN VOL
        bouton ⛶ en haut à droite pour le plein écran.
      Ouverte depuis l'écran d'accueil, la page prend tout l'écran.
   3. Lancer DCS et une mission : la page se met à l'appareil piloté.
-     Le kneeboard (RShift+K) est aussi sur la tablette.
+     Le menu en haut à gauche permet aussi de choisir son appareil à la
+     main, avant même la mission. S'il ne correspond pas à celui que DCS
+     pilote, la pastille passe à l'orange et les boutons sont coupés.
+
+KNEEBOARD
+---------
+Le bouton « Kneeboard » de la tablette montre les pages de l'avion piloté,
+lues directement dans les fichiers (mission en cours, solo ou multijoueur,
+pages du module, les vôtres, planches de la carte), et celui de DCS en
+direct.
+
+Dans cet onglet, « Kneeboard DCS sur » choisit où il apparaît quand on
+l'ouvre dans DCS (RShift+K, ou K enfoncé) :
+  - PC : en bas à droite de l'écran, comme d'habitude ;
+  - Tablette : rien sur le PC, la tablette bascule dessus, et revient aux
+    écrans quand on le referme.
+Si la tablette se déconnecte, il revient sur le PC au bout de 10 secondes.
 
 Fermer la fenêtre de DCS Tablette arrête tout.
 
@@ -63,6 +79,9 @@ SI ÇA NE MARCHE PAS
 -------------------
 - La page ne s'ouvre pas sur la tablette : le Wi-Fi du PC est peut-être en
   réseau « Public » dans Windows ; le passer en « Privé ».
+- « DCS : pas de signal » alors que les écrans s'affichent : chercher
+  DCS-TABLETTE dans Saved Games\DCS\Logs\dcs.log ; le script de la tablette
+  y dit s'il est prêt, ou pourquoi il ne peut pas démarrer.
 - Les écrans restent noirs : relancer DCS après l'installation (il ne lit la
   configuration d'écrans qu'au démarrage), et vérifier dans Options → Système
   → Moniteurs que « Tablette DCS » est choisi.

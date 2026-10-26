@@ -9,7 +9,11 @@ l'affiche : iPad, tablette Android, téléphone, navigateur d'un autre PC.
   doigt est posé.
 - **Planche avant du Hornet** redessinée : UFC tactile, IFEI, instruments de
   secours, voyants.
-- **Kneeboard** : celui de DCS en direct, et les pages des missions.
+- **Kneeboard** : les pages de l'avion piloté lues directement dans les
+  fichiers, nettes à toute taille — mission en cours (solo ou multijoueur),
+  pages du module, les vôtres, planches de la carte — et celui de DCS en
+  direct. Au choix, la touche kneeboard de DCS l'affiche sur le PC comme
+  d'habitude, ou sur la tablette, qui bascule alors d'elle-même dessus.
 - **Toutes les tailles d'écran** : la page ne propose que les dispositions
   qui restent confortables au doigt sur l'écran utilisé — un ou deux écrans
   sur un téléphone, trois sur une tablette en paysage, toute la planche sur
@@ -101,15 +105,34 @@ blanche par appareil) et relâche tout bouton tenu plus de 5 secondes.
 **Désinstaller** : DCS fermé, `Desinstaller.bat` retire tout et remet
 l'affichage d'avant. Supprimer ensuite le dossier.
 
+## Appareil détecté ou choisi
+
+En haut à gauche, le menu **Appareil** : en *Auto*, la page suit l'appareil
+que DCS annonce (la pastille est verte quand DCS parle à la tablette). On
+peut aussi y choisir son appareil à la main, pour préparer la page avant de
+lancer la mission. Si l'appareil choisi n'est pas celui que DCS pilote, la
+pastille passe à l'orange et les boutons sont coupés : d'un module à
+l'autre, le même numéro désigne un tout autre bouton.
+
 ## Problèmes courants
+
+- **« DCS : pas de signal » alors que les écrans s'affichent** : les images
+  viennent de l'écran, mais les boutons et le nom de l'appareil passent par
+  le script de la tablette dans DCS. Ouvrir `Saved Games\DCS\Logs\dcs.log`
+  et chercher `DCS-TABLETTE` : le script y dit s'il est prêt, quel appareil
+  il voit, ou pourquoi il ne peut pas démarrer. Aucune ligne : relancer
+  `Installer.bat`, puis la mission.
 
 - **La page ne s'ouvre pas sur l'iPad** : le Wi-Fi du PC est peut-être en
   réseau *Public* dans Windows ; le passer en *Privé*.
 - **Écrans noirs** : relancer DCS après l'installation (il ne lit la
   configuration d'écrans qu'au démarrage) et vérifier dans Options → Système
   → Moniteurs que « Tablette DCS » est choisi.
-- **Le kneeboard de DCS tombe sur l'écran virtuel** : une fenêtre miroir le
-  recopie en bas à droite de l'écran principal, et il est aussi sur l'iPad.
+- **Le kneeboard de DCS tombe sur l'écran virtuel** : c'est voulu. Dans
+  l'onglet Kneeboard de la tablette, « Kneeboard DCS sur » choisit où il
+  apparaît quand vous l'ouvrez : *PC* (une fenêtre le recopie en bas à
+  droite de l'écran principal) ou *Tablette* (elle bascule dessus, rien sur
+  le PC). Si la tablette se déconnecte, il revient sur le PC au bout de 10 s.
 
 ## Depuis le code source
 

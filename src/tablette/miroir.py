@@ -9,7 +9,8 @@ contrôle d'intégrité des serveurs multijoueur.
 Cette fenêtre recopie donc la page, en direct, au coin bas droit de l'écran
 principal — là où DCS l'aurait mise sur un écran unique :
 
-- elle n'apparaît que quand le kneeboard est ouvert dans DCS (RShift+K, K) ;
+- elle n'apparaît que quand le kneeboard est ouvert dans DCS (RShift+K, K),
+  et que la tablette ne l'a pas pris pour elle (AffichageKneeboard) ;
 - toujours au premier plan, sans cadre, absente de la barre des tâches ;
 - la souris la traverse : elle ne prend jamais un clic destiné à DCS.
 
@@ -25,13 +26,14 @@ import logging
 import threading
 import time
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Callable, Optional, Tuple
 
 from .copie import Rect
 from .ecrans_dcs import PasDExport, options_affichage, zone_kneeboard
 
 PERIODE_MS = 100
 VALIDITE_PLACE_S = 2.0
+SILENCE_TABLETTE_S = 10.0
 
 GWL_EXSTYLE = -20
 WS_EX_TOPMOST = 0x00000008
@@ -59,12 +61,44 @@ def place_miroir(principal: Rect, taille: Tuple[int, int]) -> Rect:
     return (px + pl - l, py + ph - h, l, h)
 
 
+class AffichageKneeboard:
+    """Où le kneeboard de DCS s'affiche quand on l'ouvre (RShift+K, K) :
+    sur le PC, par ce miroir, comme DCS d'habitude ; ou sur la tablette, qui
+    bascule alors d'elle-même dessus, et rien sur le PC.
+
+    Choisi sur la tablette, qui le redit à chaque demande d'état. Sans
+    nouvelles d'elle depuis 10 s (iPad en veille, Wi-Fi coupé), retour au
+    PC : le kneeboard ne doit jamais disparaître des deux côtés à la fois.
+    """
+    PC, TABLETTE = "pc", "tablette"
+
+    def __init__(self, horloge: Callable[[], float] = time.monotonic):
+        self._horloge = horloge
+        self._choix = self.PC
+        self._vu = -1e9
+
+    def choisir(self, sur: str) -> None:
+        if sur in (self.PC, self.TABLETTE):
+            self._choix = sur
+            self._vu = self._horloge()
+
+    def effectif(self) -> str:
+        if self._choix == self.TABLETTE and self._horloge() - self._vu < SILENCE_TABLETTE_S:
+            return self.TABLETTE
+        return self.PC
+
+
 class Miroir(threading.Thread):
-    def __init__(self, video, saved_games: Path):
+    def __init__(self, video, saved_games: Path,
+                 affichage: Optional[AffichageKneeboard] = None):
         super().__init__(name="tablette-miroir", daemon=True)
         self.video = video
         self.saved_games = saved_games
+        self.affichage = affichage
         self._place: Tuple[float, Optional[Rect]] = (-1e9, None)
+
+    def _sur_pc(self) -> bool:
+        return self.affichage is None or self.affichage.effectif() == AffichageKneeboard.PC
 
     def run(self) -> None:
         # Un miroir en panne ne doit pas emporter le serveur de la tablette.
@@ -128,7 +162,7 @@ class Miroir(threading.Thread):
             try:
                 principal = self._ecran_principal_si_necessaire()
                 image = None
-                if principal is not None:
+                if principal is not None and self._sur_pc():
                     try:
                         image = self.video.kneeboard()
                     except PasDImage:

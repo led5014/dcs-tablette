@@ -46,7 +46,7 @@ def servir(local: bool, miroir: bool) -> int:
     from .config import Config
     from .dcs import PontDCS
     from .installation import est_installe
-    from .miroir import Miroir
+    from .miroir import AffichageKneeboard, Miroir
     from .video import Video
 
     logging.basicConfig(format="%(asctime)s  %(message)s", datefmt="%H:%M:%S")
@@ -60,8 +60,9 @@ def servir(local: bool, miroir: bool) -> int:
     pont = PontDCS(cfg.port_ordres, cfg.port_etat)
     pont.demarrer()
     video = Video(cfg.saved_games)
+    affichage = AffichageKneeboard()      # kneeboard de DCS sur le PC ou la tablette
     if miroir:
-        Miroir(video, cfg.saved_games).start()
+        Miroir(video, cfg.saved_games, affichage).start()
     if local:
         print(f"Essai local : http://127.0.0.1:{cfg.port_web}")
     else:
@@ -69,7 +70,8 @@ def servir(local: bool, miroir: bool) -> int:
         for adresse in adresses_locales() or ["<adresse de ce PC>"]:
             print(f"  http://{adresse}:{cfg.port_web}")
     try:
-        uvicorn.run(create_app(cfg, pont, video), host="127.0.0.1" if local else "0.0.0.0",
+        uvicorn.run(create_app(cfg, pont, video, affichage),
+                    host="127.0.0.1" if local else "0.0.0.0",
                     port=cfg.port_web, log_level="warning")
     finally:
         pont.arreter()

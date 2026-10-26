@@ -21,9 +21,10 @@ PROFIL = Profil(
     libelle="F/A-18C Hornet",
     noms_dcs=("FA-18C_hornet",),
     ecrans=(
-        Ecran("ddi_gauche", "DDI gauche", "LEFT_MFCD", {"": 35}, _CADRE),
-        Ecran("ddi_droit", "DDI droit", "RIGHT_MFCD", {"": 36}, _CADRE),
-        Ecran("ampcd", "AMPCD", "CENTER_MFCD", {"": 37}, _CADRE),
+        # Verre arrondi, mesuré sur l'export : rayon ≈ 1/6 du côté.
+        Ecran("ddi_gauche", "DDI gauche", "LEFT_MFCD", {"": 35}, _CADRE, arrondi=0.17),
+        Ecran("ddi_droit", "DDI droit", "RIGHT_MFCD", {"": 36}, _CADRE, arrondi=0.17),
+        Ecran("ampcd", "AMPCD", "CENTER_MFCD", {"": 37}, _CADRE, arrondi=0.17),
     ),
     kneeboard=68,
     panneaux=("ufc", "ifei", "secours"),

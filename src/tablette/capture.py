@@ -24,6 +24,7 @@ import os
 import sys
 import time
 from ctypes import wintypes
+from pathlib import Path
 from typing import Dict, Optional, Tuple
 
 from PIL import Image
@@ -145,7 +146,7 @@ def zone_utile_principale() -> Optional[Rect]:
     return zones[0] if zones else None
 
 
-def _nom_exe(pid: int) -> str:
+def _chemin_exe(pid: int) -> str:
     processus = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
     if not processus:
         return ""
@@ -153,10 +154,14 @@ def _nom_exe(pid: int) -> str:
         taille = wintypes.DWORD(1024)
         tampon = ctypes.create_unicode_buffer(1024)
         if kernel32.QueryFullProcessImageNameW(processus, 0, tampon, ctypes.byref(taille)):
-            return os.path.basename(tampon.value).lower()
+            return tampon.value
         return ""
     finally:
         kernel32.CloseHandle(processus)
+
+
+def _nom_exe(pid: int) -> str:
+    return os.path.basename(_chemin_exe(pid)).lower()
 
 
 def _taille_client(hwnd) -> Tuple[int, int]:
@@ -262,6 +267,19 @@ def lancement_dcs() -> Optional[float]:
         return (creation - 116444736000000000) / 1e7     # FILETIME → époque Unix
     finally:
         kernel32.CloseHandle(processus)
+
+
+def dossier_dcs() -> Optional[Path]:
+    """Dossier d'installation de DCS, d'après le DCS.exe qui tourne
+    (<dossier>/bin/DCS.exe ou bin-mt) : Steam, version autonome, autre disque,
+    peu importe. None s'il ne tourne pas."""
+    hwnd = _fenetre_dcs()
+    if not hwnd:
+        return None
+    pid = wintypes.DWORD()
+    user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+    chemin = _chemin_exe(pid.value)
+    return Path(chemin).parent.parent if chemin else None
 
 
 def origine_dcs() -> Optional[Tuple[int, int]]:

@@ -18,10 +18,14 @@
 </head>
 <body>
 <header id="barre">
-  <span id="etat" class="etat inconnu" role="status">DCS : …</span>
+  <span id="etat" class="etat inconnu" role="status" aria-label="DCS : …"></span>
+  <!-- L'appareil : celui que DCS annonce (Auto), ou choisi à la main pour
+       préparer la page avant même de lancer la mission. -->
+  <select id="appareil" aria-label="Appareil"><option value="auto">Auto · DCS : …</option></select>
   <!-- Rempli d'après le profil de l'appareil et la place disponible : une
        disposition n'est proposée que si chacun de ses panneaux reste
        confortable au doigt sur cet écran-là. -->
+  <span class="saut" aria-hidden="true"></span>
   <nav id="modes" aria-label="Disposition"></nav>
   <nav id="sieges" aria-label="Siège" hidden></nav>
   <button id="bascule" class="bascule">Kneeboard</button>
@@ -36,6 +40,13 @@
     <button id="kb-prec" aria-label="Page précédente">‹</button>
     <span id="kb-num"></span>
     <button id="kb-suiv" aria-label="Page suivante">›</button>
+    <!-- Où va le kneeboard quand on l'ouvre dans DCS (RShift+K, K) : sur le
+         PC comme d'habitude, ou ici, la tablette basculant d'elle-même. -->
+    <nav id="kb-sur" aria-label="Kneeboard ouvert dans DCS : afficher sur">
+      <span class="kb-sur-titre">Kneeboard DCS sur</span>
+      <button data-sur="pc">PC</button>
+      <button data-sur="tablette">Tablette</button>
+    </nav>
   </div>
   <div id="kb-vue">
     <canvas id="kb-direct" aria-label="Kneeboard de DCS en direct"></canvas>

@@ -162,13 +162,35 @@ def configurer_ecrans(saved_games: Path, essai: bool = False,
     dossier = saved_games / "Config" / "MonitorSetup"
     dossier.mkdir(parents=True, exist_ok=True)
     fichier = dossier / NOM_FICHIER
-    if fichier.exists():
-        fichier.replace(fichier.with_suffix(".lua.precedent"))
-    fichier.write_text(generer((0, 0, pl, ph), zones, description), encoding="ascii")
+    texte = generer((0, 0, pl, ph), zones, description)
+    # Identique : on n'y touche pas. Réécrit pendant que DCS tourne, il
+    # paraîtrait changé depuis son lancement, et la tablette refuserait de
+    # capturer jusqu'au redémarrage de DCS (video.py) : c'est le cas d'une
+    # mise à jour, Installer.bat relancé DCS ouvert.
+    inchange = (fichier.exists()
+                and fichier.read_text(encoding="ascii", errors="replace") == texte)
+    if inchange:
+        lignes = [f"Inchangé : {fichier}"]
+    else:
+        if fichier.exists():
+            fichier.replace(fichier.with_suffix(".lua.precedent"))
+        fichier.write_text(texte, encoding="ascii")
+        lignes = [f"Écrit : {fichier}"]
     for ancien in ANCIENS:                       # l'ancienne « Tablette Hornet »
         (dossier / ancien).unlink(missing_ok=True)
-    lignes = [f"Écrit : {fichier}"]
     lignes += [f"  {nom:12} x={x} y={y} {l}×{h}" for nom, (x, y, l, h) in zones.items()]
+
+    # Mise à jour : déjà choisie dans DCS, à la bonne résolution, rien à
+    # régler ni à relancer.
+    try:
+        choix, largeur, hauteur = options_affichage(saved_games)
+        deja = (choix.lower() in (Path(NOM_FICHIER).stem, NOM_AFFICHE.lower())
+                and (largeur, hauteur) == resolution)
+    except PasDExport:
+        deja = False
+    if inchange and deja:
+        return True, lignes + [f"DCS déjà réglé : « {NOM_AFFICHE} », "
+                               f"{resolution[0]}×{resolution[1]}."]
 
     if not ouvert():
         try:

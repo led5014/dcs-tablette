@@ -47,6 +47,10 @@ class PasDImage(Exception):
     """Pas d'image à servir, avec la raison à montrer sur la tablette."""
 
 
+class KneeboardFerme(PasDImage):
+    """DCS tourne et se capture, mais le kneeboard n'y est pas ouvert."""
+
+
 def _noire(image: Image.Image) -> bool:
     return all(maxi < SEUIL_NOIR for _, maxi in image.getextrema())
 
@@ -151,8 +155,8 @@ class Video:
             # disposition encore chargée par DCS) suffisait à le croire ouvert.
             l, h = image.size
             if _noire(image.crop((0, int(h * 0.75), l, int(h * 0.95)))):
-                raise PasDImage("Kneeboard fermé dans DCS : ouvre-le avec RShift+K "
-                                "(ou garde K enfoncé pour un coup d'œil).")
+                raise KneeboardFerme("Kneeboard fermé dans DCS : ouvre-le avec RShift+K "
+                                     "(ou garde K enfoncé pour un coup d'œil).")
             return instant, image
         if not _noire(image):
             return instant, image
@@ -169,6 +173,17 @@ class Video:
         """Page du kneeboard telle que DCS la dessine ; lève la raison sinon."""
         with self._verrou:
             return self._brute(KNEEBOARD)[1]
+
+    def kneeboard_ouvert(self) -> Optional[bool]:
+        """Le kneeboard est-il ouvert dans DCS ? None quand on ne peut pas le
+        savoir (DCS absent, configuration d'écrans qui ne convient pas)."""
+        try:
+            self.kneeboard()
+            return True
+        except KneeboardFerme:
+            return False
+        except PasDImage:
+            return None
 
     def image(self, nom: str) -> bytes:
         """JPEG de l'écran `nom` (LEFT_MFCD…, ou KNEEBOARD)."""

@@ -444,6 +444,22 @@ class TestInstallation(unittest.TestCase):
         self.assertEqual(lien, self.saved / RACCOURCI)
         self.assertTrue(lien.read_bytes().startswith(b"L\x00\x00\x00"))   # en-tête d'un .lnk
 
+    def test_mise_a_jour_dcs_ouvert_configuration_identique_intacte(self):
+        """Réécrite DCS ouvert, la configuration paraîtrait changée depuis son
+        lancement et la tablette ne capturerait plus rien."""
+        from tablette.ecrans_dcs import NOM_FICHIER
+        from tablette.installation import configurer_ecrans
+        ecrans = [self.PRINCIPAL, self.VIRTUEL]
+        configurer_ecrans(self.saved, ecrans=ecrans, ouvert=lambda: False)
+        fichier = self.saved / "Config" / "MonitorSetup" / NOM_FICHIER
+        avant = fichier.stat().st_mtime_ns
+        complet, lignes = configurer_ecrans(self.saved, ecrans=ecrans, ouvert=lambda: True)
+        self.assertTrue(complet)
+        self.assertTrue(lignes[0].startswith("Inchangé"))
+        self.assertTrue(lignes[-1].startswith("DCS déjà réglé"))   # pas de « relance DCS »
+        self.assertEqual(fichier.stat().st_mtime_ns, avant)
+        self.assertFalse(fichier.with_suffix(".lua.precedent").exists())
+
     def test_dcs_ouvert_options_lua_intact(self):
         from tablette.installation import configurer_ecrans
         avant = lire(self.saved / "Config" / "options.lua")
@@ -693,6 +709,21 @@ class TestMiroir(unittest.TestCase):
         self.assertEqual(place_miroir((0, 0, 2560, 1392), (720, 1084)),
                          (1840, 308, 720, 1084))
 
+    def test_kneeboard_rendu_au_pc_quand_la_tablette_se_tait(self):
+        from tablette.miroir import AffichageKneeboard, Miroir
+        maintenant = [100.0]
+        affichage = AffichageKneeboard(horloge=lambda: maintenant[0])
+        miroir = Miroir(video=None, saved_games=Path("."), affichage=affichage)
+        self.assertTrue(miroir._sur_pc())
+        affichage.choisir("tablette")
+        self.assertFalse(miroir._sur_pc())
+        maintenant[0] += 9
+        self.assertEqual(affichage.effectif(), "tablette")
+        maintenant[0] += 2                  # 11 s sans nouvelles de la tablette
+        self.assertEqual(affichage.effectif(), "pc")
+        affichage.choisir("ailleurs")       # ignoré
+        self.assertEqual(affichage.effectif(), "pc")
+
 
 class FauxLua:
     """Joue le rôle de DCS-Tablette-Export.lua sur des ports éphémères."""
@@ -729,7 +760,9 @@ class TestApiTablette(unittest.TestCase):
         self.pont = PontDCS(port_ordres=self.lua.port, port_etat=0)
         self.pont.demarrer()
         cfg = Config(saved_games=self.saved)
-        self.client = TestClient(create_app(cfg, self.pont))
+        self.dossier_dcs = None             # le DCS du poste n'entre pas dans les tests
+        self.client = TestClient(create_app(cfg, self.pont,
+                                            dossier_dcs=lambda: self.dossier_dcs))
 
     def tearDown(self):
         self.pont.arreter()
@@ -744,7 +777,7 @@ class TestApiTablette(unittest.TestCase):
         """Fait annoncer `nom` par le faux script, et attend que le serveur suive."""
         self.lua.annoncer(self.pont.port_etat, nom)
         for _ in range(100):
-            if self.client.get("/api/etat").json()["appareil"] == nom:
+            if self.client.get("/api/etat").json()["dcs"]["appareil"] == nom:
                 return
             time.sleep(0.02)
         self.fail(f"{nom} jamais annoncé")
@@ -753,6 +786,45 @@ class TestApiTablette(unittest.TestCase):
         self.lua.ecoute.settimeout(0.3)
         with self.assertRaises(socket.timeout):
             self.lua.recevoir()
+
+    def test_appareil_choisi_a_la_main_et_garde_fou(self):
+        """Le menu de la tablette (cookie) prépare la page avant la mission ;
+        mais rien ne part vers un DCS qui pilote autre chose : l'OSB 1 du MFD
+        droit du F-16 y serait l'A/P de l'UFC du Hornet."""
+        self.assertIn("ah64d", [p["id"] for p in self.client.get("/api/profils").json()])
+        self.client.cookies.set("tablette_appareil", "ah64d")
+        self.assertEqual(self.client.get("/api/profil").json()["id"], "ah64d")
+        e = self.client.get("/api/etat").json()
+        self.assertEqual((e["profil"], e["choisi"], e["ailleurs"]), ("ah64d", True, None))
+
+        self.piloter("FA-18C_hornet")
+        e = self.client.get("/api/etat").json()
+        self.assertEqual((e["profil"], e["ailleurs"]), ("ah64d", "F/A-18C Hornet"))
+        r = self.bouton("mpd_gauche", "T1")
+        self.assertEqual(r.status_code, 409)
+        self.assertIn("boutons coupés", r.json()["detail"])
+        self.silence()
+
+        self.piloter("AH-64D_BLK_II")
+        self.assertEqual(self.bouton("mpd_gauche", "T1").json(), {"envoye": True})
+        self.assertEqual(self.lua.recevoir(), "42 3001 1")
+
+        # Hornet choisi, F-16 piloté : l'UFC non plus ne part pas.
+        self.client.cookies.set("tablette_appareil", "fa18c")
+        self.piloter("F-16C_50")
+        self.assertEqual(self.client.post("/api/ufc", json={"touche": "AP", "enfonce": True})
+                         .status_code, 409)
+        self.silence()
+        # Auto : la page suit de nouveau DCS.
+        self.client.cookies.clear()
+        self.assertEqual(self.client.get("/api/profil").json()["id"], "f16c")
+
+    def test_coins_des_ecrans_selon_l_appareil(self):
+        """Arrondis mesurés sur le Hornet seulement ; l'Apache est quasi carré."""
+        hornet = appareils.profil_par_id("fa18c").description()["ecrans"]
+        apache = appareils.profil_par_id("ah64d").description()["ecrans"]
+        self.assertEqual({e["arrondi"] for e in hornet}, {0.17})
+        self.assertTrue(all(e["arrondi"] <= 0.02 for e in apache))
 
     def test_page_installable_sur_l_ecran_d_accueil(self):
         """Android lit le manifeste, iOS l'icône 180 : nom, icône, plein écran."""
@@ -888,7 +960,7 @@ class TestApiTablette(unittest.TestCase):
 
         carnets = self.client.get("/api/kneeboard").json()
         self.assertEqual([(c["id"], c["pages"]) for c in carnets],
-                         [("mes-pages", 2), ("miz:Vol test.miz", 1)])
+                         [("avion", 2), ("miz:Vol test.miz", 1)])
         for c in carnets:
             r = self.client.get(c["url"] + "/0")
             self.assertEqual(r.status_code, 200)
@@ -913,8 +985,92 @@ class TestApiTablette(unittest.TestCase):
             "Control passed to the player\r\n", encoding="utf-8")
         carnets = self.client.get("/api/kneeboard").json()
         self.assertEqual((carnets[0]["id"], carnets[0]["titre"], carnets[0]["pages"]),
-                         ("en-cours", "Mission en cours", 1))
+                         ("avion", "Kneeboard de l'avion", 1))
         self.assertEqual(self.client.get(carnets[0]["url"] + "/0").content, PNG)
+
+    def test_kneeboard_de_l_avion_en_multijoueur(self):
+        """Vu dans dcs.log : en multijoueur, DCS charge la mission du serveur
+        depuis l'enregistrement de la partie (.trk). Kneeboard de l'avion :
+        mission, puis module, puis pages perso ; cartes à part."""
+        import io
+
+        from PIL import Image
+
+        from tablette.kneeboard import lister_carnets
+        trk = self.saved / "Tracks" / "Multiplayer" / "Op-20261026-211500.trk"
+        trk.parent.mkdir(parents=True)
+        with zipfile.ZipFile(trk, "w") as z:
+            z.writestr("mission", 'mission = {\n\t["theatre"] = "Caucasus",\n}\n')
+            z.writestr("KNEEBOARD/IMAGES/freq.png", PNG)
+            z.writestr("KNEEBOARD/FA-18C_hornet/IMAGES/carte.png", PNG)
+            z.writestr("KNEEBOARD/F-16C_50/IMAGES/viper.png", PNG)       # pas pour nous
+        (self.saved / "Logs").mkdir()
+        (self.saved / "Logs" / "dcs.log").write_text(
+            f"2026-10-26 21:15:00.000 INFO    Dispatcher (Main): loadMission {trk}\r\n",
+            encoding="utf-8")
+        (self.saved / "Kneeboard" / "FA-18C_hornet").mkdir(parents=True)
+        (self.saved / "Kneeboard" / "FA-18C_hornet" / "perso.png").write_bytes(PNG)
+        (self.saved / "Kneeboard" / "commune.png").write_bytes(PNG)
+
+        # Un dossier DCS : le module (dossier « FA-18C », appareil
+        # « FA-18C_hornet ») et la carte (planches, dont une en BMP).
+        dcs = self.saved / "DCSWorld"
+        module = dcs / "Mods" / "aircraft" / "FA-18C"
+        (module / "Cockpit" / "Scripts" / "KNEEBOARD" / "pages").mkdir(parents=True)
+        (module / "entry.lua").write_text(
+            "make_flyable('FA-18C_hornet', current_mod_path..'/Cockpit/Scripts/', nil)")
+        (module / "Cockpit" / "Scripts" / "KNEEBOARD" / "pages" / "1.png").write_bytes(PNG)
+        (module / "Cockpit" / "Scripts" / "KNEEBOARD" / "pages" / "1.lua").write_text("--")
+        terrain = dcs / "Mods" / "terrains" / "Caucasus"
+        (terrain / "Kneeboard").mkdir(parents=True)
+        (terrain / "entry.lua").write_text('local self_ID = "Caucasus";\n')   # tel quel
+        (terrain / "Kneeboard" / "00_map.png").write_bytes(PNG)
+        tampon = io.BytesIO()
+        Image.new("RGB", (4, 6), "white").save(tampon, "BMP")
+        (terrain / "Kneeboard" / "01_kobuleti.bmp").write_bytes(tampon.getvalue())
+
+        carnets = lister_carnets(self.saved, "FA-18C_hornet", dcs)
+        noms = {c.id: [p.name if isinstance(p, Path) else p[1] for p in c.pages] for c in carnets}
+        self.assertEqual(noms["avion"], [
+            "KNEEBOARD/FA-18C_hornet/IMAGES/carte.png", "KNEEBOARD/IMAGES/freq.png",
+            "1.png", "perso.png", "commune.png"])
+        self.assertEqual(noms["carte:Caucasus"], ["00_map.png", "01_kobuleti.bmp"])
+        self.assertEqual([c.titre for c in carnets][:2], ["Kneeboard de l'avion", "Cartes : Caucasus"])
+
+        # Par l'API, DCS une fois connu : la planche BMP arrive en PNG.
+        self.dossier_dcs = dcs
+        r = self.client.get("/api/kneeboard/carte%3ACaucasus/1")
+        self.assertEqual((r.status_code, r.headers["content-type"]), (200, "image/png"))
+        self.assertEqual(Image.open(io.BytesIO(r.content)).size, (4, 6))
+        self.dossier_dcs = None             # DCS fermé : le dernier dossier connu sert
+        self.assertEqual(self.client.get("/api/kneeboard").json()[1]["id"], "carte:Caucasus")
+
+    def test_kneeboard_de_dcs_sur_pc_ou_tablette(self):
+        from fastapi.testclient import TestClient
+
+        from tablette.app import create_app
+        from tablette.config import Config
+
+        class FausseVideo:
+            def kneeboard_ouvert(self):
+                return True
+
+        client = TestClient(create_app(Config(saved_games=self.saved), self.pont,
+                                       FausseVideo(), dossier_dcs=lambda: None))
+        self.assertEqual(client.get("/api/etat").json()["kneeboard"],
+                         {"sur": "pc", "ouvert": None})
+        # DCS muet : la tablette prend le kneeboard, sans savoir s'il est ouvert.
+        self.assertEqual(client.get("/api/etat?kneeboard=tablette").json()["kneeboard"],
+                         {"sur": "tablette", "ouvert": None})
+        self.lua.annoncer(self.pont.port_etat, "FA-18C_hornet")
+        for _ in range(100):
+            if client.get("/api/etat").json()["dcs"]["connecte"]:
+                break
+            time.sleep(0.02)
+        self.assertEqual(client.get("/api/etat?kneeboard=tablette").json()["kneeboard"],
+                         {"sur": "tablette", "ouvert": True})
+        self.assertEqual(client.get("/api/etat?kneeboard=pc").json()["kneeboard"],
+                         {"sur": "pc", "ouvert": None})
 
     def test_pages_du_kneeboard_de_dcs(self):
         self.client.post("/api/kneeboard/dcs/page", json={"sens": 1})

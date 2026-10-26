@@ -95,12 +95,44 @@ bas de la vue : pour essayer, pas pour voler.
 - **Écran d'accueil** : manifeste et icônes (`scripts/generer_icones.py`)
   pour Android et iOS ; bouton ⛶ (plein écran) là où le navigateur le permet.
 - **Boutons** : enfoncés dans le cockpit tant que le doigt est posé.
-- **Kneeboard** : un bouton bascule vers lui et revient. En tête, le kneeboard
-  de DCS en direct (RShift+K pour l'ouvrir) ; puis les pages de la mission en
-  cours, de `Saved Games\DCS\Kneeboard` et des missions du dossier Missions.
-- **Sur le PC** : quand le kneeboard de DCS tombe sur l'écran virtuel, une
-  fenêtre miroir le recopie en bas à droite de l'écran principal, au-dessus de
-  la barre des tâches ; la souris la traverse.
+- **Appareil** (menu en haut à gauche) : *Auto* suit l'annonce de DCS ; un
+  appareil choisi à la main prépare la page avant la mission. Le choix vit
+  dans un cookie de la page (`tablette_appareil`) : chaque tablette a le
+  sien. Garde-fou (`garde_fou` dans `app.py`) : choisi ≠ piloté, aucun ordre
+  ne part, car la liste blanche du script Lua suit l'appareil PILOTÉ et
+  laisserait passer un numéro qui y désigne autre chose (OSB 1 du MFD droit
+  du F-16 = A/P de l'UFC du Hornet).
+- **Coins des écrans** : `arrondi` de chaque `Ecran` ; 0,17 mesuré sur les
+  DDI du Hornet, 0,02 ailleurs tant que rien n'est mesuré (l'écran de
+  l'Apache est quasi carré).
+- **Script Lua** : écrit dans dcs.log sous `DCS-TABLETTE` (chargé, prêt,
+  appareil vu, ou la panne) ; démarrage manqué ou port pris : nouvel essai
+  toutes les 5 s, et l'appareil est annoncé même sans écoute des appuis.
+  Vu en vrai le 26/10 : un vol entier dans l'Apache sans un mot du script,
+  cause non retrouvée faute de trace.
+- **Kneeboard** : un bouton bascule vers lui et revient. Carnets
+  (`kneeboard.py`) :
+  - « Kneeboard DCS (en direct) » : la capture du kneeboard de DCS, seule
+    source des pages que DCS fabrique (fréquences, points) ;
+  - « Kneeboard de l'avion », par défaut : les fichiers que DCS met dans le
+    kneeboard de l'appareil piloté — mission en cours (`.miz`, ou `.trk` en
+    multijoueur : vu dans dcs.log, DCS y charge la mission du serveur), pages
+    du module, `Saved Games\DCS\Kneeboard\<appareil>` puis `Kneeboard\` ;
+  - « Cartes : <carte> » : planches de la carte de la mission
+    (`Mods/terrains/<carte>/Kneeboard`, 53 pour le Caucase) ;
+  - les autres missions du dossier Missions.
+  Dossier de DCS lu sur le DCS.exe qui tourne ; module et carte retrouvés par
+  leurs `entry.lua` (`make_flyable('<appareil>'`, `local self_ID = "<carte>"`).
+  DDS, TGA, BMP convertis en PNG.
+- **Kneeboard DCS sur PC ou tablette** (onglet Kneeboard) : où va le
+  kneeboard quand on l'ouvre dans DCS (RShift+K, K).
+  - PC : une fenêtre miroir le recopie en bas à droite de l'écran principal
+    (DCS le dessine sur l'écran virtuel), au-dessus de la barre des tâches ;
+    la souris la traverse.
+  - Tablette : pas de miroir ; l'ouvrir dans DCS amène la tablette sur le
+    kneeboard en direct, le refermer la ramène où elle était.
+  La page redit son choix à chaque demande d'état (`/api/etat?kneeboard=…`) ;
+  muette plus de 10 s, le PC reprend le kneeboard (`AffichageKneeboard`).
 
 ## Fonctionnement
 

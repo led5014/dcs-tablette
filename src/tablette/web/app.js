@@ -13,7 +13,7 @@
 const $ = (sel) => document.querySelector(sel);
 const attendre = (ms) => new Promise((fin) => setTimeout(fin, ms));
 
-const PERIODE_ETAT_MS = 1500;
+const PERIODE_ETAT_MS = 750;        // aussi le délai de la bascule sur le kneeboard
 const PERIODE_IMAGE_MS = 33;        // au plus 30 images par seconde et par écran
 const PERIODE_PLANCHE_MS = 100;     // UFC, IFEI, aiguilles : 10 fois par seconde
 const ATTENTE_SANS_IMAGE_MS = 1500;
@@ -62,7 +62,11 @@ async function poster(url, corps) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(corps),
     });
-    if (!r.ok) return false;
+    // Refusé par le serveur (appareil choisi à la main ≠ appareil piloté…) :
+    // sa raison, à montrer telle quelle.
+    if (!r.ok) {
+      try { return (await r.json()).detail || false; } catch { return false; }
+    }
     return (await r.json()).envoye === true;
   } catch { return false; }
 }
@@ -434,6 +438,7 @@ function construireCadre(e) {
   const ecran = element('div', 'ecran');
   ecran.style.gridColumn = `2 / ${n + 2}`;
   ecran.style.gridRow = `2 / ${n + 2}`;
+  if (typeof e.arrondi === 'number') ecran.style.setProperty('--arrondi', `${e.arrondi * 100}%`);
   const toile = element('canvas', 'video');
   const msg = element('div', 'ecran-msg', "En attente de l'image…");
   const retour = element('div', 'ecran-retour');
@@ -464,8 +469,9 @@ function construireCadre(e) {
     }
     brancherAppui(el, (enfonce) => enFile('/api/bouton',
       { ecran: e.id, bouton: b.id, enfonce, siege }).then((ok) => {
-      retour.textContent = ok ? `${b.id} ${enfonce ? 'enfoncé' : 'relâché'}` : `${b.id} : non transmis`;
-      retour.classList.toggle('erreur', !ok);
+      retour.textContent = ok === true ? `${b.id} ${enfonce ? 'enfoncé' : 'relâché'}`
+        : `${b.id} : ${typeof ok === 'string' ? ok : 'non transmis'}`;
+      retour.classList.toggle('erreur', ok !== true);
     }));
   }
   boucleImage(e.id, ecran, toile, msg, generation);
@@ -770,42 +776,120 @@ async function chargerProfil() {
 async function rafraichirEtat() {
   const el = $('#etat');
   let classe = 'inconnu';
-  let texte;
+  let detecte;                    // ce que DCS dit, pour l'option « Auto »
+  let titre;
+  let ailleurs = null;
   try {
-    const e = await (await fetch('/api/etat', { cache: 'no-store' })).json();
+    const e = await (await fetch(`/api/etat?kneeboard=${kneeboardSur}`, { cache: 'no-store' })).json();
+    suivreKneeboardDcs(e.kneeboard);
     const d = e.dcs;
+    ailleurs = e.ailleurs;
     if (!d.connecte) {
-      texte = `DCS : pas de signal — ${e.libelle}`;
+      detecte = 'DCS : pas de signal';
     } else if (!d.appareil) {
-      texte = 'DCS : pas dans un appareil';
+      detecte = 'DCS : pas dans un appareil';
+    } else if (ailleurs) {
+      detecte = `DCS : ${ailleurs}`;
     } else if (e.profil === 'generique') {
       classe = 'autre';
-      texte = `DCS : ${d.appareil} — pas de profil, kneeboard seul`;
+      detecte = `${d.appareil} (pas de profil, kneeboard seul)`;
     } else {
       classe = 'ok';
-      texte = `DCS : ${e.libelle}`;
+      detecte = e.choisi ? `DCS : ${e.libelle}` : e.libelle;
+    }
+    titre = detecte;
+    if (ailleurs) {
+      classe = 'autre';
+      titre = `Tablette réglée sur ${e.libelle}, DCS pilote ${ailleurs} : boutons coupés`;
     }
     if (profil && e.profil !== profil.id) chargerProfil();
   } catch {
     classe = 'erreur';
-    texte = 'Serveur injoignable';
+    detecte = 'serveur injoignable';
+    titre = 'Serveur de la tablette injoignable';
   }
   el.className = 'etat ' + classe;
-  el.textContent = texte;
+  el.title = titre;
+  el.setAttribute('aria-label', titre);
+  majMenuAppareil(detecte, ailleurs);
 }
+
+// --------------------------------------------------------------- appareil
+// Le menu Appareil : « Auto » suit ce que DCS annonce ; un appareil choisi à
+// la main prépare la page avant la mission, ou rattrape un DCS muet. Le
+// choix voyage dans un cookie : chaque tablette garde le sien, et le serveur
+// coupe les boutons si l'appareil choisi n'est pas celui que DCS pilote.
+
+const COOKIE_APPAREIL = 'tablette_appareil';
+
+function choixAppareil() {
+  const m = document.cookie.match(/(?:^|; )tablette_appareil=([^;]*)/);
+  return m ? decodeURIComponent(m[1]) : 'auto';
+}
+
+function retenirAppareil(valeur) {
+  document.cookie = valeur === 'auto'
+    ? `${COOKIE_APPAREIL}=; path=/; max-age=0; SameSite=Lax`
+    : `${COOKIE_APPAREIL}=${encodeURIComponent(valeur)}; path=/; max-age=31536000; SameSite=Lax`;
+}
+
+async function construireMenuAppareil() {
+  const select = $('#appareil');
+  let liste = [];
+  try {
+    liste = await (await fetch('/api/profils', { cache: 'no-store' })).json();
+  } catch {
+    setTimeout(construireMenuAppareil, 2000);
+    return;
+  }
+  const auto = select.options[0];
+  select.textContent = '';
+  select.append(auto);
+  for (const p of liste) {
+    const opt = element('option', '', p.libelle);
+    opt.value = p.id;
+    opt.dataset.libelle = p.libelle;
+    select.append(opt);
+  }
+  select.value = choixAppareil();
+  if (select.selectedIndex < 0) select.value = 'auto';
+}
+
+function majMenuAppareil(detecte, ailleurs) {
+  const select = $('#appareil');
+  select.options[0].textContent = `Auto · ${detecte}`;
+  for (const opt of select.options) {
+    if (!opt.dataset.libelle) continue;
+    opt.textContent = opt.selected && ailleurs
+      ? `${opt.dataset.libelle} — DCS : ${ailleurs}` : opt.dataset.libelle;
+  }
+  select.title = select.selectedOptions.length ? select.selectedOptions[0].textContent : '';
+}
+
+$('#appareil').addEventListener('change', (e) => {
+  toutRelacher();                 // les boutons sous le doigt vont changer
+  retenirAppareil(e.target.value);
+  chargerProfil();
+  if (enKneeboard) chargerCarnets();
+  rafraichirEtat();
+});
 
 // --------------------------------------------------------------- kneeboard
 
 // En tête, le kneeboard de DCS lui-même, capturé en direct : les pages que
 // DCS fabrique (carte, points, fréquences) n'existent nulle part en fichier.
 // Ses flèches tournent les pages DANS DCS, comme les touches [ et ].
+// Puis les fichiers, lus tels quels, nets à toute taille : « Kneeboard de
+// l'avion » (mission, module, pages perso), les cartes, les autres missions.
 const KNEEBOARD_DCS = { id: 'dcs', titre: 'Kneeboard DCS (en direct)', direct: true };
 
 let carnets = [];
 let carnet = null;
 let page = 0;
 
-async function chargerCarnets() {
+// `impose` : carnet choisi par la page elle-même (bascule à l'ouverture dans
+// DCS), qui ne remplace pas celui que l'on a choisi à la main.
+async function chargerCarnets(impose = null) {
   let fichiers = [];
   try {
     fichiers = await (await fetch('/api/kneeboard', { cache: 'no-store' })).json();
@@ -818,18 +902,26 @@ async function chargerCarnets() {
     opt.value = c.id;
     select.append(opt);
   }
-  const memoire = lire('carnet', '');
-  carnet = carnets.find((c) => c.id === memoire) || carnets[0];
-  page = carnet.id === memoire ? Number(lire('page', '0')) || 0 : 0;
+  const voulu = impose || lire('carnet', '');
+  carnet = carnets.find((c) => c.id === voulu)
+    || carnets.find((c) => c.id === 'avion') || carnets[0];
+  page = !impose && carnet.id === voulu ? Number(lire('page', '0')) || 0 : 0;
   select.value = carnet.id;
-  afficherPage();
+  afficherPage(!impose);
 }
 
-function afficherPage() {
+function choisirCarnet(id, memoriser) {
+  carnet = carnets.find((c) => c.id === id) || carnet;
+  page = 0;
+  $('#kb-carnet').value = carnet.id;
+  afficherPage(memoriser);
+}
+
+function afficherPage(memoriser = true) {
   const vue = $('#kb-vue');
   const img = $('#kb-image');
   vue.classList.toggle('direct', carnet.direct === true);
-  retenir('carnet', carnet.id);
+  if (memoriser) retenir('carnet', carnet.id);
   if (carnet.direct) {
     img.hidden = true;
     $('#kb-vide').hidden = true;
@@ -852,7 +944,52 @@ function afficherPage() {
   $('#kb-prec').disabled = page === 0;
   $('#kb-suiv').disabled = page === carnet.pages - 1;
   if (page + 1 < carnet.pages) new Image().src = `${carnet.url}/${page + 1}`;
-  retenir('page', page);
+  if (memoriser) retenir('page', page);
+}
+
+// --------------------------------------------------------------- kneeboard de DCS
+// Où va le kneeboard quand on l'ouvre dans DCS (RShift+K, K) : sur le PC,
+// par le miroir, comme d'habitude ; ou ici. La page redit ce choix au
+// serveur à chaque demande d'état ; muette plus de 10 s, il revient au PC.
+// Sur la tablette, l'ouvrir dans DCS amène la page sur le kneeboard en
+// direct ; le refermer la ramène là où elle était.
+
+let kneeboardSur = lire('kneeboard.sur', 'pc') === 'tablette' ? 'tablette' : 'pc';
+let ouvertDansDcs = false;
+let avantOuverture = null;      // { enKneeboard, carnet } quand DCS l'a ouvert
+
+function construireKneeboardSur() {
+  for (const b of document.querySelectorAll('#kb-sur button')) {
+    b.classList.toggle('actif', b.dataset.sur === kneeboardSur);
+  }
+}
+
+async function suivreKneeboardDcs(kb) {
+  const ouvert = Boolean(kb && kb.sur === 'tablette' && kb.ouvert === true);
+  if (ouvert === ouvertDansDcs) return;
+  ouvertDansDcs = ouvert;
+  if (ouvert) {
+    avantOuverture = { enKneeboard, carnet: carnet ? carnet.id : null };
+    if (!enKneeboard) {
+      toutRelacher();               // les écrans vont disparaître sous le doigt
+      enKneeboard = true;
+      appliquer();
+      await chargerCarnets(KNEEBOARD_DCS.id);
+    } else if (!carnet || !carnet.direct) {
+      choisirCarnet(KNEEBOARD_DCS.id, false);
+    }
+    return;
+  }
+  const avant = avantOuverture;
+  avantOuverture = null;
+  // Revenu ailleurs à la main entre-temps : on n'y touche pas.
+  if (!avant || !enKneeboard || !carnet || !carnet.direct) return;
+  if (!avant.enKneeboard) {
+    enKneeboard = false;
+    appliquer();
+  } else if (avant.carnet) {
+    choisirCarnet(avant.carnet, false);
+  }
 }
 
 function tourner(sens) {
@@ -875,6 +1012,15 @@ function brancherKneeboard() {
   });
   $('#kb-prec').addEventListener('click', () => tourner(-1));
   $('#kb-suiv').addEventListener('click', () => tourner(1));
+  for (const b of document.querySelectorAll('#kb-sur button')) {
+    b.addEventListener('click', () => {
+      kneeboardSur = b.dataset.sur;
+      retenir('kneeboard.sur', kneeboardSur);
+      construireKneeboardSur();
+      rafraichirEtat();             // le PC le sait tout de suite
+    });
+  }
+  construireKneeboardSur();
 
   // Balayage horizontal pour tourner la page ; un appui sur le tiers gauche
   // ou droit fait de même, pour qui préfère taper que glisser.
@@ -932,6 +1078,7 @@ function brancherPleinEcran() {
 // --------------------------------------------------------------- démarrage
 
 brancherPleinEcran();
+construireMenuAppareil();
 brancherKneeboard();
 chargerProfil();
 boucleImage('kneeboard', $('#kb-vue'), $('#kb-direct'), $('#kb-msg'), null);
