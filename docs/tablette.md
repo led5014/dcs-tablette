@@ -130,7 +130,14 @@ bas de la vue : pour essayer, pas pour voler.
     (DCS le dessine sur l'écran virtuel), au-dessus de la barre des tâches ;
     la souris la traverse.
   - Tablette : pas de miroir ; l'ouvrir dans DCS amène la tablette sur le
-    kneeboard en direct, le refermer la ramène où elle était.
+    kneeboard en direct, le refermer la ramène où elle était. Et l'inverse :
+    regarder le kneeboard en direct sur la tablette l'ouvre dans DCS (DCS
+    ne le dessine qu'ouvert), passer à autre chose le referme — message
+    « kneeboard ±1 », le coup d'œil de la touche K (iCommandPlaneShowKneeboard,
+    1587, `LoSetCommand`), seul ordre accepté hors liste blanche.
+  La page se recharge seule quand la version du serveur change (`version`
+  dans `/api/etat`) : une icône d'écran d'accueil n'a pas de bouton pour
+  recharger, et la vieille page tournait sur le nouveau serveur.
   La page redit son choix à chaque demande d'état (`/api/etat?kneeboard=…`) ;
   muette plus de 10 s, le PC reprend le kneeboard (`AffichageKneeboard`).
 

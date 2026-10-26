@@ -13,7 +13,8 @@ l'affiche : iPad, tablette Android, téléphone, navigateur d'un autre PC.
   fichiers, nettes à toute taille — mission en cours (solo ou multijoueur),
   pages du module, les vôtres, planches de la carte — et celui de DCS en
   direct. Au choix, la touche kneeboard de DCS l'affiche sur le PC comme
-  d'habitude, ou sur la tablette, qui bascule alors d'elle-même dessus.
+  d'habitude, ou sur la tablette, qui bascule alors d'elle-même dessus — et
+  dans ce mode, l'ouvrir sur la tablette l'ouvre dans DCS, sans clavier.
 - **Toutes les tailles d'écran** : la page ne propose que les dispositions
   qui restent confortables au doigt sur l'écran utilisé — un ou deux écrans
   sur un téléphone, trois sur une tablette en paysage, toute la planche sur
@@ -133,6 +134,9 @@ l'autre, le même numéro désigne un tout autre bouton.
   apparaît quand vous l'ouvrez : *PC* (une fenêtre le recopie en bas à
   droite de l'écran principal) ou *Tablette* (elle bascule dessus, rien sur
   le PC). Si la tablette se déconnecte, il revient sur le PC au bout de 10 s.
+- **La tablette montre une ancienne version après une mise à jour** : à
+  partir de la 1.2.1 elle se recharge seule ; avant, fermer l'app (ou
+  l'onglet) et la rouvrir.
 
 ## Depuis le code source
 

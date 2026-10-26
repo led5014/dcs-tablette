@@ -14,7 +14,7 @@ from urllib.parse import quote
 from fastapi import Cookie, FastAPI, HTTPException
 from fastapi.responses import FileResponse, JSONResponse, Response
 
-from . import appareils, planche
+from . import VERSION, appareils, planche
 from .appareils import Profil
 from .config import Config
 from .dcs import PontDCS
@@ -115,7 +115,8 @@ def create_app(cfg: Optional[Config] = None, pont: Optional[PontDCS] = None,
         sur = affichage.effectif()
         ouvert = (video.kneeboard_ouvert()
                   if sur == AffichageKneeboard.TABLETTE and dcs_etat["connecte"] else None)
-        return {"dcs": dcs_etat, "profil": profil.id, "libelle": profil.libelle,
+        return {"version": VERSION,
+                "dcs": dcs_etat, "profil": profil.id, "libelle": profil.libelle,
                 "appareil": nom, "choisi": appareils.profil_par_id(choix or "") is not None,
                 "ailleurs": pilote_ailleurs(profil),
                 "kneeboard": {"sur": sur, "ouvert": ouvert}}
@@ -233,6 +234,19 @@ def create_app(cfg: Optional[Config] = None, pont: Optional[PontDCS] = None,
         commande = PAGE_SUIVANTE if sens == 1 else PAGE_PRECEDENTE
         envoye = pont.appuyer(profil.kneeboard, commande, True)
         journal.info("Kneeboard page %s%s", "suivante" if sens == 1 else "précédente",
+                     "" if envoye else " — envoi impossible")
+        return {"envoye": envoye}
+
+    @app.post("/api/kneeboard/dcs/affichage")
+    def affichage_kneeboard_dcs(corps: Optional[Dict] = None) -> Dict:
+        """Affiche ou cache le kneeboard dans DCS, comme le coup d'œil (K) :
+        en mode tablette, le regarder ici en direct l'ouvre dans DCS, sans
+        toucher au clavier. Commun à tous les appareils."""
+        ouvert = (corps or {}).get("ouvert")
+        if not isinstance(ouvert, bool):
+            raise HTTPException(status_code=422, detail="ouvert : true ou false")
+        envoye = pont.kneeboard(ouvert)
+        journal.info("Kneeboard %s dans DCS%s", "affiché" if ouvert else "caché",
                      "" if envoye else " — envoi impossible")
         return {"envoye": envoye}
 

@@ -1,8 +1,9 @@
 """Le lien avec DCS : deux sens, en UDP, sur la boucle locale.
 
 - Aller : un datagramme par appui ou relâchement vers le script Lua,
-  "<appareil> <commande> <valeur>". Rien n'attend de réponse : un ordre
-  perdu est un bouton qui ne s'enfonce pas, et le pilote réappuie.
+  "<appareil> <commande> <valeur>" ; et "kneeboard 1" / "kneeboard -1"
+  pour afficher ou cacher le kneeboard de DCS. Rien n'attend de réponse :
+  un ordre perdu est un bouton qui ne s'enfonce pas, et le pilote réappuie.
 - Retour : le script annonce chaque seconde l'appareil piloté. Faute
   d'annonce depuis `SILENCE_S`, DCS est considéré absent — on ne prétend
   pas savoir ce qui se passe dans un cockpit qu'on n'entend plus. Dans un
@@ -115,6 +116,10 @@ class PontDCS:
     def appuyer(self, appareil: int, commande: int, enfonce: bool) -> bool:
         """Envoie l'ordre ; faux seulement si l'envoi lui-même a échoué."""
         return self._envoyer(f"{appareil} {commande} {1 if enfonce else 0}")
+
+    def kneeboard(self, ouvert: bool) -> bool:
+        """Affiche ou cache le kneeboard de DCS (le coup d'œil, touche K)."""
+        return self._envoyer(f"kneeboard {1 if ouvert else -1}")
 
     def tourner(self, appareil: int, commande: int, cran: float) -> bool:
         """Un cran de molette, dans le sens du signe de `cran`."""

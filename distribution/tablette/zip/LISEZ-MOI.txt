@@ -69,7 +69,9 @@ Dans cet onglet, « Kneeboard DCS sur » choisit où il apparaît quand on
 l'ouvre dans DCS (RShift+K, ou K enfoncé) :
   - PC : en bas à droite de l'écran, comme d'habitude ;
   - Tablette : rien sur le PC, la tablette bascule dessus, et revient aux
-    écrans quand on le referme.
+    écrans quand on le referme. Et sans toucher au clavier : afficher
+    « Kneeboard DCS (en direct) » sur la tablette l'ouvre dans DCS, passer
+    à autre chose le referme.
 Si la tablette se déconnecte, il revient sur le PC au bout de 10 secondes.
 
 Fermer la fenêtre de DCS Tablette arrête tout.

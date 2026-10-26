@@ -125,6 +125,7 @@ function brancherGeste(el, envoyer) {
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) toutRelacher();
   else redisposer();
+  accorderKneeboardDcs();
 });
 
 // --------------------------------------------------------------- état
@@ -265,6 +266,7 @@ function appliquer() {
   document.body.classList.toggle('en-kneeboard', enKneeboard);
   $('#scene').hidden = enKneeboard;
   $('#kneeboard').hidden = !enKneeboard;
+  accorderKneeboardDcs();
   const sansEcrans = dispositions.length === 0;
   $('#bascule').hidden = sansEcrans;
   $('#bascule').textContent = enKneeboard ? 'Écrans' : 'Kneeboard';
@@ -773,6 +775,8 @@ async function chargerProfil() {
 
 // --------------------------------------------------------------- état DCS
 
+let versionServeur = null;
+
 async function rafraichirEtat() {
   const el = $('#etat');
   let classe = 'inconnu';
@@ -781,6 +785,17 @@ async function rafraichirEtat() {
   let ailleurs = null;
   try {
     const e = await (await fetch(`/api/etat?kneeboard=${kneeboardSur}`, { cache: 'no-store' })).json();
+    // Serveur mis à jour pendant que la page restait ouverte (iPad en veille,
+    // icône d'écran d'accueil sans bouton pour recharger) : on se recharge,
+    // sinon la vieille page continue de tourner sur le nouveau serveur.
+    if (versionServeur === null) {
+      versionServeur = e.version;
+      document.title = `DCS Tablette ${e.version}`;
+    } else if (e.version && e.version !== versionServeur) {
+      toutRelacher();
+      location.reload();
+      return;
+    }
     suivreKneeboardDcs(e.kneeboard);
     const d = e.dcs;
     ailleurs = e.ailleurs;
@@ -921,6 +936,7 @@ function afficherPage(memoriser = true) {
   const vue = $('#kb-vue');
   const img = $('#kb-image');
   vue.classList.toggle('direct', carnet.direct === true);
+  accorderKneeboardDcs();
   if (memoriser) retenir('carnet', carnet.id);
   if (carnet.direct) {
     img.hidden = true;
@@ -957,6 +973,18 @@ function afficherPage(memoriser = true) {
 let kneeboardSur = lire('kneeboard.sur', 'pc') === 'tablette' ? 'tablette' : 'pc';
 let ouvertDansDcs = false;
 let avantOuverture = null;      // { enKneeboard, carnet } quand DCS l'a ouvert
+let afficheParLaTablette = false;
+
+// Sur la tablette, regarder le kneeboard de DCS en direct suffit à l'ouvrir
+// dans DCS (DCS ne le dessine qu'ouvert) ; passer à autre chose le referme.
+// Rien ne s'affiche sur le PC : en mode tablette, le miroir est coupé.
+function accorderKneeboardDcs() {
+  const voulu = kneeboardSur === 'tablette' && enKneeboard && !document.hidden
+    && carnet !== null && carnet.direct === true;
+  if (voulu === afficheParLaTablette) return;
+  afficheParLaTablette = voulu;
+  poster('/api/kneeboard/dcs/affichage', { ouvert: voulu });
+}
 
 function construireKneeboardSur() {
   for (const b of document.querySelectorAll('#kb-sur button')) {
@@ -1017,6 +1045,7 @@ function brancherKneeboard() {
       kneeboardSur = b.dataset.sur;
       retenir('kneeboard.sur', kneeboardSur);
       construireKneeboardSur();
+      accorderKneeboardDcs();
       rafraichirEtat();             // le PC le sait tout de suite
     });
   }

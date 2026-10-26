@@ -200,7 +200,19 @@ end
 
 --- Un ordre reçu : vérifié entièrement contre le profil avant de toucher au
 --- cockpit.
+-- Afficher ou cacher le kneeboard de DCS, pour le montrer sur la tablette
+-- sans toucher au clavier : la commande du coup d'œil (touche K,
+-- iCommandPlaneShowKneeboard), +1 l'affiche, -1 le cache — et non la bascule
+-- de RShift+K, qui inverserait à l'aveugle. Commune à tous les appareils ;
+-- seules ces deux valeurs passent.
+local KNEEBOARD_AFFICHER = 1587
+
 local function traiter(message, maintenant)
+  local sens = tostring(message):match("^kneeboard (%-?1)%s*$")
+  if sens then
+    pcall(LoSetCommand, KNEEBOARD_AFFICHER, tonumber(sens))
+    return
+  end
   local d, c, v = tostring(message):match("^(%d+) (%d+) (%-?[%d%.]+)%s*$")
   d, c, v = tonumber(d), tonumber(c), tonumber(v)
   if not d or not c or not v or not profil then return end

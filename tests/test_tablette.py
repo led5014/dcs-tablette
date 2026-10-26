@@ -1072,6 +1072,22 @@ class TestApiTablette(unittest.TestCase):
         self.assertEqual(client.get("/api/etat?kneeboard=pc").json()["kneeboard"],
                          {"sur": "pc", "ouvert": None})
 
+    def test_kneeboard_de_dcs_affiche_depuis_la_tablette(self):
+        """Le coup d'œil (K) : +1 l'affiche, -1 le cache ; rien d'autre."""
+        self.client.post("/api/kneeboard/dcs/affichage", json={"ouvert": True})
+        self.assertEqual(self.lua.recevoir(), "kneeboard 1")
+        self.client.post("/api/kneeboard/dcs/affichage", json={"ouvert": False})
+        self.assertEqual(self.lua.recevoir(), "kneeboard -1")
+        for valeur in (1, "true", None):
+            r = self.client.post("/api/kneeboard/dcs/affichage", json={"ouvert": valeur})
+            self.assertEqual(r.status_code, 422, valeur)
+        self.silence()
+
+    def test_version_dans_l_etat(self):
+        """La page se recharge quand le serveur change de version."""
+        from tablette import VERSION
+        self.assertEqual(self.client.get("/api/etat").json()["version"], VERSION)
+
     def test_pages_du_kneeboard_de_dcs(self):
         self.client.post("/api/kneeboard/dcs/page", json={"sens": 1})
         self.assertEqual(self.lua.recevoir(), "68 3001 1")
