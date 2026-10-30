@@ -327,6 +327,11 @@ body.en-kneeboard #modes { opacity: .45; }
    basse : les marges suivent, pour que le bouton garde une forme de touche. */
 .pb.cote-gauche, .pb.cote-droite { margin: 18% 12%; }
 .pb.cote-haut, .pb.cote-bas { margin: 12% 18%; }
+/* Boutons centrés sur les libellés (app.js, pistes) : leurs cases sont plus
+   étroites, les vides entre elles font l'écart ; marges réduites le long du
+   bord pour garder la taille sous le doigt. */
+.sur-reperes .pb.cote-haut, .sur-reperes .pb.cote-bas { margin: 12% 4%; }
+.sur-reperes .pb.cote-gauche, .sur-reperes .pb.cote-droite { margin: 4% 12%; }
 /* La molette de luminosité, dans le coin bas gauche du cadre : un bouton
    rond strié, son repère tourne de 30° par cran (--angle, posé par la page). */
 .molette-lum {

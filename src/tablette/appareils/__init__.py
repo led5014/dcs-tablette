@@ -46,6 +46,14 @@ class Ecran:
     # presque droits — l'écran de l'Apache est quasi carré, et arrondir sans
     # l'avoir mesuré rognerait des symboles.
     arrondi: float = 0.02
+    # Où le module écrit le libellé de chaque bouton, en fraction de l'image
+    # exportée : de gauche à droite pour les rangées du haut et du bas, de
+    # haut en bas pour les côtés, un par rang. La tablette centre chaque
+    # bouton sur le sien (retour de vol : sur l'Apache, ceux des bouts
+    # tombaient à côté). None : boutons également répartis, faute de source
+    # (module absent du poste de développement).
+    reperes_x: Optional[Tuple[float, ...]] = None
+    reperes_y: Optional[Tuple[float, ...]] = None
 
     def appareil(self, siege: str) -> Optional[int]:
         if siege in self.appareils:
@@ -85,10 +93,24 @@ class Profil:
             "panneaux": list(self.panneaux),
             "ecrans": [{"id": e.id, "libelle": e.libelle, "par_cote": e.par_cote,
                         "arrondi": e.arrondi,
+                        "reperes_x": list(e.reperes_x) if e.reperes_x else None,
+                        "reperes_y": list(e.reperes_y) if e.reperes_y else None,
                         "boutons": [{"id": b.id, "cote": b.cote, "rang": b.rang}
                                     for b in e.boutons]}
                        for e in self.ecrans],
         }
+
+
+def reperes(premier: float, dernier: float, n: int, demi_image: float,
+            vers_le_bas: bool = False) -> Tuple[float, ...]:
+    """`n` libellés également espacés de `premier` à `dernier`, en unités du
+    module (0 au centre de l'image, y vers le haut ; `demi_image` unités du
+    centre au bord), en fraction de l'image depuis la gauche — ou depuis le
+    haut, `vers_le_bas`."""
+    pas = (dernier - premier) / (n - 1)
+    signe = -1 if vers_le_bas else 1
+    return tuple(round(0.5 + signe * (premier + i * pas) / (2 * demi_image), 4)
+                 for i in range(n))
 
 
 def couronne_horaire(par_cote: int, premier_cote: str,

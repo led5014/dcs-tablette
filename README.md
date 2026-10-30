@@ -57,6 +57,11 @@ de l'OH-58D, du Mi-24P et de la Gazelle viennent de
 [DCS-BIOS](https://github.com/DCS-Skunkworks/dcs-bios) et restent à confirmer
 en vol : un retour est bienvenu.
 
+Sur le Hornet, l'Apache et l'A-10C, chaque bouton est en face du libellé que
+le module écrit sur l'écran (positions lues dans les scripts du module). Sur
+le F-16C et l'OH-58D, les boutons sont également répartis le long du cadre :
+une capture d'écran de leurs MFD permettra de les caler aussi.
+
 ## Installation
 
 1. Extraire le zip là où il restera (par exemple dans Documents), puis

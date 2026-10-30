@@ -166,6 +166,19 @@ bas de la vue : pour essayer, pas pour voler.
 - **Coins des écrans** : `arrondi` de chaque `Ecran` ; 0,17 mesuré sur les
   DDI du Hornet, 0,02 ailleurs tant que rien n'est mesuré (l'écran de
   l'Apache est quasi carré).
+- **Boutons en face des libellés** (retour de vol, 30/10/2026 : sur
+  l'Apache, ceux des bouts tombaient à côté) : `reperes_x` / `reperes_y` de
+  chaque `Ecran`, là où le module écrit les libellés, lus dans ses scripts —
+  Apache MFD_PB_Defs.lua, Hornet MPD_PB_defs.lua, A-10C OSB_positions ;
+  `TestContreLesScriptsDesModules` les relit. Le serveur les ramène à
+  l'image rognée (`app.vu_par_la_tablette`), la page fait une case par
+  bouton centrée sur son libellé, des vides entre (`app.js`, `pistes`).
+  Vérifié sur une image dessinée aux positions des scripts : 1,4 px d'écart
+  au plus sur un écran de 373 px. F-16C, OH-58D : modules absents du poste,
+  boutons également répartis, à caler sur une capture.
+- **Appuis** : rien d'écrit sur l'image quand l'appui passe (retour de vol :
+  « T1 enfoncé » masquait le bas de l'écran) ; un refus et le cran de
+  luminosité s'affichent 1,8 s.
 - **Script Lua** : écrit dans dcs.log sous `DCS-TABLETTE` (chargé, prêt,
   appareil vu, ou la panne) ; démarrage manqué ou port pris : nouvel essai
   toutes les 5 s, et l'appareil est annoncé même sans écoute des appuis.

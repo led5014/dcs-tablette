@@ -22,7 +22,7 @@ from .config import Config
 from .dcs import PontDCS
 from .kneeboard import lire_page, lister_carnets, trouver
 from .miroir import AffichageKneeboard
-from .video import KNEEBOARD, PasDImage, Video
+from .video import KNEEBOARD, ROGNAGE, PasDImage, Video
 
 WEB_DIR = Path(__file__).resolve().parent / "web"
 
@@ -54,6 +54,16 @@ def hote_permis(hote: str) -> bool:
     except ValueError:
         pc = socket.gethostname().lower()
         return nom.lower() in ("localhost", pc, f"{pc}.local")
+
+
+def vu_par_la_tablette(description: Dict) -> Dict:
+    """Les repères des libellés, en fraction de l'image que la tablette
+    montre : celle de DCS rognée de ROGNAGE sur chaque bord (video.py)."""
+    for ecran in description["ecrans"]:
+        for cle in ("reperes_x", "reperes_y"):
+            if ecran.get(cle):
+                ecran[cle] = [round((f - ROGNAGE) / (1 - 2 * ROGNAGE), 4) for f in ecran[cle]]
+    return description
 
 
 def create_app(cfg: Optional[Config] = None, pont: Optional[PontDCS] = None,
@@ -177,7 +187,7 @@ def create_app(cfg: Optional[Config] = None, pont: Optional[PontDCS] = None,
 
     @app.get("/api/profil")
     def description_profil(choix: Optional[str] = Cookie(None, alias=CHOIX)) -> Dict:
-        return actif(choix)[0].description()
+        return vu_par_la_tablette(actif(choix)[0].description())
 
     @app.post("/api/bouton")
     def bouton(corps: Optional[Dict] = None,

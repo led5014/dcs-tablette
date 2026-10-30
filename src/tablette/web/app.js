@@ -439,29 +439,36 @@ const luminosites = new Map();
 
 function cleLuminosite(id) { return `luminosite.${profil ? profil.id : ''}.${id}`; }
 
+// Un mot en bas de l'écran (refus d'un appui, cran de luminosité), effacé
+// après DUREE_RETOUR_MS : rien ne doit rester sur l'image.
+const DUREE_RETOUR_MS = 1800;
+function dire(retour, texte, erreur) {
+  retour.textContent = texte;
+  retour.classList.toggle('erreur', erreur);
+  clearTimeout(retour.effacement);
+  retour.effacement = setTimeout(() => { retour.textContent = ''; }, DUREE_RETOUR_MS);
+}
+
 // Une molette ronde dans le coin bas gauche du cadre, là où un vrai MFD a sa
 // commande BRT. On la tourne du doigt : glisser vers le haut ou la droite
 // éclaircit, cran par cran ; la molette de la souris et les flèches aussi.
-function moletteLuminosite(cadre, id, n, retour) {
+function moletteLuminosite(cadre, id, ligneDuBas, retour) {
   luminosites.set(id, Number(lire(cleLuminosite(id), 0)) || 0);
   const m = element('div', 'molette-lum');
   m.append(element('span', 'repere'));
   m.style.gridColumn = '1';
-  m.style.gridRow = String(n + 2);
+  m.style.gridRow = String(ligneDuBas);
   m.tabIndex = 0;
   m.setAttribute('role', 'slider');
   m.setAttribute('aria-label', 'Luminosité');
   m.setAttribute('aria-valuemin', String(LUMINOSITE_MIN));
   m.setAttribute('aria-valuemax', String(LUMINOSITE_MAX));
 
-  const dessiner = (dire) => {
+  const dessiner = (afficher) => {
     const v = luminosites.get(id) || 0;
     m.style.setProperty('--angle', `${v * ANGLE_CRAN}deg`);
     m.setAttribute('aria-valuenow', String(v));
-    if (dire) {
-      retour.textContent = `Luminosité ${v > 0 ? '+' : ''}${v}`;
-      retour.classList.remove('erreur');
-    }
+    if (afficher) dire(retour, `Luminosité ${v > 0 ? '+' : ''}${v}`, false);
   };
   const fixer = (niveau) => {
     niveau = Math.max(LUMINOSITE_MIN, Math.min(LUMINOSITE_MAX, niveau));
@@ -503,19 +510,44 @@ function moletteLuminosite(cadre, id, n, retour) {
 
 // --------------------------------------------------------------- cadres
 
+// Les pistes de la grille le long d'un côté du cadre. Sans repères : n cases
+// égales. Avec : une case par bouton, centrée sur l'endroit où le module
+// écrit son libellé (fraction de l'image, `reperes_x` / `reperes_y` du
+// profil), et des vides entre elles — retour de vol : sur l'Apache, les
+// libellés n'occupent pas toute la largeur, les boutons des bouts tombaient
+// à côté. Le total reste n fr : le cadre garde sa taille. Rend le gabarit, la
+// piste du bouton de chaque rang, et celle du bord d'en face.
+const MARGE_ECRAN = 0.012;          // = margin de .ecran (style.css) : le verre dans sa case
+function pistes(n, reperes) {
+  if (!reperes || reperes.length !== n) {
+    return { gabarit: `${BORD}fr repeat(${n}, 1fr) ${BORD}fr`, rang: (r) => 2 + r, fin: n + 2 };
+  }
+  const p = reperes.map((f) => MARGE_ECRAN + (1 - 2 * MARGE_ECRAN) * f);
+  let c = 1 / n;                    // largeur d'une case, en fraction de l'écran
+  for (let i = 1; i < n; i++) c = Math.min(c, p[i] - p[i - 1]);
+  c = Math.min(c, 2 * p[0], 2 * (1 - p[n - 1]));
+  const fr = (x) => `${Math.max(0, x * n).toFixed(4)}fr`;
+  const t = [fr(p[0] - c / 2)];
+  for (let i = 0; i < n; i++) {
+    t.push(fr(c), fr((i < n - 1 ? p[i + 1] - c / 2 : 1) - p[i] - c / 2));
+  }
+  return { gabarit: `${BORD}fr ${t.join(' ')} ${BORD}fr`, rang: (r) => 3 + 2 * r, fin: 2 * n + 3 };
+}
+
 function construireCadre(e) {
   const n = e.par_cote;
   const rangee = e.boutons.filter((b) => b.cote === 'rangee');
-  const cadre = element('div', 'panneau cadre');
-  cadre.style.gridTemplateColumns = `${BORD}fr repeat(${n}, 1fr) ${BORD}fr`;
-  cadre.style.gridTemplateRows = `${BORD}fr repeat(${n}, 1fr) ${BORD}fr`
-    + (rangee.length ? ` ${BORD}fr` : '');
+  const col = pistes(n, e.reperes_x);
+  const lig = pistes(n, e.reperes_y);
+  const cadre = element('div', 'panneau cadre' + (e.reperes_x || e.reperes_y ? ' sur-reperes' : ''));
+  cadre.style.gridTemplateColumns = col.gabarit;
+  cadre.style.gridTemplateRows = lig.gabarit + (rangee.length ? ` ${BORD}fr` : '');
   const lignes = n + 2 * BORD + (rangee.length ? BORD : 0);
   cadre.formes = [{ ratio: (n + 2 * BORD) / lignes, classe: '', confort: CONFORT.cadre }];
 
   const ecran = element('div', 'ecran');
-  ecran.style.gridColumn = `2 / ${n + 2}`;
-  ecran.style.gridRow = `2 / ${n + 2}`;
+  ecran.style.gridColumn = `2 / ${col.fin}`;
+  ecran.style.gridRow = `2 / ${lig.fin}`;
   if (typeof e.arrondi === 'number') ecran.style.setProperty('--arrondi', `${e.arrondi * 100}%`);
   const toile = element('canvas', 'video');
   const msg = element('div', 'ecran-msg', "En attente de l'image…");
@@ -526,8 +558,8 @@ function construireCadre(e) {
   // Rangée de touches fixes sous le cadre, réparties sur toute sa largeur.
   const touchesFixes = element('div', 'touches-fixes');
   if (rangee.length) {
-    touchesFixes.style.gridColumn = `1 / ${n + 3}`;
-    touchesFixes.style.gridRow = String(n + 3);
+    touchesFixes.style.gridColumn = `1 / ${col.fin + 1}`;
+    touchesFixes.style.gridRow = String(lig.fin + 1);
     cadre.append(touchesFixes);
   }
   for (const b of e.boutons) {
@@ -536,23 +568,23 @@ function construireCadre(e) {
     if (b.cote === 'rangee') {
       touchesFixes.append(el);
     } else {
-      // Grille (n + 2) × (n + 2) : la couronne porte les boutons, le centre l'écran.
+      // La couronne de la grille porte les boutons, le centre l'écran.
       const place = {
-        gauche: [1, 2 + b.rang], droite: [n + 2, 2 + b.rang],
-        haut: [2 + b.rang, 1], bas: [2 + b.rang, n + 2],
+        gauche: [1, lig.rang(b.rang)], droite: [col.fin, lig.rang(b.rang)],
+        haut: [col.rang(b.rang), 1], bas: [col.rang(b.rang), lig.fin],
       }[b.cote];
       el.style.gridColumn = String(place[0]);
       el.style.gridRow = String(place[1]);
       cadre.append(el);
     }
+    // Rien d'écrit quand l'appui passe : le texte masquait le bas de l'écran
+    // (retour de vol). Seul un refus est dit, le temps de le lire.
     brancherAppui(el, (enfonce) => enFile('/api/bouton',
       { ecran: e.id, bouton: b.id, enfonce, siege }).then((ok) => {
-      retour.textContent = ok === true ? `${b.id} ${enfonce ? 'enfoncé' : 'relâché'}`
-        : `${b.id} : ${typeof ok === 'string' ? ok : 'non transmis'}`;
-      retour.classList.toggle('erreur', ok !== true);
+      if (ok !== true) dire(retour, `${b.id} : ${typeof ok === 'string' ? ok : 'non transmis'}`, true);
     }));
   }
-  moletteLuminosite(cadre, e.id, n, retour);
+  moletteLuminosite(cadre, e.id, lig.fin, retour);
   boucleImage(e.id, ecran, toile, msg, generation);
   return cadre;
 }

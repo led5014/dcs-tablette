@@ -141,6 +141,60 @@ class TestContreLesScriptsDesModules(unittest.TestCase):
             self.skipTest(f"module {dossier} absent")
         return scripts
 
+    def nombre(self, texte, nom):
+        return float(re.search(rf"\b{nom}\s*=\s*(-?[\d.]+)", texte).group(1))
+
+    def test_reperes_des_libelles_de_l_apache(self):
+        s = self.module("AH-64D")
+        defs = lire(s / "Displays" / "MFD" / "indicator" / "MFD_PB_Defs.lua")
+        self.assertEqual(self.nombre(lire(s / "Displays" / "MFD" / "indicator"
+                                          / "MFD_Page_Defs.lua"), "display_size_pix"), 1024)
+        self.assertEqual(ah64d.REPERES_X, appareils.reperes(
+            self.nombre(defs, "TDXLeftPos"), self.nombre(defs, "TDXRightPos"), 6, 512))
+        self.assertEqual(ah64d.REPERES_Y, appareils.reperes(
+            self.nombre(defs, "LRYTopPos"), self.nombre(defs, "LRYBottomPos"), 6, 512,
+            vers_le_bas=True))
+
+    def test_reperes_des_libelles_du_hornet(self):
+        s = self.module("FA-18C")
+        dossier = s / "Multipurpose_Display_Group" / "Common" / "indicator"
+        defs = lire(dossier / "MPD_PB_defs.lua")
+        self.assertEqual(self.nombre(lire(dossier / "MDG_units.lua"), "UnitsPerSide"), 1024)
+        x0, pas_x = self.nombre(defs, "TDXLeftPos"), self.nombre(defs, "PB_TextDistBetweenWordsInRow")
+        y0 = self.nombre(defs, "LRYLeftPos")
+        pas_y = self.nombre(defs, "PB_TextDistBetweenWordsInColumn")
+        self.assertEqual(fa18c.REPERES_X, appareils.reperes(x0, x0 + 4 * pas_x, 5, 512))
+        self.assertEqual(fa18c.REPERES_Y, appareils.reperes(y0, y0 - 4 * pas_y, 5, 512,
+                                                            vers_le_bas=True))
+
+    def test_reperes_des_libelles_de_l_a10c(self):
+        from tablette.appareils import a10c
+        s = self.module("A-10C_2")
+        dossier = s / "MFCD" / "indicator"
+        tailles = lire(dossier / "MFCD_sizes.lua")
+        self.assertEqual((self.nombre(tailles, "max_pixels_count"),
+                          self.nombre(tailles, "size_k")), (569, 0.97))
+        osb = lire(dossier / "MFCD_useful_definitions.lua").split("OSB_positions", 1)[1]
+        self.assertRegex(osb, r"\[1\]\s*=\s*\{110\s*,")
+        self.assertRegex(osb, r"\[2\]\s*=\s*\{110 \+ 87\.25\s*,")
+        self.assertRegex(osb, r"\[6\]\s*=\s*\{[^,]+,\s*max_pixels_count - 100\s*\}")
+        self.assertRegex(osb, r"\[7\]\s*=\s*\{[^,]+,\s*max_pixels_count - 100 -\s+82\.5\}")
+        self.assertAlmostEqual(a10c.REPERES_X[1] - a10c.REPERES_X[0], 87.25 * 0.97 / 569,
+                               places=3)
+
+    def test_reperes_sur_l_image_rognee_de_la_tablette(self):
+        from tablette.app import vu_par_la_tablette
+        from tablette.video import ROGNAGE
+        d = vu_par_la_tablette(ah64d.PROFIL.description())
+        mpd = d["ecrans"][0]
+        self.assertAlmostEqual(mpd["reperes_x"][0],
+                               (ah64d.REPERES_X[0] - ROGNAGE) / (1 - 2 * ROGNAGE), places=3)
+        self.assertIsNone(d["ecrans"][2]["reperes_x"])                  # TEDAC : pas de boutons
+        self.assertEqual(ah64d.PROFIL.description()["ecrans"][0]["reperes_x"],
+                         list(ah64d.REPERES_X))                          # le profil n'est pas touché
+        # Libellés plus serrés que les boutons répartis : c'est ce qui décalait.
+        self.assertGreater(ah64d.REPERES_X[0], 1 / 12 + 0.05)
+
     def test_hornet(self):
         s = self.module("FA-18C")
         self.assertEqual(identifiants(s, "MDI_LEFT", "MDI_RIGHT", "AMPCD", "KNEEBOARD", "UFC"),

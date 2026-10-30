@@ -17,9 +17,17 @@ Le siège n'est publié nulle part dans les données d'export : la tablette le
 demande au pilote (Pilote / CPG). DCS montre les MPD du siège occupé ; les
 boutons, eux, appartiennent à un siège précis.
 """
-from . import Bouton, Ecran, Profil
+from . import Bouton, Ecran, Profil, reperes
 
 DOSSIER_KNEEBOARD = "AH-64D_BLK_II"
+
+# Où sont les libellés : Displays/MFD/indicator/MFD_PB_Defs.lua, en pixels
+# d'un écran de 1024 (MFD_Page_Defs.lua, display_size_pix), centre 0, y vers
+# le haut. T et B : x de -335 (T1, B1) à 320 ; L et R : y de 330 (L1, R1) à
+# -280. Les libellés n'occupent pas toute la largeur : répartis également,
+# les boutons des bouts tombaient à côté.
+REPERES_X = reperes(-335, 320, 6, 512)
+REPERES_Y = reperes(330, -280, 6, 512, vers_le_bas=True)
 
 
 def _cadre_mpd():
@@ -45,9 +53,9 @@ PROFIL = Profil(
     noms_dcs=("AH-64D_BLK_II",),
     ecrans=(
         Ecran("mpd_gauche", "MPD gauche", "LEFT_MFCD", {"pilote": 42, "cpg": 44},
-              _CADRE, par_cote=6),
+              _CADRE, par_cote=6, reperes_x=REPERES_X, reperes_y=REPERES_Y),
         Ecran("mpd_droit", "MPD droit", "RIGHT_MFCD", {"pilote": 43, "cpg": 45},
-              _CADRE, par_cote=6),
+              _CADRE, par_cote=6, reperes_x=REPERES_X, reperes_y=REPERES_Y),
         Ecran("tedac", "TEDAC", "TEDAC", {"cpg": 51}, (), par_cote=6),
     ),
     sieges=("pilote", "cpg"),
