@@ -29,6 +29,7 @@ a = Analysis(
         # importés à la demande par le lanceur selon la commande
         "tablette.app",
         "tablette.installation",
+        "tablette.ecran_virtuel",
         "tablette.miroir",
     ],
     excludes=[

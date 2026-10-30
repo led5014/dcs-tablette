@@ -6,6 +6,8 @@ Les fonctions rendent les lignes à afficher au lieu de les imprimer : les
 tests les lisent, la console les recopie.
 
 Ce qui est touché, et rien d'autre :
+- l'écran virtuel (ecran_virtuel.py) : installé s'il manque et si le pilote
+  est d'accord, placé à droite du principal ;
 - Saved Games/DCS/Scripts : les deux scripts de la tablette, et une ligne
   ajoutée à la fin d'Export.lua (copie de l'ancien à côté) ;
 - Saved Games/DCS/Config/MonitorSetup/tablette.lua, la configuration
@@ -152,8 +154,9 @@ def configurer_ecrans(saved_games: Path, essai: bool = False,
                 "exportés au lieu de les poser sur la vue :",
                 f"  - écran virtuel : Virtual Display Driver, gratuit — {VDD}",
                 "  - ou une prise HDMI factice.",
-                "Dans Paramètres → Système → Écran, le placer à droite du principal,",
-                "aligné en haut, puis relancer l'installation."]
+                "Installer.bat installe et place l'écran virtuel lui-même. À la main :",
+                "Paramètres → Système → Écran, « Étendre ces affichages », le glisser à",
+                "droite du principal, bords du haut alignés, puis relancer l'installation."]
         _, _, sl, sh, _ = second
         zones = disposition_second_ecran(pl, ph, sl, sh)
         description = "Vue sur l'ecran principal, ecrans exportes sur le second"
@@ -261,19 +264,50 @@ def creer_raccourci(cible: Path, dossier: Optional[Path] = None) -> Path:
     return lien
 
 
-def installer(saved_games: Path, essai: bool = False) -> int:
-    """`DCS-Tablette.exe installer` : scripts, écrans, raccourci."""
+def demander(question: str) -> Optional[str]:
+    """La réponse tapée dans la console, None si personne ne peut répondre."""
+    try:
+        return input(question)
+    except (EOFError, OSError):
+        return None
+
+
+def installer(saved_games: Path, essai: bool = False,
+              demander: Callable[[str], Optional[str]] = demander,
+              ouvert: Callable[[], bool] = dcs_ouvert) -> int:
+    """`DCS-Tablette.exe installer` : écran virtuel, scripts, écrans de DCS,
+    raccourci. Fait tout ce qu'il peut, et dit à la main ce qu'il n'a pas pu."""
     if not saved_games.is_dir():
         print(f"Dossier de DCS introuvable ({saved_games}).")
         print("Lance DCS une fois pour qu'il le crée, puis recommence.")
         return 1
-    print(f"Dossier de DCS : {saved_games}\n\n1/2  Scripts de la tablette")
+    etapes = 2 if essai else 3
+    print(f"Dossier de DCS : {saved_games}")
+    pret = True
+    if not essai:
+        from .ecran_virtuel import preparer
+        print(f"\n1/{etapes}  Écran virtuel")
+        pret = preparer(lambda ligne: print("  " + ligne),
+                        lambda question: demander("  " + question))
+    print(f"\n{etapes - 1}/{etapes}  Scripts de la tablette")
     for ligne in installer_scripts(saved_games):
         print("  " + ligne)
-    print("\n2/2  Écrans de DCS")
-    complet, lignes = configurer_ecrans(saved_games, essai)
-    for ligne in lignes:
-        print("  " + ligne)
+    print(f"\n{etapes}/{etapes}  Écrans de DCS")
+    if not pret:
+        print("  Écran virtuel pas prêt : la configuration d'écrans de DCS attendra.")
+        print("  Relancer Installer.bat une fois l'écran virtuel en place.")
+        complet = False
+    else:
+        # DCS réécrit options.lua en quittant : réglé DCS ouvert, le choix
+        # « Tablette DCS » serait perdu. On attend qu'il soit fermé.
+        while ouvert():
+            reponse = demander("  DCS est ouvert. Ferme-le, puis appuie sur Entrée "
+                               "(ou tape p pour passer) : ")
+            if reponse is None or reponse.strip().lower() == "p":
+                break
+        complet, lignes = configurer_ecrans(saved_games, essai, ouvert=ouvert)
+        for ligne in lignes:
+            print("  " + ligne)
     lancer = "DCS-Tablette.exe"
     # Depuis le code source, pas de raccourci : il pointerait vers Python.
     if getattr(sys, "frozen", False):
@@ -286,7 +320,8 @@ def installer(saved_games: Path, essai: bool = False) -> int:
         print(f"\nInstallation terminée. Lance {lancer} et ouvre sur la tablette "
               "l'adresse qu'il affiche.")
     else:
-        print("\nScripts installés ; les écrans restent à régler (voir ci-dessus).")
+        print("\nScripts installés ; les écrans restent à régler (voir ci-dessus, et "
+              "LISEZ-MOI.txt, « À la main »).")
     return 0 if complet else 1
 
 
@@ -300,4 +335,7 @@ def desinstaller(saved_games: Path) -> int:
     for ligne in lignes or ["Rien à retirer : la tablette n'était pas installée."]:
         print("  " + ligne)
     print("\nOn peut maintenant supprimer le dossier de DCS Tablette.")
+    print("L'écran virtuel reste installé : il peut servir à autre chose. Pour le retirer :")
+    print("Gestionnaire de périphériques → Cartes graphiques → Virtual Display Driver,")
+    print("clic droit → Désinstaller l'appareil.")
     return 0

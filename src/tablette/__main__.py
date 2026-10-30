@@ -1,8 +1,8 @@
 """Lancement : python -m tablette  (ou DCS-Tablette.exe)
 
     python -m tablette                  le serveur ; l'adresse à ouvrir sur l'iPad s'affiche
-    python -m tablette installer        scripts dans DCS + configuration d'écrans
-    python -m tablette desinstaller     l'inverse
+    python -m tablette installer        écran virtuel, scripts dans DCS, configuration d'écrans
+    python -m tablette desinstaller     l'inverse (l'écran virtuel reste)
 
 Le serveur écoute sur toutes les interfaces : c'est la tablette, sur le
 Wi-Fi de la maison, qui doit l'atteindre. Au premier lancement, Windows
@@ -16,6 +16,7 @@ import argparse
 import logging
 import socket
 import sys
+from pathlib import Path
 from typing import List, Optional
 
 from . import VERSION
@@ -88,12 +89,26 @@ def main(arguments: Optional[List[str]] = None) -> int:
     options.add_argument("--sans-miroir", action="store_true",
                          help="ne pas recopier le kneeboard sur l'écran du PC")
     commandes = options.add_subparsers(dest="commande", metavar="{installer,desinstaller}")
-    installer = commandes.add_parser("installer", help="scripts dans DCS + écrans")
+    installer = commandes.add_parser("installer",
+                                     help="écran virtuel, scripts dans DCS, écrans de DCS")
     installer.add_argument("--essai", action="store_true",
                            help="sans second écran : les écrans en bas de la vue")
     commandes.add_parser("desinstaller", help="retirer la tablette de DCS")
+    # Lancée par `installer`, en administrateur : le pilote de l'écran virtuel.
+    pilote = commandes.add_parser("pilote-ecran-virtuel")
+    pilote.add_argument("--mode", required=True, help="largeurxhauteur@fréquence")
+    pilote.add_argument("--journal", required=True, type=Path)
     choix = options.parse_args(arguments)
 
+    if choix.commande == "pilote-ecran-virtuel":
+        from .ecran_virtuel import installer_pilote
+        mode = tuple(int(v) for v in choix.mode.replace("@", "x").split("x"))
+
+        def journal(ligne: str) -> None:
+            print(ligne)
+            with open(choix.journal, "a", encoding="utf-8") as f:
+                f.write(ligne + "\n")
+        return installer_pilote(mode, journal)
     if choix.commande:
         from . import installation
         from .config import dossier_saved_games

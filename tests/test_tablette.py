@@ -469,6 +469,238 @@ class TestInstallation(unittest.TestCase):
         self.assertEqual(lire(self.saved / "Config" / "options.lua"), avant)
         self.assertIn("5120×1440", "\n".join(lignes))
 
+    def installer(self, reponses, ouvert, pret=True):
+        """`installer` sans console ni écrans réels : réponses et état de DCS
+        joués d'avance. Rend le code de sortie et ce qui s'est affiché."""
+        import contextlib
+        import io
+        from unittest import mock
+
+        from tablette import installation
+        reponses = list(reponses)
+        sortie = io.StringIO()
+
+        def demander(question):
+            print(question)
+            return reponses.pop(0)
+
+        with mock.patch("tablette.installation.moniteurs",
+                        return_value=[self.PRINCIPAL, self.VIRTUEL]), \
+                mock.patch("tablette.ecran_virtuel.preparer", return_value=pret), \
+                contextlib.redirect_stdout(sortie):
+            code = installation.installer(self.saved, demander=demander, ouvert=ouvert)
+        return code, sortie.getvalue()
+
+    def test_installer_attend_que_dcs_soit_ferme(self):
+        etats = [True, True, False, False]
+        code, sortie = self.installer(["", ""], lambda: etats.pop(0))
+        self.assertEqual(code, 0)
+        self.assertEqual(etats, [])                 # deux fois ouvert, puis fermé
+        self.assertEqual(sortie.count("DCS est ouvert"), 2)
+        self.assertIn('"tablette"', lire(self.saved / "Config" / "options.lua"))
+
+    def test_installer_dcs_laisse_ouvert_dit_quoi_regler(self):
+        avant = lire(self.saved / "Config" / "options.lua")
+        code, sortie = self.installer(["p"], lambda: True)
+        self.assertEqual(code, 0)
+        self.assertEqual(lire(self.saved / "Config" / "options.lua"), avant)
+        self.assertIn("Options → Système → Moniteurs", sortie)
+
+    def test_installer_sans_ecran_virtuel_ne_touche_pas_a_dcs(self):
+        avant = lire(self.saved / "Config" / "options.lua")
+        code, sortie = self.installer([], lambda: False, pret=False)
+        self.assertEqual(code, 1)
+        self.assertTrue((self.saved / "Scripts" / "DCS-Tablette-Export.lua").exists())
+        self.assertEqual(lire(self.saved / "Config" / "options.lua"), avant)
+        self.assertIn("À la main", sortie)
+
+
+def ecran(nom="\\\\.\\DISPLAY2", carte="Virtual Display Driver",
+          ident="Root\\MttVDD MONITOR\\MTT1337\\{4d36e96e}\\0000", x=2560, y=0, largeur=2560,
+          hauteur=1440, frequence=240, principal=False, actif=True, modes=()):
+    from tablette.ecran_virtuel import Ecran
+    return Ecran(nom, carte, ident, x, y, largeur, hauteur, frequence, principal, actif,
+                 tuple(modes))
+
+
+# Relevés sur le poste de développement le 30/10/2026 (EnumDisplayDevices).
+PRINCIPAL = ecran("\\\\.\\DISPLAY1", "AMD Radeon RX 9070 XT",
+                  "PCI\\VEN_1002&DEV_7550 MONITOR\\CND3CFA\\{4d36e96e}", 0, 0, principal=True)
+MODES_VDD = ((1920, 1080, 60), (1920, 1080, 240), (2560, 1440, 60), (2560, 1440, 240),
+             (3840, 2160, 60))
+
+
+class TestEcranVirtuel(unittest.TestCase):
+    """Trouver, installer et placer l'écran virtuel, sur des écrans décrits :
+    jamais ceux du poste, rien n'est installé ni déplacé."""
+
+    def test_l_ecran_virtuel_est_reconnu_et_pas_la_carte_graphique(self):
+        self.assertTrue(ecran().virtuel)
+        self.assertTrue(ecran(carte="Parsec Virtual Display Adapter", ident="").virtuel)
+        self.assertFalse(PRINCIPAL.virtuel)
+        self.assertFalse(ecran(carte="Generic PnP Monitor", ident="PCI\\VEN_10DE").virtuel)
+
+    def test_ecran_virtuel_mal_place_va_a_droite_aligne_en_haut(self):
+        from tablette.ecran_virtuel import planifier
+        for x, y in ((-1920, 300), (2560, 200), (0, 1440)):
+            p, lignes = planifier([PRINCIPAL, ecran(x=x, y=y, largeur=1920, hauteur=1080,
+                                                    frequence=60, modes=MODES_VDD)])
+            self.assertEqual((p.x, p.y, p.largeur, p.hauteur, p.frequence),
+                             (2560, 0, 2560, 1440, 240), (x, y))
+            self.assertTrue(p.a_faire)
+            self.assertEqual(lignes, [])
+
+    def test_ecran_virtuel_deja_en_place(self):
+        from tablette.ecran_virtuel import planifier
+        p, _ = planifier([PRINCIPAL, ecran(modes=MODES_VDD)])
+        self.assertFalse(p.a_faire)
+        p, _ = planifier([PRINCIPAL, ecran(actif=False, modes=MODES_VDD)])
+        self.assertTrue(p.a_faire)                 # dupliqué : à remettre sur le bureau
+
+    def test_mode_le_plus_proche_de_l_ecran_principal(self):
+        from tablette.ecran_virtuel import choisir_mode
+        self.assertEqual(choisir_mode(MODES_VDD, 2560, 1440, 240), (2560, 1440, 240))
+        self.assertEqual(choisir_mode(MODES_VDD, 2560, 1440, 144), (2560, 1440, 240))
+        # Écran large absent : même hauteur d'abord.
+        self.assertEqual(choisir_mode(MODES_VDD, 3440, 1440, 60), (2560, 1440, 60))
+        # Hauteur absente : moins haut plutôt que plus haut, jamais dessiné.
+        self.assertEqual(choisir_mode(MODES_VDD, 2560, 1600, 60), (2560, 1440, 60))
+        self.assertIsNone(choisir_mode((), 2560, 1440, 60))
+
+    def test_un_ecran_physique_a_droite_n_est_pas_deplace(self):
+        from tablette.ecran_virtuel import planifier
+        physique = ecran("\\\\.\\DISPLAY3", "Generic PnP Monitor", "PCI\\VEN_1002", 2560, 0,
+                         1920, 1080, 60)
+        p, lignes = planifier([PRINCIPAL, physique, ecran(x=-2560, modes=MODES_VDD)])
+        self.assertIsNone(p)
+        self.assertIn("Generic PnP Monitor", lignes[0])
+        # Ailleurs, il ne gêne pas.
+        p, _ = planifier([PRINCIPAL, ecran(x=-1920, y=0, largeur=1920, hauteur=1080,
+                                           carte="Generic PnP Monitor", ident="PCI"),
+                          ecran(x=0, y=1440, modes=MODES_VDD)])
+        self.assertEqual((p.x, p.y), (2560, 0))
+
+    def test_ecran_principal_virtuel(self):
+        from tablette.ecran_virtuel import planifier
+        p, lignes = planifier([ecran(x=0, principal=True),
+                               ecran("\\\\.\\DISPLAY1", "AMD Radeon RX 9070 XT", "PCI", 2560, 0)])
+        self.assertIsNone(p)
+        self.assertIn("En faire mon écran principal", "\n".join(lignes))
+
+    def test_reglages_du_pilote_completes_sans_rien_retirer(self):
+        from xml.etree import ElementTree
+
+        from tablette.ecran_virtuel import reglages_vdd
+        livre = ("<?xml version='1.0' encoding='utf-8'?>\n<vdd_settings>\n"
+                 "<monitors><count>1</count></monitors>\n<global>\n"
+                 "<!--refresh rates-->\n<g_refresh_rate>60</g_refresh_rate>\n"
+                 "<g_refresh_rate>244</g_refresh_rate>\n</global>\n<resolutions>\n"
+                 "<resolution><width>2560</width><height>1440</height>"
+                 "<refresh_rate>30</refresh_rate></resolution>\n</resolutions>\n"
+                 "<options><HardwareCursor>true</HardwareCursor></options>\n</vdd_settings>\n")
+        texte = reglages_vdd(livre, 3440, 1440, 240)
+        racine = ElementTree.fromstring(texte)
+        self.assertEqual([g.text for g in racine.iter("g_refresh_rate")], ["60", "244", "240"])
+        self.assertEqual([(r.findtext("width"), r.findtext("height"))
+                          for r in racine.iter("resolution")],
+                         [("2560", "1440"), ("3440", "1440")])
+        self.assertEqual(racine.findtext("monitors/count"), "1")
+        self.assertEqual(racine.findtext("options/HardwareCursor"), "true")
+        self.assertIn("<!--refresh rates-->", texte)
+        self.assertEqual(reglages_vdd(texte, 3440, 1440, 240), texte)      # une seule fois
+        self.assertEqual(reglages_vdd(livre, 2560, 1440, 60).count("<resolution>"), 1)
+
+    def preparer(self, listes, reponse="", code=0, refus=None):
+        """`preparer` avec des écrans joués d'avance : `listes` est ce que
+        Windows rend à chaque relevé, la dernière se répète."""
+        from tablette.ecran_virtuel import preparer
+        listes, appels = list(listes), {"installer": [], "appliquer": [], "etendre": 0}
+        lignes = []
+
+        def lister():
+            return listes.pop(0) if len(listes) > 1 else listes[0]
+
+        def installer(mode):
+            appels["installer"].append(mode)
+            return code, ["journal du pilote"]
+
+        def appliquer(p):
+            appels["appliquer"].append((p.x, p.y, p.largeur, p.hauteur, p.frequence))
+            return refus
+
+        def etendre():
+            appels["etendre"] += 1
+            return True
+
+        pret = preparer(lignes.append, lambda q: reponse, lister=lister, etendre=etendre,
+                        appliquer=appliquer, installer=installer, attendre=lambda s: None)
+        return pret, appels, "\n".join(lignes)
+
+    def test_sans_ecran_virtuel_et_sans_accord_rien_n_est_installe(self):
+        for reponse in ("n", None):                 # refus, ou pas de console
+            pret, appels, texte = self.preparer([[PRINCIPAL]], reponse=reponse)
+            self.assertFalse(pret)
+            self.assertEqual(appels["installer"], [])
+            self.assertIn("Virtual Display Driver", texte)
+            self.assertIn("À la main", texte)
+
+    def test_installe_puis_place_au_mode_du_principal(self):
+        place = ecran(modes=MODES_VDD)
+        pret, appels, texte = self.preparer(
+            [[PRINCIPAL], [PRINCIPAL], [PRINCIPAL, ecran(x=-1920, largeur=1920, hauteur=1080,
+                                                         frequence=60, modes=MODES_VDD)],
+             [PRINCIPAL, place]])
+        self.assertTrue(pret, texte)
+        self.assertEqual(appels["installer"], [(2560, 1440, 240)])
+        self.assertEqual(appels["appliquer"], [(2560, 0, 2560, 1440, 240)])
+        self.assertIn("journal du pilote", texte)
+        self.assertIn("placé", texte)
+
+    def test_installation_ratee_dit_quoi_faire_a_la_main(self):
+        from tablette.ecran_virtuel import REFUS_UAC
+        pret, appels, texte = self.preparer([[PRINCIPAL]], code=REFUS_UAC)
+        self.assertFalse(pret)
+        self.assertEqual(appels["appliquer"], [])
+        self.assertIn("À la main", texte)
+
+    def test_pilote_installe_mais_pas_d_ecran(self):
+        pret, _, texte = self.preparer([[PRINCIPAL]])
+        self.assertFalse(pret)
+        self.assertIn("Redémarrer le PC", texte)
+
+    def test_ecran_duplique_remis_en_etendu(self):
+        pret, appels, _ = self.preparer(
+            [[PRINCIPAL, ecran(actif=False, x=0, y=0, largeur=0, hauteur=0, modes=MODES_VDD)],
+             [PRINCIPAL, ecran(x=-2560, modes=MODES_VDD)], [PRINCIPAL, ecran(modes=MODES_VDD)]])
+        self.assertTrue(pret)
+        self.assertEqual(appels["etendre"], 1)
+        self.assertEqual(appels["appliquer"], [(2560, 0, 2560, 1440, 240)])
+
+    def test_deja_en_place_rien_ne_bouge(self):
+        pret, appels, texte = self.preparer([[PRINCIPAL, ecran(modes=MODES_VDD)]])
+        self.assertTrue(pret)
+        self.assertEqual((appels["installer"], appels["appliquer"], appels["etendre"]),
+                         ([], [], 0))
+        self.assertIn("déjà en place", texte)
+
+    def test_prise_hdmi_factice_deja_a_droite_gardee(self):
+        factice = ecran(carte="Generic PnP Monitor", ident="PCI\\VEN_1002", largeur=1920,
+                        hauteur=1080, frequence=60)
+        pret, appels, _ = self.preparer([[PRINCIPAL, factice]])
+        self.assertTrue(pret)
+        self.assertEqual(appels["installer"], [])
+
+    def test_windows_refuse_le_placement(self):
+        pret, _, texte = self.preparer([[PRINCIPAL, ecran(x=-2560, modes=MODES_VDD)]],
+                                       refus="Windows refuse ce réglage (code -2)")
+        self.assertFalse(pret)
+        self.assertIn("Paramètres → Système → Écran", texte)
+
+    def test_placement_non_garde_par_windows(self):
+        pret, _, texte = self.preparer([[PRINCIPAL, ecran(x=-2560, modes=MODES_VDD)]])
+        self.assertFalse(pret)
+        self.assertIn("pas gardé", texte)
+
 
 class TestVideo(unittest.TestCase):
     """La capture est remplacée par une fausse : on vérifie ce qu'on en fait."""

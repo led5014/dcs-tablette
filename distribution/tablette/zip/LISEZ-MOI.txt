@@ -7,39 +7,51 @@ boutons sous le doigt. La page s'adapte toute seule à l'appareil piloté dans
 DCS et à la taille de l'écran : un ou deux écrans sur un téléphone, trois ou
 toute la planche sur un grand écran.
 
-Pas de Python à installer, pas de connexion internet : tout reste sur le PC
-et le Wi-Fi de la maison.
-
-
-AVANT D'INSTALLER : UN SECOND ÉCRAN QUE PERSONNE NE REGARDE
------------------------------------------------------------
-DCS dessine les écrans exportés sur un écran : sans second écran, ils
-recouvrent la vue. La solution gratuite est un écran virtuel :
-
-  1. Installer Virtual Display Driver avec « VDD Control » :
-     https://github.com/VirtualDrivers/Virtual-Display-Driver
-  2. Windows : Paramètres → Système → Écran
-     - régler l'écran virtuel à la taille de l'écran principal
-       (par exemple 2560 × 1440), à la même fréquence ;
-     - le placer À DROITE de l'écran principal, aligné en haut.
-
-Une prise HDMI factice branchée sur la carte graphique fait la même chose.
+Pas de Python à installer. En vol, rien ne passe par internet : tout reste
+sur le PC et le Wi-Fi de la maison.
 
 
 INSTALLATION
 ------------
   1. Placer ce dossier là où il restera (par exemple dans Documents) : le
      raccourci du bureau pointera dessus.
-  2. Fermer DCS.
-  3. Double-cliquer « Installer.bat ».
-     Il copie deux scripts dans Saved Games\DCS\Scripts, ajoute une ligne à
-     Export.lua (copie de l'ancien à côté), choisit dans DCS la
-     configuration d'écrans « Tablette DCS » (copie des réglages d'origine)
-     et pose un raccourci « DCS Tablette » sur le bureau.
-     Tacview, SRS et les autres outils continuent de marcher.
-  4. Si Windows affiche « Windows a protégé votre ordinateur » : cliquer
+  2. Double-cliquer « Installer.bat ».
+     Si Windows affiche « Windows a protégé votre ordinateur » : cliquer
      « Informations complémentaires » puis « Exécuter quand même ».
      L'exécutable n'est pas signé ; le code source est sur GitHub.
+  3. Répondre aux questions de la fenêtre. Elle fait tout le reste, en
+     trois étapes :
+
+     1/3 Écran virtuel
+         DCS dessine les écrans du cockpit sur un écran : sans second écran,
+         ils recouvriraient la vue. L'installation les envoie sur un écran
+         virtuel, invisible, que personne ne regarde.
+         - S'il n'y en a pas, elle propose d'installer Virtual Display
+           Driver (gratuit, open source) : répondre O. Il faut internet pour
+           cette étape. Windows demande alors :
+             « Voulez-vous autoriser cette application… » → Oui
+             « Voulez-vous installer ce logiciel de périphérique ? » → Installer
+         - Puis elle le règle comme il faut : à droite de l'écran principal,
+           aligné en haut, même définition et même fréquence. Le bureau
+           s'agrandit vers la droite : c'est normal, la souris peut y
+           filer. Rien à toucher dans les paramètres d'écran.
+     2/3 Scripts de la tablette
+         Deux scripts copiés dans Saved Games\DCS\Scripts, une ligne ajoutée
+         à Export.lua (copie de l'ancien à côté). Tacview, SRS et les autres
+         outils continuent de marcher.
+     3/3 Écrans de DCS
+         Choisit dans DCS la configuration d'écrans « Tablette DCS », la
+         résolution qui couvre les deux écrans, en fenêtré (copie des
+         réglages d'origine à côté). Si DCS est ouvert, la fenêtre demande
+         de le fermer et attend.
+
+     Puis elle pose un raccourci « DCS Tablette » sur le bureau.
+  4. Si une étape n'aboutit pas, la fenêtre dit laquelle et quoi faire.
+     Voir aussi « À la main » plus bas : chaque étape s'y fait sans
+     l'installation.
+
+Pas d'écran virtuel voulu, juste pour essayer : « Installer.bat --essai »
+met les écrans du cockpit en bas de la vue.
 
 
 EN VOL
@@ -77,6 +89,51 @@ Si la tablette se déconnecte, il revient sur le PC au bout de 10 secondes.
 Fermer la fenêtre de DCS Tablette arrête tout.
 
 
+À LA MAIN, SI L'INSTALLATION N'Y ARRIVE PAS
+-------------------------------------------
+Les mêmes étapes que « Installer.bat », faites soi-même. Après les étapes A
+et B, relancer « Installer.bat » : il vérifie et fait le reste.
+
+A. Installer l'écran virtuel
+   1. Ouvrir https://github.com/VirtualDrivers/Virtual-Display-Driver/releases
+      et télécharger « VDD.Control.<version>.zip » (dans « Assets »).
+   2. Extraire le zip, lancer « VDD Control.exe », cliquer « Install »,
+      accepter les questions de Windows.
+   3. Vérifier : Gestionnaire de périphériques → Cartes graphiques →
+      « Virtual Display Driver » est là.
+   Une prise HDMI factice branchée sur la carte graphique fait la même
+   chose, sans rien installer.
+
+B. Placer l'écran virtuel (Paramètres → Système → Écran)
+   1. En haut, cliquer « Identifier » pour savoir quel numéro est l'écran
+      virtuel (le chiffre qui ne s'affiche sur aucun écran réel).
+   2. Dans la liste « Plusieurs écrans » : « Étendre ces affichages ».
+   3. Cliquer l'écran PRINCIPAL et noter sa « Résolution d'affichage »
+      (par exemple 2560 × 1440) ; dans « Paramètres d'affichage avancés »,
+      noter sa fréquence (par exemple 144 Hz). Vérifier que « En faire mon
+      écran principal » est coché pour lui.
+   4. Cliquer l'écran VIRTUEL : même résolution, même fréquence (Paramètres
+      d'affichage avancés). Si elle n'est pas proposée, prendre la même
+      hauteur (1440, 1080…).
+   5. Glisser l'écran virtuel collé À DROITE du principal, les bords du HAUT
+      au même niveau (Windows aimante les bords : lâcher quand ils sont
+      alignés), puis « Appliquer ».
+   Si un autre écran réel est déjà à droite du principal, le glisser à
+   gauche ou dessous : la place de droite revient à l'écran virtuel.
+
+C. Scripts de la tablette
+   « Installer.bat » le fait toujours, même quand le reste échoue.
+
+D. Régler DCS (DCS ouvert, puis le relancer)
+   Options → Système :
+   - « Moniteurs » : « Tablette DCS » ;
+   - « Résolution » : la largeur des DEUX écrans × leur hauteur
+     (2560 × 1440 + 2560 × 1440 → 5120 × 1440) ; la fenêtre de
+     « Installer.bat » affiche la bonne valeur ;
+   - « Plein écran » décoché.
+   Puis quitter DCS et le relancer : il ne lit les écrans qu'au démarrage.
+
+
 SI ÇA NE MARCHE PAS
 -------------------
 - La page ne s'ouvre pas sur la tablette : le Wi-Fi du PC est peut-être en
@@ -87,8 +144,11 @@ SI ÇA NE MARCHE PAS
 - Les écrans restent noirs : relancer DCS après l'installation (il ne lit la
   configuration d'écrans qu'au démarrage), et vérifier dans Options → Système
   → Moniteurs que « Tablette DCS » est choisi.
-- Pas de second écran sous la main, juste pour essayer :
-  « Installer.bat --essai » met les écrans en bas de la vue.
+- Les écrans du cockpit couvrent la vue : l'écran virtuel n'est pas à sa
+  place (une mise à jour de Windows ou de la carte graphique peut le
+  déplacer). Relancer « Installer.bat », qui le remet.
+- La souris part sur la droite et disparaît : elle est sur l'écran virtuel.
+  La ramener vers la gauche.
 
 
 DÉSINSTALLATION
@@ -96,6 +156,10 @@ DÉSINSTALLATION
 DCS fermé, double-cliquer « Desinstaller.bat » : il retire la ligne
 d'Export.lua, les scripts et le raccourci du bureau, et remet l'affichage de
 DCS d'avant. Supprimer ensuite ce dossier.
+
+L'écran virtuel reste installé (il peut servir à autre chose). Pour le
+retirer : Gestionnaire de périphériques → Cartes graphiques → « Virtual
+Display Driver », clic droit → « Désinstaller l'appareil ».
 
 
 Outil communautaire, sans lien avec Eagle Dynamics.

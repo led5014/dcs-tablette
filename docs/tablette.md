@@ -40,9 +40,32 @@ Lua en dépend) et `scripts\installer_dcs.py`.
 
 Pour l'escadron : le zip des Releases du dépôt public
 (`DCS-Tablette.exe` + `Installer.bat`), sans Python. `Installer.bat` lance
-`DCS-Tablette.exe installer`, qui fait les étapes 2 et 4 ci-dessous et pose
-le raccourci « DCS Tablette » sur le bureau ; `Desinstaller.bat` les défait. Le mode d'emploi est dans le README du dépôt
-public (source : `distribution/tablette/depot/README.md`).
+`DCS-Tablette.exe installer`, qui fait les étapes 2 à 4 ci-dessous et pose
+le raccourci « DCS Tablette » sur le bureau ; `Desinstaller.bat` défait 2
+et 4 (l'écran virtuel reste). Le mode d'emploi est dans le README et dans
+`distribution/tablette/zip/LISEZ-MOI.txt`, qui décrit aussi chaque étape à
+la main.
+
+L'étape 3 était celle où les pilotes bloquaient : placer l'écran virtuel au
+pixel près, à droite et aligné en haut (30/10/2026). `ecran_virtuel.py` la
+fait :
+- trouve l'écran virtuel (`EnumDisplayDevices` : « Virtual Display Driver »,
+  `Root\MttVDD`, moniteur `MTT1337`) ; un écran physique n'est jamais
+  déplacé, une prise HDMI factice déjà à droite est gardée ;
+- s'il manque, et si le pilote répond O : télécharge Virtual Display Driver
+  25.7.23 et NefCon 1.14.0 (versions et SHA-256 fixés, les mêmes que
+  `silent-install.ps1` du projet VDD), écrit `vdd_settings.xml` avec la
+  définition et la fréquence du principal, installe par
+  `nefconw install MttVDD.inf Root\MttVDD`. Seule partie en administrateur,
+  dans un processus à part (`DCS-Tablette.exe pilote-ecran-virtuel`, UAC) ;
+  les certificats du pilote ne sont pas ajoutés aux éditeurs de confiance,
+  Windows demande donc confirmation. Un appareil désactivé est réactivé
+  plutôt que doublé ;
+- remet en mode « Étendre » s'il est dupliqué (`SetDisplayConfig`), puis le
+  place (`ChangeDisplaySettingsEx`, enregistré) et relit la position.
+Essayé en vrai : la détection et le téléchargement vérifié, sur le poste de
+développement. L'installation du pilote et le placement ne sont couverts
+que par les tests (écrans décrits) : à essayer sur un PC sans écran virtuel.
 
 Publier une version : `scripts\publier_tablette.py` recopie la tablette, et
 elle seule (liste blanche), dans `..\dcs-tablette` ; y lancer
@@ -58,7 +81,8 @@ Depuis le code :
    `Saved Games\DCS\Scripts` et ajoute la ligne qui les charge à `Export.lua`,
    après une copie de l'original. Tacview, SRS et les autres restent intacts.
 3. **Un second écran que personne ne regarde**, pour que DCS y dessine les
-   écrans exportés au lieu de les poser sur la vue :
+   écrans exportés au lieu de les poser sur la vue. `python -m tablette
+   installer` l'installe et le place (voir plus haut). À la main :
    - [Virtual Display Driver](https://github.com/VirtualDrivers/Virtual-Display-Driver)
      (gratuit) : installer avec *VDD Control*, puis dans Paramètres → Écran,
      régler l'écran virtuel en **2560 × 1440** (ou la taille de l'écran
