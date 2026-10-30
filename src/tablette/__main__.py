@@ -38,7 +38,7 @@ def servir(local: bool, miroir: bool, mise_a_jour: bool = True) -> int:
     from .config import Config
     from .dcs import PontDCS
     from .diagnostic import Diagnostic
-    from .installation import dcs_ouvert, demander, installer, premiere_fois
+    from .installation import installer, premiere_fois
     from .miroir import AffichageKneeboard, Miroir
     from .video import Video
 
@@ -48,14 +48,14 @@ def servir(local: bool, miroir: bool, mise_a_jour: bool = True) -> int:
     cfg = Config()
     print(f"DCS Tablette {VERSION}\n")
     # Une version plus récente ? Proposée avant tout le reste : elle corrige
-    # peut-être ce qui suit. Acceptée, elle remplace l'exe : on se ferme.
-    # DCS ouvert, on ne demande rien : la question bloquerait le démarrage
-    # en plein vol ; le diagnostic de la tablette le signale.
+    # peut-être ce qui suit. Acceptée, elle remplace l'exe : on se ferme. La
+    # question n'attend que quelques secondes : relancé en plein vol, sans
+    # personne au clavier, DCS Tablette démarre quand même.
     publiee = None
     if mise_a_jour and getattr(sys, "frozen", False):
-        from .mise_a_jour import derniere_version, proposer
+        from .mise_a_jour import demander_un_temps, derniere_version, proposer
         publiee = derniere_version()
-        if not dcs_ouvert() and proposer(print, demander, publiee):
+        if proposer(print, demander_un_temps, publiee):
             return 0
     # Lancé sans être passé par Installer.bat : on installe d'abord.
     if premiere_fois(cfg.saved_games):

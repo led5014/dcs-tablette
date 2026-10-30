@@ -36,8 +36,9 @@ Le zip contient `DCS-Tablette.exe`, `Installer.bat`, `Desinstaller.bat` et un
 **Mettre à jour : rien à réinstaller.** À partir de la 1.5.0, DCS Tablette
 regarde à son lancement s'il existe une version plus récente et propose de
 se mettre à jour : téléchargement vérifié (SHA-256), remplacement de ses
-fichiers, relance — vos réglages restent. Seule demande faite à internet,
-au lancement et jamais en vol ; `--sans-mise-a-jour` la supprime. Depuis
+fichiers, relance — vos réglages restent. DCS peut rester ouvert ; sans
+réponse au bout de 15 s, il démarre sans mettre à jour. Seule demande faite
+à internet, au lancement ; `--sans-mise-a-jour` la supprime. Depuis
 une version plus ancienne, extraire une dernière fois le zip à la place de
 l'ancien dossier.
 

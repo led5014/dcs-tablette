@@ -8,4 +8,4 @@ script `dcs_export/DCS-Tablette-Export.lua`.
 Il n'importe ni `dcs_debrief` ni `copilote`, et aucun des deux ne l'importe.
 """
 
-VERSION = "1.5.1"
+VERSION = "1.5.2"

@@ -16,10 +16,13 @@ DCS Tablette soit fermé, copie, puis le relance. Les chemins lui passent par
 l'environnement : rien à échapper, accents compris.
 
 Seul moment où DCS Tablette parle à internet : cette demande, au lancement,
-4 secondes au plus — hors ligne, il démarre comme avant. DCS ouvert, rien
-n'est proposé (la question attendrait une réponse au PC, en plein vol) : le
-diagnostic de la tablette signale la nouvelle version. `--sans-mise-a-jour`
-supprime la demande.
+4 secondes au plus — hors ligne, il démarre comme avant. La question attend
+DELAI_REPONSE_S au plus, puis DCS Tablette démarre sans mettre à jour : relancé
+en plein vol, personne n'est au clavier, et il ne doit pas rester bloqué.
+(Jusqu'à la 1.5.1, DCS ouvert, rien n'était proposé : relancé DCS ouvert,
+il ne disait rien et restait à l'ancienne version — retour du 30/10/2026.)
+Le diagnostic de la tablette signale la nouvelle version tant qu'elle n'est
+pas installée. `--sans-mise-a-jour` supprime la demande.
 """
 from __future__ import annotations
 
@@ -32,6 +35,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 import urllib.request
 import zipfile
 from pathlib import Path
@@ -42,6 +46,7 @@ from . import VERSION
 DEPOT = "led5014/dcs-tablette"
 API = f"https://api.github.com/repos/{DEPOT}/releases/latest"
 DELAI_S = 3
+DELAI_REPONSE_S = 15
 NOM = "DCS-Tablette"
 
 # Pas de bloc entre parenthèses : un « ) » dans un chemin (« DCS-Tablette (1) »,
@@ -186,6 +191,31 @@ def lancer_remplacement(source: Path, cible: Path, dossier: Path, zip_: Path) ->
                      close_fds=True)
 
 
+def demander_un_temps(question: str, delai_s: float = DELAI_REPONSE_S) -> Optional[str]:
+    """La réponse tapée dans la console, ou None au bout de `delai_s` (ou
+    sans console) : relancé en plein vol, personne n'est au clavier, et
+    DCS Tablette ne doit pas rester bloqué sur la question."""
+    try:
+        import msvcrt
+    except ImportError:
+        return None
+    if not (sys.stdin and sys.stdin.isatty()):
+        return None
+    print(f"{question}({int(delai_s)} s pour répondre) ", end="", flush=True)
+    fin, tape = time.monotonic() + delai_s, ""
+    while time.monotonic() < fin:
+        if not msvcrt.kbhit():
+            time.sleep(0.05)
+            continue
+        caractere = msvcrt.getwche()
+        if caractere in "\r\n":
+            print()
+            return tape
+        tape = tape[:-1] if caractere == "\b" else tape + caractere
+    print("\nPas de réponse : DCS Tablette démarre sans mettre à jour.")
+    return None
+
+
 def proposer(afficher: Callable[[str], None], demander: Callable[[str], Optional[str]],
              publiee: Optional[Dict]) -> bool:
     """Au lancement de l'exécutable : une version plus récente (`publiee`,
@@ -201,7 +231,8 @@ def proposer(afficher: Callable[[str], None], demander: Callable[[str], Optional
         afficher(f"  - {puce}")
     reponse = demander("Mettre à jour maintenant ? Vos réglages sont gardés. [O/n] ")
     if reponse is None or reponse.strip().lower() not in ("", "o", "oui", "y", "yes"):
-        afficher("Pas maintenant : DCS Tablette le reproposera au prochain lancement.\n")
+        afficher("Pas maintenant : DCS Tablette le reproposera au prochain lancement "
+                 "(et le diagnostic de la tablette le rappelle).\n")
         return False
     taille = publiee.get("taille", 0) / 1e6
     afficher(f"Téléchargement ({taille:.0f} Mo)…" if taille else "Téléchargement…")

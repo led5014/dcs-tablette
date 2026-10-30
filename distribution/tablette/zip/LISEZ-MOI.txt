@@ -74,9 +74,11 @@ MISE À JOUR
 -----------
 Rien à réinstaller. À son lancement, DCS Tablette regarde sur GitHub s'il
 existe une version plus récente (une demande de quelques secondes au plus,
-rien si le PC est hors ligne ; jamais pendant le vol). S'il y en a une, il
-dit ce qu'elle apporte et demande « Mettre à jour maintenant ? » :
-répondre O. Il la télécharge, vérifie qu'elle est bien celle publiée
+rien si le PC est hors ligne). S'il y en a une, il dit ce qu'elle apporte
+et demande « Mettre à jour maintenant ? » : répondre O, puis Entrée — DCS
+peut rester ouvert. Sans réponse au bout de 15 secondes, il démarre sans
+mettre à jour : relancé en plein vol, il ne reste pas bloqué.
+Il la télécharge, vérifie qu'elle est bien celle publiée
 (empreinte SHA-256), se ferme, remplace ses fichiers et se relance tout
 seul. Tout est gardé : écran virtuel, réglages de DCS, raccourci du bureau.
 Les nouveaux scripts sont recopiés dans DCS au passage, et la page de la

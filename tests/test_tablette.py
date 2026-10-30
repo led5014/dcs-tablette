@@ -1717,6 +1717,34 @@ class TestMiseAJour(unittest.TestCase):
         self.assertIsNone(derniere_version(lambda r, timeout: self.reponse(b"[1, 2]")))
         self.assertIsNone(derniere_version(lambda r, timeout: self.reponse(b'{"tag_name": 5}')))
 
+    def clavier(self, touches):
+        """Un faux msvcrt qui rend `touches` une à une, et une console."""
+        import types
+        from unittest import mock
+        touches = list(touches)
+        faux = types.SimpleNamespace(kbhit=lambda: bool(touches),
+                                     getwche=lambda: touches.pop(0))
+        console = mock.Mock()
+        console.isatty.return_value = True
+        return mock.patch.dict(sys.modules, {"msvcrt": faux}), mock.patch.object(sys, "stdin", console)
+
+    def test_question_qui_n_attend_pas_indefiniment(self):
+        """Relancé en vol (retour du 30/10 : DCS ouvert, rien n'était proposé),
+        la question attend un moment puis DCS Tablette démarre quand même."""
+        import contextlib
+
+        from tablette.mise_a_jour import demander_un_temps
+        modules, stdin = self.clavier("o\r")
+        with modules, stdin, contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(demander_un_temps("? ", 2), "o")
+        modules, stdin = self.clavier("")
+        sortie = io.StringIO()
+        debut = time.monotonic()
+        with modules, stdin, contextlib.redirect_stdout(sortie):
+            self.assertIsNone(demander_un_temps("? ", 0.3))
+        self.assertLess(time.monotonic() - debut, 2)
+        self.assertIn("sans mettre à jour", sortie.getvalue())
+
     def test_derniere_version_bornee_dans_le_temps(self):
         from unittest import mock
 
