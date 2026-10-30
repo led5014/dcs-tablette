@@ -80,6 +80,9 @@ class Video:
         self._copie: Optional[Tuple[float, Optional[Copie]]] = None
         self._demandes: Dict[str, float] = {}
         self._jpeg: Dict[str, Tuple[float, bytes]] = {}
+        # Pour le diagnostic : la dernière image demandée par la tablette,
+        # (instant, None si servie, sinon la raison donnée à la tablette).
+        self.dernier: Optional[Tuple[float, Optional[str]]] = None
 
     # ----------------------------------------------------------- zones
 
@@ -136,7 +139,7 @@ class Video:
                              "Système, puis relance DCS.")
         return PasDImage(f"{nom} sort de la fenêtre de DCS ({fl} × {fh}) : la "
                          "configuration d'écrans ne correspond pas à la résolution. "
-                         "Relance scripts/configurer_ecrans_dcs.py.")
+                         "Quitte DCS : DCS Tablette remet ses réglages, puis relance DCS.")
 
     # ----------------------------------------------------------- images
 
@@ -188,7 +191,14 @@ class Video:
     def image(self, nom: str) -> bytes:
         """JPEG de l'écran `nom` (LEFT_MFCD…, ou KNEEBOARD)."""
         with self._verrou:
-            instant, image = self._brute(nom)
+            try:
+                instant, image = self._brute(nom)
+            except KneeboardFerme:
+                raise
+            except PasDImage as e:
+                self.dernier = (self._horloge(), str(e))
+                raise
+            self.dernier = (self._horloge(), None)
             deja = self._jpeg.get(nom)
             if deja and deja[0] == instant:
                 return deja[1]

@@ -21,6 +21,7 @@ multijoueur ne voit rien.
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -32,7 +33,7 @@ from .capture import moniteurs
 from .config import BUREAU, dossier_windows
 from .ecrans_dcs import (NOM_AFFICHE, NOM_FICHIER, PasDExport, disposition_essai,
                          disposition_second_ecran, generer, options_affichage,
-                         regler_options, retablir_options)
+                         plein_ecran, regler_options, retablir_options)
 
 SCRIPTS = ("DCS-Tablette-Export.lua", "DCS-Tablette-Appareils.lua")
 RACCOURCI = "DCS Tablette.lnk"
@@ -66,6 +67,24 @@ def est_installe(saved_games: Path) -> bool:
     except OSError:
         return False
     return SCRIPTS[0].encode() in texte
+
+
+def scripts_a_jour(saved_games: Path, source: Optional[Path] = None) -> bool:
+    """DCS charge-t-il les scripts de CETTE version ? Après une mise à jour,
+    les anciens restent dans Saved Games tant qu'on ne les recopie pas."""
+    source = source or dossier_lua()
+    try:
+        return est_installe(saved_games) and all(
+            (saved_games / "Scripts" / nom).read_bytes() == (source / nom).read_bytes()
+            for nom in SCRIPTS)
+    except OSError:
+        return False
+
+
+def premiere_fois(saved_games: Path) -> bool:
+    """Rien d'installé : ni la ligne d'Export.lua, ni « Tablette DCS »."""
+    return (not est_installe(saved_games)
+            and not (saved_games / "Config" / "MonitorSetup" / NOM_FICHIER).exists())
 
 
 def installer_scripts(saved_games: Path, source: Optional[Path] = None) -> List[str]:
@@ -121,6 +140,53 @@ def desinstaller_scripts(saved_games: Path) -> List[str]:
     return lignes
 
 
+def second_ecran(ecrans: Sequence[Moniteur]) -> Optional[Moniteur]:
+    """L'écran collé à droite du principal, aligné en haut : là où DCS
+    s'étend, et où vont les écrans exportés."""
+    principal = next((m for m in ecrans if m[4]), None)
+    if principal is None:
+        return None
+    px, py, pl, _, _ = principal
+    return next((m for m in ecrans if not m[4] and m[0] == px + pl and m[1] == py), None)
+
+
+def support_ecrans(ecrans: Sequence[Moniteur],
+                   essai: bool) -> Optional[Tuple[Moniteur, Tuple[int, int]]]:
+    """L'écran où vont les écrans exportés, et la résolution de DCS qui va
+    avec ; None sans second écran à sa place."""
+    principal = next((m for m in ecrans if m[4]), None)
+    if principal is None:
+        return None
+    _, _, pl, ph, _ = principal
+    if essai:
+        return principal, (pl, ph)
+    second = second_ecran(ecrans)
+    if second is None:
+        return None
+    return second, (pl + second[2], max(ph, second[3]))
+
+
+def dcs_regle(saved_games: Path, resolution: Tuple[int, int]) -> bool:
+    """DCS est-il sur « Tablette DCS », à cette résolution, en fenêtré ?"""
+    try:
+        choix, largeur, hauteur = options_affichage(saved_games)
+    except PasDExport:
+        return False
+    return (choix.lower() in (Path(NOM_FICHIER).stem, NOM_AFFICHE.lower())
+            and (largeur, hauteur) == tuple(resolution) and not plein_ecran(saved_games))
+
+
+def mode_essai(saved_games: Path) -> Optional[bool]:
+    """La configuration « Tablette DCS » est-elle celle d'essai (écrans en
+    bas de la vue) ? None si elle n'est pas écrite."""
+    try:
+        texte = (saved_games / "Config" / "MonitorSetup" / NOM_FICHIER).read_text(
+            encoding="utf-8", errors="replace")
+    except OSError:
+        return None
+    return re.search(r"^Description\s*=\s*'Essai", texte, re.M) is not None
+
+
 def configurer_ecrans(saved_games: Path, essai: bool = False,
                       ecrans: Optional[Sequence[Moniteur]] = None,
                       ouvert: Callable[[], bool] = dcs_ouvert) -> Tuple[bool, List[str]]:
@@ -146,7 +212,7 @@ def configurer_ecrans(saved_games: Path, essai: bool = False,
         description = "Essai : ecrans exportes en bas de l'ecran unique"
         resolution = (pl, ph)
     else:
-        second = next((m for m in ecrans if not m[4] and m[0] == px + pl and m[1] == py), None)
+        second = second_ecran(ecrans)
         if second is None:
             return False, [
                 "Pas de second écran à droite de l'écran principal, aligné en haut.",
@@ -183,15 +249,9 @@ def configurer_ecrans(saved_games: Path, essai: bool = False,
         (dossier / ancien).unlink(missing_ok=True)
     lignes += [f"  {nom:12} x={x} y={y} {l}×{h}" for nom, (x, y, l, h) in zones.items()]
 
-    # Mise à jour : déjà choisie dans DCS, à la bonne résolution, rien à
-    # régler ni à relancer.
-    try:
-        choix, largeur, hauteur = options_affichage(saved_games)
-        deja = (choix.lower() in (Path(NOM_FICHIER).stem, NOM_AFFICHE.lower())
-                and (largeur, hauteur) == resolution)
-    except PasDExport:
-        deja = False
-    if inchange and deja:
+    # Mise à jour : déjà choisie dans DCS, à la bonne résolution, en fenêtré,
+    # rien à régler ni à relancer.
+    if inchange and dcs_regle(saved_games, resolution):
         return True, lignes + [f"DCS déjà réglé : « {NOM_AFFICHE} », "
                                f"{resolution[0]}×{resolution[1]}."]
 

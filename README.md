@@ -126,14 +126,39 @@ lancer la mission. Si l'appareil choisi n'est pas celui que DCS pilote, la
 pastille passe à l'orange et les boutons sont coupés : d'un module à
 l'autre, le même numéro désigne un tout autre bouton.
 
+## Diagnostic
+
+DCS Tablette vérifie tout ce dont la tablette a besoin, à son lancement puis
+toutes les 10 secondes : dossier de DCS, scripts, écran virtuel, écrans et
+réglages de DCS, DCS lancé, signal du script (avec la dernière ligne
+`DCS-TABLETTE` de dcs.log), images, réseau du PC (Public ou Privé), tablette
+connectée.
+
+- **Sur le PC** : la liste « Vérification » dans la fenêtre au lancement,
+  puis chaque changement, horodaté.
+- **Sur la tablette** : toucher la pastille en haut à gauche, ou le badge
+  « ⚠ n » qui apparaît quand quelque chose est à régler. *Vérifier*
+  revérifie tout de suite.
+
+Chaque point est *OK*, *réparé*, *en attente* (DCS pas lancé…), *à régler*
+ou *manque*, avec la marche à suivre. Ce qui se répare sans risque l'est
+tout seul, et c'est dit : scripts d'une ancienne version, écran virtuel
+déplacé par une mise à jour de Windows, configuration d'écrans qui ne tombe
+plus sur les écrans, DCS repassé en plein écran ou sur une autre
+configuration (une fois DCS fermé : il réécrit ses réglages en quittant).
+Rien n'est installé sans le demander : l'écran virtuel manquant, c'est
+`Installer.bat`.
+
 ## Problèmes courants
+
+D'abord, le diagnostic ci-dessus. Les cas les plus fréquents :
 
 - **« DCS : pas de signal » alors que les écrans s'affichent** : les images
   viennent de l'écran, mais les boutons et le nom de l'appareil passent par
-  le script de la tablette dans DCS. Ouvrir `Saved Games\DCS\Logs\dcs.log`
-  et chercher `DCS-TABLETTE` : le script y dit s'il est prêt, quel appareil
-  il voit, ou pourquoi il ne peut pas démarrer. Aucune ligne : relancer
-  `Installer.bat`, puis la mission.
+  le script de la tablette dans DCS. Le diagnostic montre la dernière ligne
+  `DCS-TABLETTE` de `Saved Games\DCS\Logs\dcs.log` : le script y dit s'il
+  est prêt, quel appareil il voit, ou pourquoi il ne peut pas démarrer.
+  Aucune ligne : relancer `Installer.bat`, puis la mission.
 
 - **La page ne s'ouvre pas sur l'iPad** : le Wi-Fi du PC est peut-être en
   réseau *Public* dans Windows ; le passer en *Privé*.
@@ -141,8 +166,8 @@ l'autre, le même numéro désigne un tout autre bouton.
   configuration d'écrans qu'au démarrage) et vérifier dans Options → Système
   → Moniteurs que « Tablette DCS » est choisi.
 - **Les écrans du cockpit couvrent la vue** : l'écran virtuel n'est plus à
-  sa place (mise à jour de Windows ou du pilote graphique). Relancer
-  `Installer.bat`, qui le remet.
+  sa place (mise à jour de Windows ou du pilote graphique). DCS Tablette le
+  remet tout seul ; quitter DCS et le relancer.
 - **Le kneeboard de DCS tombe sur l'écran virtuel** : c'est voulu. Dans
   l'onglet Kneeboard de la tablette, « Kneeboard DCS sur » choisit où il
   apparaît quand vous l'ouvrez : *PC* (une fenêtre le recopie en bas à

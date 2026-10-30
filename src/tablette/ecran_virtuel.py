@@ -511,6 +511,56 @@ def _accepte(reponse: Optional[str]) -> bool:
     return reponse is not None and reponse.strip().lower() in ("", "o", "oui", "y", "yes")
 
 
+def _deja_a_droite(ecrans: Sequence[Ecran]) -> Optional[Ecran]:
+    """Un second écran physique déjà à la place de l'écran virtuel : une prise
+    HDMI factice, ou un écran choisi exprès. On le garde."""
+    principal = next((e for e in ecrans if e.principal), None)
+    if principal is None:
+        return None
+    droite = (principal.x + principal.largeur, principal.y)
+    return next((e for e in ecrans if e.actif and not e.principal and (e.x, e.y) == droite),
+                None)
+
+
+def remettre(reparer: bool = True, lister: Callable[[], List[Ecran]] = lister,
+             etendre: Callable[[], bool] = etendre,
+             appliquer: Callable[[Placement], Optional[str]] = appliquer,
+             attendre: Callable[[float], None] = time.sleep) -> Tuple[str, str, List[str]]:
+    """Pour la console de diagnostic : l'écran virtuel est-il en place ? Le
+    remet s'il a bougé (mise à jour de Windows ou du pilote graphique), sans
+    jamais rien installer ni rien demander. `reparer` faux : on dit seulement
+    — chaque essai fait clignoter les écrans, on ne le répète pas en boucle.
+
+    Rend (« ok », « repare », « a_faire » ou « manque »), ce qu'on a vu ou
+    fait, et la marche à suivre.
+    """
+    ecrans = lister()
+    placement, raisons = planifier(ecrans)
+    if placement is not None and not placement.a_faire:
+        return "ok", f"{placement.ecran}, à droite du principal, aligné en haut", []
+    if not any(e.virtuel and not e.principal for e in ecrans):
+        deja = _deja_a_droite(ecrans)
+        if deja is not None:
+            return "ok", f"pas d'écran virtuel, mais {deja} est à sa place", []
+        return "manque", "aucun : les écrans du cockpit iraient sur la vue", [
+            "Lancer Installer.bat : il propose de l'installer (répondre O) et le place."
+        ] + MANUEL[1:3]
+    if placement is None:
+        return "manque", raisons[0], raisons[1:]
+    p = placement
+    voulu = (f"{p.largeur}×{p.hauteur}, {p.frequence} Hz, à droite du principal, "
+             "aligné en haut")
+    if not reparer:
+        return "a_faire", f"{p.ecran} n'est pas à sa place", [
+            "« Vérifier » pour réessayer de le remettre, ou relancer Installer.bat.",
+            f"À la main : Paramètres → Système → Écran, « Étendre ces affichages », {voulu}."]
+    lignes: List[str] = []
+    if preparer(lignes.append, lambda question: None, lister, etendre, appliquer,
+                attendre=attendre):
+        return "repare", lignes[-1], []
+    return "manque", lignes[-2] if len(lignes) > 1 else lignes[-1], lignes[-1:]
+
+
 def preparer(afficher: Callable[[str], None], demander: Callable[[str], Optional[str]],
              lister: Callable[[], List[Ecran]] = lister, etendre: Callable[[], bool] = etendre,
              appliquer: Callable[[Placement], Optional[str]] = appliquer,
@@ -528,11 +578,8 @@ def preparer(afficher: Callable[[str], None], demander: Callable[[str], Optional
         afficher("Écran principal introuvable.")
         return False
     if not any(e.virtuel and not e.principal for e in ecrans) and not principal.virtuel:
-        droite = (principal.x + principal.largeur, principal.y)
-        deja = next((e for e in ecrans if e.actif and not e.principal
-                     and (e.x, e.y) == droite), None)
+        deja = _deja_a_droite(ecrans)
         if deja is not None:
-            # Une prise HDMI factice, ou un écran choisi exprès : on le garde.
             afficher(f"Second écran {deja} déjà à droite du principal, aligné en haut : gardé.")
             return True
         for ligne in ("Aucun écran virtuel. Il en faut un, que personne ne regarde, pour que",

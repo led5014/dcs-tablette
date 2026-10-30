@@ -51,6 +51,11 @@ class PontDCS:
                                      daemon=True)
         self._fil.start()
 
+    @property
+    def a_l_ecoute(self) -> bool:
+        """Faux quand le port était pris au démarrage : DCS parle dans le vide."""
+        return self._ecoute is not None
+
     def arreter(self) -> None:
         self._arret.set()
         if self._fil:

@@ -67,6 +67,19 @@ Essayé en vrai : la détection et le téléchargement vérifié, sur le poste d
 développement. L'installation du pilote et le placement ne sont couverts
 que par les tests (écrans décrits) : à essayer sur un PC sans écran virtuel.
 
+Après l'installation, `diagnostic.py` (30/10/2026) : la console de
+diagnostic, dans la fenêtre du serveur et sur la tablette (pastille ou
+badge « ⚠ n », `/api/diagnostic`). Dix points vérifiés au lancement puis
+toutes les 10 s ; répare seule ce qui est sûr (scripts périmés recopiés,
+écran virtuel remis par `ecran_virtuel.remettre`, `tablette.lua` réécrite
+si ses zones ne tombent plus sur l'écran — retouchée à la main et toujours
+juste, elle reste —, `options.lua` remis DCS fermé seulement). Un écran
+virtuel qu'on n'a pas su remettre n'est pas réessayé seul avant 10 minutes :
+chaque essai fait clignoter les écrans. Rien n'est installé sans accord.
+Lancé sans être passé par Installer.bat, l'exécutable installe d'abord
+(`premiere_fois`). Vu au premier essai : le Wi-Fi du poste de
+développement était en réseau Public.
+
 Publier une version : `scripts\publier_tablette.py` recopie la tablette, et
 elle seule (liste blanche), dans `..\dcs-tablette` ; y lancer
 `scripts\construire_tablette.py` pour le zip, puis commit, tag et release.

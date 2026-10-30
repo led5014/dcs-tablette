@@ -7,6 +7,7 @@ dur. En changer un ici sans l'autre coupe le lien sans message.
 from __future__ import annotations
 
 import ctypes
+import socket
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -18,6 +19,15 @@ PORT_ETAT = 7791         # le serveur écoute ici
 
 SAVED_GAMES = uuid.UUID("4C5C32FF-BB9D-43B0-B5B4-2D72E54EAAA4")   # FOLDERID_SavedGames
 BUREAU = uuid.UUID("B4BFCC3A-DB2C-424C-B029-7FE99A87C641")        # FOLDERID_Desktop
+
+
+def adresses_locales():
+    """Adresses IPv4 de ce PC sur le réseau local, à taper sur l'iPad."""
+    try:
+        infos = socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET)
+    except OSError:
+        return []
+    return sorted({i[4][0] for i in infos if not i[4][0].startswith("127.")})
 
 
 def dossier_windows(dossier: uuid.UUID) -> Optional[Path]:

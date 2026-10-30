@@ -797,6 +797,7 @@ async function rafraichirEtat() {
       return;
     }
     suivreKneeboardDcs(e.kneeboard);
+    majBadgeDiagnostic(e.problemes || 0);
     const d = e.dcs;
     ailleurs = e.ailleurs;
     if (!d.connecte) {
@@ -1081,6 +1082,89 @@ function brancherKneeboard() {
   });
 }
 
+// --------------------------------------------------------------- diagnostic
+// Ce que la fenêtre de DCS Tablette vérifie sur le PC (diagnostic.py), point
+// par point : OK, réparé tout seul, en attente (DCS pas lancé…), ou à régler,
+// avec la marche à suivre. Ouvert en touchant la pastille, ou le badge
+// « ⚠ n » qui apparaît quand il y a quelque chose à régler.
+
+const MARQUES = { ok: '✓', repare: '✓', attente: '…', a_faire: '!', manque: '✕' };
+const LIBELLES = { ok: '', repare: 'réparé', attente: 'en attente', a_faire: 'à régler',
+                   manque: 'manque' };
+const PERIODE_DIAGNOSTIC_MS = 2000;
+let diagnosticOuvert = false;
+
+function majBadgeDiagnostic(n) {
+  const badge = $('#diag');
+  badge.hidden = !n;
+  badge.textContent = `⚠ ${n}`;
+  badge.setAttribute('aria-label', `Diagnostic : ${n} point${n > 1 ? 's' : ''} à régler`);
+}
+
+function afficherDiagnostic(d) {
+  $('#diag-heure').textContent = d.heure ? `vérifié à ${d.heure}` : 'pas encore vérifié';
+  const liste = $('#diag-points');
+  liste.textContent = '';
+  for (const p of d.points) {
+    const li = element('li', p.etat);
+    li.append(element('span', 'marque', MARQUES[p.etat] || '?'));
+    const titre = element('div', 'point-titre', p.titre);
+    if (LIBELLES[p.etat]) titre.append(element('em', '', LIBELLES[p.etat]));
+    li.append(titre, element('div', 'point-detail', p.detail));
+    if (p.solution.length) {
+      const etapes = element('ol', 'point-solution');
+      for (const s of p.solution) etapes.append(element('li', '', s));
+      li.append(etapes);
+    }
+    liste.append(li);
+  }
+  const journal = $('#diag-journal');
+  journal.textContent = '';
+  $('#diag-titre-journal').hidden = d.journal.length === 0;
+  for (const j of d.journal) {
+    const li = element('li', j.etat);
+    li.append(element('span', 'heure', j.heure), `${j.titre} : ${j.detail}`);
+    journal.append(li);
+  }
+  majBadgeDiagnostic(d.problemes);
+}
+
+async function chargerDiagnostic(verifier = false) {
+  try {
+    const r = await fetch('/api/diagnostic', { method: verifier ? 'POST' : 'GET',
+                                               cache: 'no-store' });
+    afficherDiagnostic(await r.json());
+  } catch {
+    $('#diag-heure').textContent = 'PC injoignable : la fenêtre DCS Tablette est-elle '
+      + 'ouverte, et le PC sur le même Wi-Fi ?';
+  }
+}
+
+function ouvrirDiagnostic(ouvrir) {
+  diagnosticOuvert = ouvrir;
+  $('#diagnostic').hidden = !ouvrir;
+  if (ouvrir) chargerDiagnostic();
+}
+
+function brancherDiagnostic() {
+  const etat = $('#etat');
+  etat.addEventListener('click', () => ouvrirDiagnostic(!diagnosticOuvert));
+  etat.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') ouvrirDiagnostic(!diagnosticOuvert);
+  });
+  $('#diag').addEventListener('click', () => ouvrirDiagnostic(true));
+  $('#diag-fermer').addEventListener('click', () => ouvrirDiagnostic(false));
+  $('#diag-verifier').addEventListener('click', async () => {
+    const bouton = $('#diag-verifier');
+    bouton.disabled = true;
+    $('#diag-heure').textContent = 'vérification…';
+    await chargerDiagnostic(true);
+    bouton.disabled = false;
+  });
+  setInterval(() => { if (diagnosticOuvert && !document.hidden) chargerDiagnostic(); },
+              PERIODE_DIAGNOSTIC_MS);
+}
+
 // --------------------------------------------------------------- plein écran
 // Android, navigateur du PC : un bouton cache la barre du navigateur. Masqué
 // quand la page est ouverte depuis l'écran d'accueil (déjà plein écran) et
@@ -1107,6 +1191,7 @@ function brancherPleinEcran() {
 // --------------------------------------------------------------- démarrage
 
 brancherPleinEcran();
+brancherDiagnostic();
 construireMenuAppareil();
 brancherKneeboard();
 chargerProfil();

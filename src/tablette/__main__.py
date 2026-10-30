@@ -14,21 +14,12 @@ sans exposer le serveur, ni déclencher la question du pare-feu.
 """
 import argparse
 import logging
-import socket
 import sys
 from pathlib import Path
 from typing import List, Optional
 
 from . import VERSION
-
-
-def adresses_locales():
-    """Adresses IPv4 de ce PC sur le réseau local, à taper sur l'iPad."""
-    try:
-        infos = socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET)
-    except OSError:
-        return []
-    return sorted({i[4][0] for i in infos if not i[4][0].startswith("127.")})
+from .config import adresses_locales
 
 
 class SansConnexionCoupee(logging.Filter):
@@ -46,7 +37,8 @@ def servir(local: bool, miroir: bool) -> int:
     from .app import create_app
     from .config import Config
     from .dcs import PontDCS
-    from .installation import est_installe
+    from .diagnostic import Diagnostic
+    from .installation import installer, premiere_fois
     from .miroir import AffichageKneeboard, Miroir
     from .video import Video
 
@@ -54,14 +46,18 @@ def servir(local: bool, miroir: bool) -> int:
     logging.getLogger("tablette").setLevel(logging.INFO)
     logging.getLogger("asyncio").addFilter(SansConnexionCoupee())
     cfg = Config()
-    print(f"DCS Tablette {VERSION}")
-    if not est_installe(cfg.saved_games):
-        print("Attention : DCS ne charge pas encore le script de la tablette. Lancer "
-              "Installer.bat\n(ou « python -m tablette installer »), puis relancer la mission.\n")
+    print(f"DCS Tablette {VERSION}\n")
+    # Lancé sans être passé par Installer.bat : on installe d'abord.
+    if premiere_fois(cfg.saved_games):
+        print("Première utilisation : installation.\n")
+        installer(cfg.saved_games)
+        print()
     pont = PontDCS(cfg.port_ordres, cfg.port_etat)
     pont.demarrer()
     video = Video(cfg.saved_games)
     affichage = AffichageKneeboard()      # kneeboard de DCS sur le PC ou la tablette
+    diagnostic = Diagnostic(cfg.saved_games, pont, video, cfg.port_web)
+    diagnostic.demarrer()
     if miroir:
         Miroir(video, cfg.saved_games, affichage).start()
     if local:
@@ -70,11 +66,14 @@ def servir(local: bool, miroir: bool) -> int:
         print("Ouvrir sur l'iPad :")
         for adresse in adresses_locales() or ["<adresse de ce PC>"]:
             print(f"  http://{adresse}:{cfg.port_web}")
+    print("Diagnostic : ci-dessus, puis ce qui change ; sur la tablette, toucher la "
+          "pastille en haut à gauche.\n")
     try:
-        uvicorn.run(create_app(cfg, pont, video, affichage),
+        uvicorn.run(create_app(cfg, pont, video, affichage, diagnostic=diagnostic),
                     host="127.0.0.1" if local else "0.0.0.0",
                     port=cfg.port_web, log_level="warning")
     finally:
+        diagnostic.arreter()
         pont.arreter()
     return 0
 

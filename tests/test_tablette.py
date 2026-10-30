@@ -1359,5 +1359,227 @@ class TestApiTablette(unittest.TestCase):
         self.assertIn("DCS Tablette", r.text)
 
 
+class FauxPont:
+    """L'état du lien avec DCS, réglé à la main."""
+
+    def __init__(self, a_l_ecoute=True, connecte=False, appareil=None):
+        self.a_l_ecoute, self.port_etat = a_l_ecoute, 7791
+        self._etat = {"connecte": connecte, "appareil": appareil}
+
+    def etat(self):
+        return dict(self._etat)
+
+
+class TestDiagnostic(unittest.TestCase):
+    """La console de diagnostic, sur un faux Saved Games/DCS et des écrans
+    décrits : rien du poste n'est lu, réparé ni déplacé."""
+
+    PRINCIPAL = TestInstallation.PRINCIPAL
+    VIRTUEL = TestInstallation.VIRTUEL
+
+    def setUp(self):
+        from tablette.installation import configurer_ecrans, installer_scripts
+        TestInstallation.setUp(self)
+        installer_scripts(self.saved)
+        configurer_ecrans(self.saved, ecrans=[self.PRINCIPAL, self.VIRTUEL],
+                          ouvert=lambda: False)
+        self.ecrans = [self.PRINCIPAL, self.VIRTUEL]
+        self.lance = False
+        self.reseaux = [("Maison", "Private")]
+        self.virtuel = ("ok", "« Virtual Display Driver » (2560×1440, 240 Hz)", [])
+        self.reparer = []
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def diagnostic(self, **autres):
+        from tablette.diagnostic import Diagnostic
+
+        def virtuel(reparer):
+            self.reparer.append(reparer)
+            return self.virtuel
+        reglages = dict(ouvert=lambda: self.lance, ecrans=lambda: self.ecrans,
+                        virtuel=virtuel, lancement=lambda: None,
+                        reseaux=lambda: self.reseaux)
+        reglages.update(autres)
+        return Diagnostic(self.saved, **reglages)
+
+    def points(self, diagnostic=None, forcer=False):
+        diagnostic = diagnostic or self.diagnostic()
+        return {p.titre: p for p in diagnostic.verifier(forcer)}
+
+    def test_tout_en_place_rien_a_regler(self):
+        d = self.diagnostic()
+        points = self.points(d)
+        self.assertEqual({p.etat for p in points.values()}, {"ok", "attente"},
+                         {t: (p.etat, p.detail) for t, p in points.items()})
+        self.assertEqual(points["Écrans de DCS"].detail,
+                         "« Tablette DCS » : 4 écrans sur l'écran virtuel")
+        self.assertEqual(d.etat()["problemes"], 0)
+        self.assertEqual(d.etat()["journal"], [])
+
+    def test_scripts_d_une_ancienne_version_recopies(self):
+        from tablette.installation import scripts_a_jour
+        (self.saved / "Scripts" / "DCS-Tablette-Export.lua").write_text("-- 1.2.1")
+        d = self.diagnostic()
+        self.assertEqual(self.points(d)["Scripts dans DCS"].etat, "repare")
+        self.assertTrue(scripts_a_jour(self.saved))
+        self.assertEqual(d.etat()["journal"][0]["titre"], "Scripts dans DCS")
+        self.assertEqual(self.points(d)["Scripts dans DCS"].etat, "ok")
+
+    def plein_ecran(self):
+        options = self.saved / "Config" / "options.lua"
+        options.write_text(lire(options).replace('["fullScreen"] = false', '["fullScreen"] = true')
+                           .replace('"tablette"', '"1camera"'), encoding="utf-8")
+        return options
+
+    def test_dcs_repasse_en_plein_ecran_remis_dcs_ferme(self):
+        options = self.plein_ecran()
+        point = self.points()["Réglages de DCS"]
+        self.assertEqual(point.etat, "repare")
+        self.assertIn("1camera", point.detail)
+        self.assertIn('["fullScreen"] = false', lire(options))
+        self.assertIn('"tablette"', lire(options))
+
+    def test_dcs_ouvert_ses_reglages_ne_sont_pas_touches(self):
+        options = self.plein_ecran()
+        avant = lire(options)
+        self.lance = True
+        point = self.points()["Réglages de DCS"]
+        self.assertEqual(point.etat, "a_faire")
+        self.assertIn("Quitter DCS", point.solution[0])
+        self.assertEqual(lire(options), avant)
+
+    def test_ecran_virtuel_change_configuration_reecrite(self):
+        from tablette.ecrans_dcs import zones_actives
+        self.ecrans = [self.PRINCIPAL, (2560, 0, 1920, 1080, False)]
+        point = self.points()["Écrans de DCS"]
+        self.assertEqual(point.etat, "repare")
+        for x, y, l, h in zones_actives(self.saved).values():
+            self.assertTrue(2560 <= x and x + l <= 4480 and y + h <= 1080)
+
+    def test_configuration_retouchee_a_la_main_gardee(self):
+        fichier = self.saved / "Config" / "MonitorSetup" / "tablette.lua"
+        retouche = lire(fichier).replace("width = 720;", "width = 700;")
+        fichier.write_text(retouche, encoding="ascii")
+        self.assertEqual(self.points()["Écrans de DCS"].etat, "ok")
+        self.assertEqual(lire(fichier), retouche)
+
+    def test_reseau_public_dit_comment_le_passer_en_prive(self):
+        self.reseaux = [("ORBI46 2", "Public")]
+        point = self.points()["Réseau du PC"]
+        self.assertEqual(point.etat, "a_faire")
+        self.assertIn("Privé", point.solution[0])
+
+    def test_ecran_virtuel_rate_pas_reessaye_en_boucle(self):
+        self.virtuel = ("manque", "Écran virtuel non placé : Windows refuse", ["À la main"])
+        d = self.diagnostic()
+        self.points(d)
+        self.points(d)
+        self.points(d, forcer=True)
+        self.assertEqual(self.reparer, [True, False, True])
+
+    def test_signal_de_dcs(self):
+        logs = self.saved / "Logs"
+        logs.mkdir()
+        (logs / "dcs.log").write_text(
+            "2026-10-30 21:00:00.000 INFO    DCS-TABLETTE (Main): charge (LuaSocket : oui)\n"
+            "2026-10-30 21:00:01.000 ERROR   DCS-TABLETTE (Main): port 7790 deja pris\n",
+            encoding="utf-8")
+        titre = "Script de la tablette dans DCS"
+        self.assertEqual(self.points(self.diagnostic(pont=FauxPont(a_l_ecoute=False)))[titre]
+                         .etat, "manque")
+        self.assertEqual(self.points(self.diagnostic(pont=FauxPont()))[titre].etat, "attente")
+        self.lance = True
+        point = self.points(self.diagnostic(pont=FauxPont()))[titre]
+        self.assertEqual(point.etat, "a_faire")
+        self.assertIn("port 7790 deja pris", point.detail)
+        point = self.points(self.diagnostic(pont=FauxPont(connecte=True, appareil="FA-18C_hornet")))[titre]
+        self.assertEqual((point.etat, point.detail),
+                         ("ok", "DCS parle à la tablette : FA-18C_hornet"))
+
+    def test_une_verification_qui_plante_ne_bloque_rien(self):
+        def panne():
+            raise OSError("EnumDisplayMonitors")
+        points = self.points(self.diagnostic(ecrans=panne))
+        self.assertIn("non vérifié", points["Écrans de DCS"].detail)
+        self.assertEqual(points["Réseau du PC"].etat, "ok")
+
+    def test_premiere_fois_sans_dossier_de_dcs(self):
+        (self.saved / "Config" / "options.lua").unlink()
+        points = self.points()
+        self.assertEqual(points["Dossier de DCS"].etat, "manque")
+        self.assertNotIn("Scripts dans DCS", points)
+
+    def test_la_tablette_vue_par_l_api(self):
+        from fastapi.testclient import TestClient
+
+        from tablette.app import create_app
+        from tablette.config import Config
+        self.reseaux = [("ORBI46 2", "Public")]
+        d = self.diagnostic()
+        d.verifier()
+        client = TestClient(create_app(Config(saved_games=self.saved), FauxPont(),
+                                       dossier_dcs=lambda: None, diagnostic=d))
+        self.assertEqual(client.get("/api/etat").json()["problemes"], 1)
+        corps = client.post("/api/diagnostic").json()
+        tablette = next(p for p in corps["points"] if p["titre"] == "Tablette")
+        self.assertEqual(tablette["etat"], "ok")
+        self.assertEqual(corps["problemes"], 1)
+        self.assertEqual(client.get("/api/diagnostic").json()["points"], corps["points"])
+
+    def test_derniere_ligne_du_script_dans_dcs_log(self):
+        from tablette.diagnostic import derniere_ligne_tablette
+        self.assertIsNone(derniere_ligne_tablette(self.saved))
+        (self.saved / "Logs").mkdir()
+        (self.saved / "Logs" / "dcs.log").write_text(
+            "2026-10-30 21:00:00.000 INFO    DCS-TABLETTE (Main): pret : appuis ecoutes\n"
+            "2026-10-30 21:00:02.000 INFO    EDCORE (Main): autre chose\n", encoding="utf-8")
+        self.assertEqual(derniere_ligne_tablette(self.saved), (False, "pret : appuis ecoutes"))
+
+
+class TestRemettreEcranVirtuel(unittest.TestCase):
+    def remettre(self, listes, reparer=True, refus=None):
+        from tablette.ecran_virtuel import remettre
+        listes = list(listes)
+        appels = []
+
+        def appliquer(p):
+            appels.append((p.x, p.y))
+            return refus
+        etat = remettre(reparer, lister=lambda: listes.pop(0) if len(listes) > 1 else listes[0],
+                        etendre=lambda: True, appliquer=appliquer, attendre=lambda s: None)
+        return etat, appels
+
+    def test_en_place(self):
+        (etat, detail, _), appels = self.remettre([[PRINCIPAL, ecran(modes=MODES_VDD)]])
+        self.assertEqual((etat, appels), ("ok", []))
+        self.assertIn("Virtual Display Driver", detail)
+
+    def test_deplace_remis(self):
+        (etat, detail, _), appels = self.remettre(
+            [[PRINCIPAL, ecran(x=-2560, modes=MODES_VDD)], [PRINCIPAL, ecran(x=-2560, modes=MODES_VDD)],
+             [PRINCIPAL, ecran(modes=MODES_VDD)]])
+        self.assertEqual((etat, appels), ("repare", [(2560, 0)]))
+
+    def test_deplace_sans_reparer(self):
+        (etat, _, solution), appels = self.remettre([[PRINCIPAL, ecran(x=-2560, modes=MODES_VDD)]],
+                                                    reparer=False)
+        self.assertEqual((etat, appels), ("a_faire", []))
+        self.assertIn("Vérifier", solution[0])
+
+    def test_absent_rien_n_est_installe(self):
+        (etat, _, solution), appels = self.remettre([[PRINCIPAL]])
+        self.assertEqual((etat, appels), ("manque", []))
+        self.assertIn("Installer.bat", solution[0])
+
+    def test_refuse_par_windows(self):
+        (etat, detail, solution), _ = self.remettre(
+            [[PRINCIPAL, ecran(x=-2560, modes=MODES_VDD)]], refus="Windows refuse ce réglage")
+        self.assertEqual(etat, "manque")
+        self.assertIn("Windows refuse", detail)
+        self.assertIn("Paramètres", solution[0])
+
+
 if __name__ == "__main__":
     unittest.main()

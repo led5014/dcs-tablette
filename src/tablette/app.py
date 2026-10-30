@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple
 from urllib.parse import quote
 
-from fastapi import Cookie, FastAPI, HTTPException
+from fastapi import Cookie, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, Response
 
 from . import VERSION, appareils, planche
@@ -43,9 +43,11 @@ CHOIX = "tablette_appareil"
 def create_app(cfg: Optional[Config] = None, pont: Optional[PontDCS] = None,
                video: Optional[Video] = None,
                affichage: Optional[AffichageKneeboard] = None,
-               dossier_dcs: Optional[Callable[[], Optional[Path]]] = None) -> FastAPI:
+               dossier_dcs: Optional[Callable[[], Optional[Path]]] = None,
+               diagnostic=None) -> FastAPI:
     """`affichage` : partagé avec le miroir du kneeboard sur le PC.
-    `dossier_dcs` : où DCS est installé (pages des modules et des cartes)."""
+    `dossier_dcs` : où DCS est installé (pages des modules et des cartes).
+    `diagnostic` : la console de diagnostic (diagnostic.py), lancée à côté."""
     cfg = cfg or Config()
     pont = pont or PontDCS(cfg.port_ordres, cfg.port_etat)
     video = video or Video(cfg.saved_games)
@@ -101,7 +103,7 @@ def create_app(cfg: Optional[Config] = None, pont: Optional[PontDCS] = None,
         return profil
 
     @app.get("/api/etat")
-    def etat(kneeboard: Optional[str] = None,
+    def etat(requete: Request, kneeboard: Optional[str] = None,
              choix: Optional[str] = Cookie(None, alias=CHOIX)) -> Dict:
         """État de DCS et profil actif. `kneeboard` (pc ou tablette) : où la
         tablette veut le kneeboard de DCS ; elle le redit à chaque appel. Sur
@@ -110,6 +112,8 @@ def create_app(cfg: Optional[Config] = None, pont: Optional[PontDCS] = None,
         tablette ; `ailleurs` : l'appareil que DCS pilote s'il diffère."""
         if kneeboard:
             affichage.choisir(kneeboard)
+        if diagnostic is not None and requete.client:
+            diagnostic.tablette_vue(requete.client.host)
         profil, nom = actif(choix)
         dcs_etat = pont.etat()
         sur = affichage.effectif()
@@ -119,7 +123,24 @@ def create_app(cfg: Optional[Config] = None, pont: Optional[PontDCS] = None,
                 "dcs": dcs_etat, "profil": profil.id, "libelle": profil.libelle,
                 "appareil": nom, "choisi": appareils.profil_par_id(choix or "") is not None,
                 "ailleurs": pilote_ailleurs(profil),
-                "kneeboard": {"sur": sur, "ouvert": ouvert}}
+                "kneeboard": {"sur": sur, "ouvert": ouvert},
+                "problemes": diagnostic.etat()["problemes"] if diagnostic else 0}
+
+    @app.get("/api/diagnostic")
+    def lire_diagnostic() -> Dict:
+        """Le dernier résultat de la console de diagnostic, sans revérifier."""
+        if diagnostic is None:
+            return {"heure": "", "points": [], "problemes": 0, "journal": []}
+        return diagnostic.etat()
+
+    @app.post("/api/diagnostic")
+    def verifier_diagnostic() -> Dict:
+        """Bouton « Vérifier » : tout revérifier maintenant, et réessayer ce
+        qu'on avait renoncé à réparer tout seul."""
+        if diagnostic is None:
+            return lire_diagnostic()
+        diagnostic.verifier(forcer=True)
+        return diagnostic.etat()
 
     @app.get("/api/profils")
     def profils() -> List[Dict]:

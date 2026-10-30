@@ -53,6 +53,10 @@ INSTALLATION
 Pas d'écran virtuel voulu, juste pour essayer : « Installer.bat --essai »
 met les écrans du cockpit en bas de la vue.
 
+Lancé directement (« DCS-Tablette.exe ») sans être passé par
+« Installer.bat », DCS Tablette fait l'installation d'abord. Après une mise
+à jour, il recopie lui-même les nouveaux scripts dans DCS.
+
 
 EN VOL
 ------
@@ -69,6 +73,31 @@ EN VOL
      Le menu en haut à gauche permet aussi de choisir son appareil à la
      main, avant même la mission. S'il ne correspond pas à celui que DCS
      pilote, la pastille passe à l'orange et les boutons sont coupés.
+
+DIAGNOSTIC
+----------
+DCS Tablette vérifie tout ce dont la tablette a besoin, à son lancement
+puis toutes les 10 secondes : dossier de DCS, scripts, écran virtuel,
+écrans et réglages de DCS, DCS lancé, signal du script, images, réseau du
+PC, tablette connectée.
+
+  - Dans la fenêtre de DCS Tablette : la liste « Vérification » au
+    lancement, puis chaque changement, à l'heure près.
+  - Sur la tablette : toucher la pastille en haut à gauche, ou le badge
+    « ⚠ 2 » qui apparaît quand quelque chose est à régler. « Vérifier »
+    revérifie tout de suite.
+
+Chaque point dit OK, RÉPARÉ, EN ATTENTE (DCS pas lancé…), À RÉGLER ou
+MANQUE, et pour ces deux derniers la marche à suivre. Ce qui se répare sans
+risque l'est tout seul, et c'est dit :
+  - scripts d'une ancienne version (après une mise à jour) recopiés ;
+  - écran virtuel déplacé par une mise à jour de Windows ou du pilote
+    graphique : remis à sa place ;
+  - configuration d'écrans qui ne tombe plus sur les écrans : réécrite ;
+  - DCS repassé en plein écran, ou sur une autre configuration d'écrans :
+    remis, une fois DCS fermé (il réécrit ses réglages en quittant).
+Rien n'est jamais installé sans le demander : l'écran virtuel manquant,
+c'est « Installer.bat ».
 
 KNEEBOARD
 ---------
@@ -136,6 +165,9 @@ D. Régler DCS (DCS ouvert, puis le relancer)
 
 SI ÇA NE MARCHE PAS
 -------------------
+D'abord, le diagnostic (voir plus haut) : la fenêtre de DCS Tablette, ou la
+pastille de la tablette. Il dit ce qui manque et comment le régler.
+
 - La page ne s'ouvre pas sur la tablette : le Wi-Fi du PC est peut-être en
   réseau « Public » dans Windows ; le passer en « Privé ».
 - « DCS : pas de signal » alors que les écrans s'affichent : chercher
@@ -146,7 +178,8 @@ SI ÇA NE MARCHE PAS
   → Moniteurs que « Tablette DCS » est choisi.
 - Les écrans du cockpit couvrent la vue : l'écran virtuel n'est pas à sa
   place (une mise à jour de Windows ou de la carte graphique peut le
-  déplacer). Relancer « Installer.bat », qui le remet.
+  déplacer). DCS Tablette le remet tout seul ; quitter DCS et le relancer.
+  S'il n'y arrive pas, le diagnostic dit pourquoi.
 - La souris part sur la droite et disparaît : elle est sur l'écran virtuel.
   La ramener vers la gauche.
 

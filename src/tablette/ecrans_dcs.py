@@ -194,6 +194,16 @@ def options_affichage(saved_games: Path) -> Tuple[str, int, int]:
     return choix, int(float(largeur)), int(float(hauteur))
 
 
+def plein_ecran(saved_games: Path) -> bool:
+    """DCS est-il en plein écran ? Exclusif, il ne se capture pas (image noire)."""
+    try:
+        texte = (saved_games / "Config" / "options.lua").read_text(encoding="utf-8",
+                                                                   errors="replace")
+    except OSError:
+        return False
+    return (_option(texte, "fullScreen") or "").lower() == "true"
+
+
 CLES_AFFICHAGE = ("multiMonitorSetup", "width", "height", "aspect", "fullScreen")
 
 

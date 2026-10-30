@@ -18,7 +18,10 @@
 </head>
 <body>
 <header id="barre">
-  <span id="etat" class="etat inconnu" role="status" aria-label="DCS : …"></span>
+  <!-- La pastille ouvre le diagnostic ; le badge dit qu'il y a quelque chose
+       à régler, et combien. -->
+  <span id="etat" class="etat inconnu" role="button" tabindex="0" aria-label="DCS : …"></span>
+  <button id="diag" class="diag" hidden aria-label="Diagnostic : à régler"></button>
   <!-- L'appareil : celui que DCS annonce (Auto), ou choisi à la main pour
        préparer la page avant même de lancer la mission. -->
   <select id="appareil" aria-label="Appareil"><option value="auto">Auto · DCS : …</option></select>
@@ -57,6 +60,20 @@
       (ou son sous-dossier au nom de l'appareil), ou vole une mission qui en
       embarque.</p>
   </div>
+</section>
+
+<!-- Ce qui manque pour que la tablette marche, et comment le régler : les
+     mêmes vérifications que la fenêtre de DCS Tablette sur le PC. -->
+<section id="diagnostic" hidden aria-label="Diagnostic">
+  <div class="diag-barre">
+    <strong>Diagnostic</strong>
+    <span id="diag-heure"></span>
+    <button id="diag-verifier">Vérifier</button>
+    <button id="diag-fermer">Fermer</button>
+  </div>
+  <ul id="diag-points"></ul>
+  <h2 id="diag-titre-journal" hidden>Dernières réparations et alertes</h2>
+  <ul id="diag-journal"></ul>
 </section>
 
 <script src="/app.js"></script>
