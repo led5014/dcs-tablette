@@ -376,8 +376,9 @@ async function decoder(blob) {
 
 async function demanderImage(id) {
   let r;
+  const lum = luminosites.get(id) || 0;
   try {
-    r = await fetch(`/api/video/${id}`, { cache: 'no-store' });
+    r = await fetch(`/api/video/${id}${lum ? `?lum=${lum}` : ''}`, { cache: 'no-store' });
   } catch { return { raison: 'Serveur injoignable' }; }
   if (!r.ok) {
     let raison = null;
@@ -423,6 +424,81 @@ async function boucleImage(id, conteneur, toile, msg, gen) {
     if (durable) conteneur.classList.remove('avec-image');
     await attendre(durable ? ATTENTE_SANS_IMAGE_MS : 200);
   }
+}
+
+// --------------------------------------------------------------- luminosité
+// Réglée écran par écran, par appareil, et retenue sur chaque tablette : le
+// TGP du F-16 est sombre, un DDI en plein soleil trop pâle. Le PC éclaircit
+// l'image avant de la compresser (crans de -2 à +5, 0 : comme dans DCS).
+
+const LUMINOSITE_MIN = -2;
+const LUMINOSITE_MAX = 5;
+const PAS_MOLETTE_PX = 26;          // glissement du doigt pour un cran
+const ANGLE_CRAN = 30;              // la molette tourne de 30° par cran
+const luminosites = new Map();
+
+function cleLuminosite(id) { return `luminosite.${profil ? profil.id : ''}.${id}`; }
+
+// Une molette ronde dans le coin bas gauche du cadre, là où un vrai MFD a sa
+// commande BRT. On la tourne du doigt : glisser vers le haut ou la droite
+// éclaircit, cran par cran ; la molette de la souris et les flèches aussi.
+function moletteLuminosite(cadre, id, n, retour) {
+  luminosites.set(id, Number(lire(cleLuminosite(id), 0)) || 0);
+  const m = element('div', 'molette-lum');
+  m.append(element('span', 'repere'));
+  m.style.gridColumn = '1';
+  m.style.gridRow = String(n + 2);
+  m.tabIndex = 0;
+  m.setAttribute('role', 'slider');
+  m.setAttribute('aria-label', 'Luminosité');
+  m.setAttribute('aria-valuemin', String(LUMINOSITE_MIN));
+  m.setAttribute('aria-valuemax', String(LUMINOSITE_MAX));
+
+  const dessiner = (dire) => {
+    const v = luminosites.get(id) || 0;
+    m.style.setProperty('--angle', `${v * ANGLE_CRAN}deg`);
+    m.setAttribute('aria-valuenow', String(v));
+    if (dire) {
+      retour.textContent = `Luminosité ${v > 0 ? '+' : ''}${v}`;
+      retour.classList.remove('erreur');
+    }
+  };
+  const fixer = (niveau) => {
+    niveau = Math.max(LUMINOSITE_MIN, Math.min(LUMINOSITE_MAX, niveau));
+    if (niveau !== (luminosites.get(id) || 0)) {
+      luminosites.set(id, niveau);
+      retenir(cleLuminosite(id), niveau);
+    }
+    dessiner(true);
+  };
+
+  let depart = null;
+  m.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    if (m.setPointerCapture) m.setPointerCapture(e.pointerId);
+    depart = { x: e.clientX, y: e.clientY, niveau: luminosites.get(id) || 0 };
+    m.classList.add('tourne');
+    dessiner(true);
+  });
+  m.addEventListener('pointermove', (e) => {
+    if (!depart) return;
+    const glisse = (e.clientX - depart.x) - (e.clientY - depart.y);
+    fixer(depart.niveau + Math.round(glisse / PAS_MOLETTE_PX));
+  });
+  for (const fin of ['pointerup', 'pointercancel']) {
+    m.addEventListener(fin, () => { depart = null; m.classList.remove('tourne'); });
+  }
+  m.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    fixer((luminosites.get(id) || 0) + (e.deltaY < 0 ? 1 : -1));
+  }, { passive: false });
+  m.addEventListener('keydown', (e) => {
+    const sens = { ArrowUp: 1, ArrowRight: 1, ArrowDown: -1, ArrowLeft: -1 }[e.key];
+    if (sens) { e.preventDefault(); fixer((luminosites.get(id) || 0) + sens); }
+  });
+  m.addEventListener('contextmenu', (e) => e.preventDefault());
+  dessiner(false);
+  cadre.append(m);
 }
 
 // --------------------------------------------------------------- cadres
@@ -476,6 +552,7 @@ function construireCadre(e) {
       retour.classList.toggle('erreur', ok !== true);
     }));
   }
+  moletteLuminosite(cadre, e.id, n, retour);
   boucleImage(e.id, ecran, toile, msg, generation);
   return cadre;
 }
@@ -1131,8 +1208,12 @@ function afficherDiagnostic(d) {
 
 async function chargerDiagnostic(verifier = false) {
   try {
-    const r = await fetch('/api/diagnostic', { method: verifier ? 'POST' : 'GET',
-                                               cache: 'no-store' });
+    // POST en JSON : le serveur refuse un POST vide, qu'une page d'un autre
+    // site pourrait envoyer sans que le navigateur s'y oppose.
+    const r = await fetch('/api/diagnostic', verifier
+      ? { method: 'POST', cache: 'no-store', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ verifier: true }) }
+      : { cache: 'no-store' });
     afficherDiagnostic(await r.json());
   } catch {
     $('#diag-heure').textContent = 'PC injoignable : la fenêtre DCS Tablette est-elle '

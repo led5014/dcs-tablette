@@ -6,13 +6,15 @@ tait — la page ne se vide pas entre deux missions.
 """
 from __future__ import annotations
 
+import ipaddress
 import logging
+import socket
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple
 from urllib.parse import quote
 
-from fastapi import Cookie, FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, JSONResponse, Response
+from fastapi import Body, Cookie, FastAPI, HTTPException, Request
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, Response
 
 from . import VERSION, appareils, planche
 from .appareils import Profil
@@ -40,14 +42,30 @@ PAGE_SUIVANTE, PAGE_PRECEDENTE = 3001, 3002     # communes à tous les kneeboard
 CHOIX = "tablette_appareil"
 
 
+def hote_permis(hote: str) -> bool:
+    """La tablette ouvre la page par l'adresse IP du PC (ou son nom). Un site
+    piégé qui ferait pointer SON nom vers le PC (« DNS rebinding ») pour
+    appuyer sur les boutons ou déplacer les écrans arrive avec ce nom-là dans
+    l'en-tête Host : refusé."""
+    nom = hote[1:hote.find("]")] if hote.startswith("[") else hote.rsplit(":", 1)[0]
+    try:
+        ipaddress.ip_address(nom)
+        return True
+    except ValueError:
+        pc = socket.gethostname().lower()
+        return nom.lower() in ("localhost", pc, f"{pc}.local")
+
+
 def create_app(cfg: Optional[Config] = None, pont: Optional[PontDCS] = None,
                video: Optional[Video] = None,
                affichage: Optional[AffichageKneeboard] = None,
                dossier_dcs: Optional[Callable[[], Optional[Path]]] = None,
-               diagnostic=None) -> FastAPI:
+               diagnostic=None, controle_hote: bool = False) -> FastAPI:
     """`affichage` : partagé avec le miroir du kneeboard sur le PC.
     `dossier_dcs` : où DCS est installé (pages des modules et des cartes).
-    `diagnostic` : la console de diagnostic (diagnostic.py), lancée à côté."""
+    `diagnostic` : la console de diagnostic (diagnostic.py), lancée à côté.
+    `controle_hote` : refuser les noms d'hôte inconnus (voir `hote_permis`) ;
+    le serveur le met, les tests parlent à « testserver »."""
     cfg = cfg or Config()
     pont = pont or PontDCS(cfg.port_ordres, cfg.port_etat)
     video = video or Video(cfg.saved_games)
@@ -55,6 +73,14 @@ def create_app(cfg: Optional[Config] = None, pont: Optional[PontDCS] = None,
     if dossier_dcs is None:
         from .capture import dossier_dcs    # Windows seulement : chargé à la demande
     app = FastAPI(title="DCS Tablette")
+
+    if controle_hote:
+        @app.middleware("http")
+        async def filtrer_hote(requete: Request, suite):
+            if not hote_permis(requete.headers.get("host", "")):
+                return PlainTextResponse("Hôte refusé : ouvrir la page par l'adresse IP du PC.",
+                                         status_code=400)
+            return await suite(requete)
     memoire = {"profil": appareils.PAR_DEFAUT, "nom": appareils.PAR_DEFAUT.noms_dcs[0],
                "dcs": None}
 
@@ -134,9 +160,11 @@ def create_app(cfg: Optional[Config] = None, pont: Optional[PontDCS] = None,
         return diagnostic.etat()
 
     @app.post("/api/diagnostic")
-    def verifier_diagnostic() -> Dict:
+    def verifier_diagnostic(corps: Dict = Body(...)) -> Dict:
         """Bouton « Vérifier » : tout revérifier maintenant, et réessayer ce
-        qu'on avait renoncé à réparer tout seul."""
+        qu'on avait renoncé à réparer tout seul. Corps JSON exigé : une page
+        d'un autre site ne peut pas en envoyer sans que le navigateur le
+        bloque, alors qu'un POST vide passerait — et ceci déplace des écrans."""
         if diagnostic is None:
             return lire_diagnostic()
         diagnostic.verifier(forcer=True)
@@ -180,10 +208,12 @@ def create_app(cfg: Optional[Config] = None, pont: Optional[PontDCS] = None,
         return {"envoye": envoye}
 
     @app.get("/api/video/{ecran_id}")
-    def image_ecran(ecran_id: str, choix: Optional[str] = Cookie(None, alias=CHOIX)) -> Response:
+    def image_ecran(ecran_id: str, lum: int = 0,
+                    choix: Optional[str] = Cookie(None, alias=CHOIX)) -> Response:
         """Dernière image de l'écran. La page en redemande une dès qu'elle a
         affiché la précédente : le débit suit ce que l'iPad absorbe, sans
-        file d'images en retard."""
+        file d'images en retard. `lum` : crans de luminosité réglés sur la
+        tablette pour cet écran (-2 à +5)."""
         if ecran_id == "kneeboard":
             nom = KNEEBOARD
         else:
@@ -192,7 +222,7 @@ def create_app(cfg: Optional[Config] = None, pont: Optional[PontDCS] = None,
                 raise HTTPException(status_code=404, detail="écran inconnu")
             nom = ecran.viewport
         try:
-            contenu = video.image(nom)
+            contenu = video.image(nom, lum)
         except PasDImage as e:
             raise HTTPException(status_code=503, detail=str(e))
         return Response(contenu, media_type="image/jpeg",

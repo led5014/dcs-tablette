@@ -31,6 +31,7 @@ a = Analysis(
         "tablette.installation",
         "tablette.ecran_virtuel",
         "tablette.diagnostic",
+        "tablette.mise_a_jour",
         "tablette.miroir",
     ],
     excludes=[

@@ -56,9 +56,13 @@ ID_MATERIEL = r"Root\MttVDD"
 # (Driver.cpp du projet : confpath, valeur VDDPATH).
 DOSSIER_VDD = Path(r"C:\VirtualDisplayDriver")
 CLE_VDD = r"SOFTWARE\MikeTheTech\VirtualDisplayDriver"
-# Nom du pilote, identifiant matériel ou du moniteur (EDID « MTT1337 »).
-MOTS_VIRTUELS = ("mttvdd", "mtt1337", "iddsample", "virtual", "virtuel")
+# Nom du pilote, identifiant matériel ou du moniteur (EDID « MTT1337 »). Virtual
+# Display Driver seulement : l'écran virtuel de Virtual Desktop (VR) ou de
+# Parsec sert à autre chose — traité comme un écran du pilote, jamais déplacé
+# ni pris sans son accord.
+MOTS_VIRTUELS = ("mttvdd", "mtt1337", "iddsample", "virtual display driver")
 ATTENTE_ECRAN_S = 30
+COTES_VIRTUEL = ("droite", "dessous")      # par ordre de préférence
 PROBLEME_DESACTIVE = 22                # CM_PROB_DISABLED
 REDEMARRAGE = 3010                     # ERROR_SUCCESS_REBOOT_REQUIRED
 REFUS_UAC = 1223                       # ERROR_CANCELLED
@@ -69,7 +73,8 @@ MANUEL = [
     "     (« VDD Control », puis Install).",
     "  2. Paramètres → Système → Écran : « Étendre ces affichages », écran virtuel",
     "     à la définition et à la fréquence du principal, glissé à DROITE du",
-    "     principal, bords du HAUT alignés.",
+    "     principal, bords du HAUT alignés — ou DESSOUS, bords de GAUCHE alignés,",
+    "     si un de vos écrans occupe déjà la droite.",
     "  3. Relancer Installer.bat : il vérifie et finit le reste.",
 ]
 
@@ -106,6 +111,12 @@ class Placement:
     largeur: int
     hauteur: int
     frequence: int
+    cote: str = "droite"          # ou « dessous » : à droite du principal, ou sous lui
+
+    @property
+    def ou(self) -> str:
+        return ("à droite du principal, aligné en haut" if self.cote == "droite"
+                else "sous le principal, aligné à gauche")
 
     @property
     def a_faire(self) -> bool:
@@ -117,20 +128,24 @@ class Placement:
 # --------------------------------------------------------------- décisions
 
 def choisir_mode(modes: Sequence[Mode], largeur: int, hauteur: int,
-                 frequence: int) -> Optional[Mode]:
+                 frequence: int, cote: str = "droite") -> Optional[Mode]:
     """Le mode de l'écran virtuel le plus proche de celui du principal.
 
-    La définition d'abord : DCS ne fait qu'une fenêtre, de la hauteur du plus
-    haut des deux, et le kneeboard se colle en bas à droite — sur un écran
-    virtuel moins haut, il tomberait hors de tout écran. Plus haut, le bas ne
-    serait jamais dessiné. Puis la même fréquence, sinon la plus proche
-    au-dessus, pour ne pas ralentir l'image de DCS sur l'écran virtuel.
+    La définition d'abord. À droite, la hauteur compte : DCS ne fait qu'une
+    fenêtre, de la hauteur du plus haut des deux, et le kneeboard se colle
+    en bas à droite — sur un écran virtuel moins haut, il tomberait hors de
+    tout écran ; plus haut, le bas ne serait jamais dessiné. Dessous, c'est
+    la largeur, pour la même raison. Puis la même fréquence, sinon la plus
+    proche au-dessus, pour ne pas ralentir l'image de DCS sur l'écran virtuel.
     """
     if not modes:
         return None
-    return min(modes, key=lambda m: ((m[0], m[1]) != (largeur, hauteur), m[1] != hauteur,
-                                     m[1] > hauteur, abs(m[1] - hauteur),
-                                     abs(m[0] - largeur), m[2] < frequence,
+    # (dimension qui compte, l'autre) : hauteur à droite, largeur dessous.
+    i, j = (1, 0) if cote == "droite" else (0, 1)
+    voulu = (largeur, hauteur)
+    return min(modes, key=lambda m: ((m[0], m[1]) != voulu, m[i] != voulu[i],
+                                     m[i] > voulu[i], abs(m[i] - voulu[i]),
+                                     abs(m[j] - voulu[j]), m[2] < frequence,
                                      abs(m[2] - frequence)))
 
 
@@ -141,8 +156,11 @@ def _chevauche(a: Tuple[int, int, int, int], b: Tuple[int, int, int, int]) -> bo
 def planifier(ecrans: Sequence[Ecran]) -> Tuple[Optional[Placement], List[str]]:
     """Où mettre l'écran virtuel, ou pourquoi on ne le peut pas.
 
-    Seul l'écran virtuel bouge. Un écran physique qui occupe sa place n'est
-    pas déplacé : on dit lequel, le pilote choisit où le mettre.
+    À droite du principal, sinon dessous : la fenêtre de DCS, qui s'étendra
+    du principal jusqu'à couvrir l'écran virtuel, ne doit recouvrir aucun
+    autre écran — il resterait noir en vol (voir installation.supports). Un
+    écran déjà à l'une de ces places y reste. Seul l'écran virtuel bouge :
+    un écran réel qui prend les deux places n'est pas déplacé, on dit lequel.
     """
     principal = next((e for e in ecrans if e.principal), None)
     if principal is None:
@@ -154,22 +172,58 @@ def planifier(ecrans: Sequence[Ecran]) -> Tuple[Optional[Placement], List[str]]:
     virtuels = [e for e in ecrans if e.virtuel and not e.principal]
     if not virtuels:
         return None, ["Aucun écran virtuel."]
-    x, y = principal.x + principal.largeur, principal.y
-    # Plusieurs écrans virtuels : celui qui est déjà à sa place, sinon le premier.
-    cible = next((e for e in virtuels if e.actif and (e.x, e.y) == (x, y)),
+    px, py, pl, ph = principal.x, principal.y, principal.largeur, principal.hauteur
+    places = {"droite": (px + pl, py), "dessous": (px, py + ph)}
+    # Plusieurs écrans virtuels : celui qui est déjà à une place, sinon le premier.
+    cible = next((e for e in virtuels if e.actif and (e.x, e.y) in places.values()),
                  next((e for e in virtuels if e.actif), virtuels[0]))
-    largeur, hauteur, frequence = (
-        choisir_mode(cible.modes, principal.largeur, principal.hauteur, principal.frequence)
-        or (cible.largeur or principal.largeur, cible.hauteur or principal.hauteur,
-            cible.frequence))
-    place = (x, y, largeur, hauteur)
-    genants = [e for e in ecrans if e is not cible and e.actif and not e.principal
-               and _chevauche((e.x, e.y, e.largeur, e.hauteur), place)]
-    if genants:
-        return None, [f"L'écran {genants[0]} occupe la place à droite de l'écran principal.",
-                      "Paramètres → Système → Écran : le glisser à gauche ou sous le principal,",
-                      "puis relancer Installer.bat, qui mettra l'écran virtuel à droite."]
-    return Placement(cible, x, y, largeur, hauteur, frequence), []
+    autres = [(e.x, e.y, e.largeur, e.hauteur) for e in ecrans
+              if e is not cible and e.actif and not e.principal]
+    # À droite dès que c'est libre : c'est la disposition éprouvée en vol.
+    # Dessous seulement quand un écran réel prend la droite.
+    for cote in COTES_VIRTUEL:
+        largeur, hauteur, frequence = (
+            choisir_mode(cible.modes, pl, ph, principal.frequence, cote)
+            or (cible.largeur or pl, cible.hauteur or ph, cible.frequence))
+        x, y = places[cote]
+        fenetre = (px, py, max(pl, x - px + largeur), max(ph, y - py + hauteur))
+        if not any(_chevauche(a, fenetre) for a in autres):
+            return Placement(cible, x, y, largeur, hauteur, frequence, cote), []
+    genants = [e for e in ecrans if e is not cible and e.actif and not e.principal]
+    return None, [
+        "Les écrans " + ", ".join(str(e) for e in genants) + " occupent la droite et le",
+        "dessous de l'écran principal : la fenêtre de DCS les couvrirait, ils resteraient noirs.",
+        "Paramètres → Système → Écran : en glisser un à gauche ou au-dessus du principal,",
+        "puis relancer Installer.bat. Ou, pour essayer sans : Installer.bat --essai."]
+
+
+def moniteurs() -> List[Tuple[int, int, int, int, bool, bool]]:
+    """Les écrans du bureau comme les attend installation.supports, avec en
+    plus : virtuel ou pas — un écran réel n'y est pris qu'avec l'accord du
+    pilote."""
+    return [(e.x, e.y, e.largeur, e.hauteur, e.principal, e.virtuel)
+            for e in lister() if e.actif]
+
+
+def decrire(ecrans: Sequence[Ecran]) -> List[str]:
+    """Les écrans du pilote, en clair, pour l'installation."""
+    principal = next((e for e in ecrans if e.principal), None)
+    lignes = []
+    for i, e in enumerate(ecrans, 1):
+        if not e.actif:
+            ou = "dupliqué ou déconnecté"
+        elif e.principal or principal is None:
+            ou = "principal" if e.principal else ""
+        else:
+            px, py, pl, ph = principal.x, principal.y, principal.largeur, principal.hauteur
+            ou = ("à droite du principal" if e.x >= px + pl else
+                  "à gauche du principal" if e.x + e.largeur <= px else
+                  "sous le principal" if e.y >= py + ph else
+                  "au-dessus du principal" if e.y + e.hauteur <= py else "")
+            if (e.x, e.y) not in ((px + pl, py), (px, py + ph)) and ou.startswith(("à d", "sous")):
+                ou += ", décalé"
+        lignes.append(f"{i}. {e}" + (" — virtuel" if e.virtuel else "") + (f" — {ou}" if ou else ""))
+    return lignes
 
 
 def reglages_vdd(texte: str, largeur: int, hauteur: int, frequence: int) -> str:
@@ -507,22 +561,33 @@ def lancer_installation(mode: Mode) -> Tuple[int, List[str]]:
 
 # --------------------------------------------------------------- l'étape
 
-def _accepte(reponse: Optional[str]) -> bool:
+def accepte(reponse: Optional[str]) -> bool:
     return reponse is not None and reponse.strip().lower() in ("", "o", "oui", "y", "yes")
 
 
-def _deja_a_droite(ecrans: Sequence[Ecran]) -> Optional[Ecran]:
-    """Un second écran physique déjà à la place de l'écran virtuel : une prise
-    HDMI factice, ou un écran choisi exprès. On le garde."""
-    principal = next((e for e in ecrans if e.principal), None)
-    if principal is None:
-        return None
-    droite = (principal.x + principal.largeur, principal.y)
-    return next((e for e in ecrans if e.actif and not e.principal and (e.x, e.y) == droite),
-                None)
+def oui(reponse: Optional[str]) -> bool:
+    """Comme `accepte`, mais Entrée seule vaut NON : pour ce qui touche aux
+    affaires du pilote (prendre un de ses écrans)."""
+    return reponse is not None and reponse.strip().lower() in ("o", "oui", "y", "yes")
 
 
-def remettre(reparer: bool = True, lister: Callable[[], List[Ecran]] = lister,
+def physique_en_place(ecrans: Sequence[Ecran]) -> Optional[Tuple[Ecran, str]]:
+    """Un écran réel à la place qu'aurait l'écran virtuel (à droite ou sous le
+    principal, sans que DCS couvre un autre écran) : une prise HDMI factice,
+    ou l'écran que le pilote regarde. Lequel, et de quel côté."""
+    from .installation import supports        # la règle des places, une seule fois
+    actifs = [e for e in ecrans if e.actif]
+    trouves = supports([(e.x, e.y, e.largeur, e.hauteur, e.principal, e.virtuel)
+                        for e in actifs], physique=True)
+    for m, cote, _, _ in trouves:
+        ecran = next(e for e in actifs if (e.x, e.y, e.largeur, e.hauteur) == tuple(m[:4]))
+        if not ecran.virtuel:
+            return ecran, cote
+    return None
+
+
+def remettre(reparer: bool = True, physique: bool = False,
+             lister: Callable[[], List[Ecran]] = lister,
              etendre: Callable[[], bool] = etendre,
              appliquer: Callable[[Placement], Optional[str]] = appliquer,
              attendre: Callable[[float], None] = time.sleep) -> Tuple[str, str, List[str]]:
@@ -530,6 +595,8 @@ def remettre(reparer: bool = True, lister: Callable[[], List[Ecran]] = lister,
     remet s'il a bougé (mise à jour de Windows ou du pilote graphique), sans
     jamais rien installer ni rien demander. `reparer` faux : on dit seulement
     — chaque essai fait clignoter les écrans, on ne le répète pas en boucle.
+    `physique` : le pilote a choisi à l'installation un écran réel (prise
+    HDMI factice) ; il fait l'affaire.
 
     Rend (« ok », « repare », « a_faire » ou « manque »), ce qu'on a vu ou
     fait, et la marche à suivre.
@@ -537,19 +604,18 @@ def remettre(reparer: bool = True, lister: Callable[[], List[Ecran]] = lister,
     ecrans = lister()
     placement, raisons = planifier(ecrans)
     if placement is not None and not placement.a_faire:
-        return "ok", f"{placement.ecran}, à droite du principal, aligné en haut", []
+        return "ok", f"{placement.ecran}, {placement.ou}", []
     if not any(e.virtuel and not e.principal for e in ecrans):
-        deja = _deja_a_droite(ecrans)
+        deja = physique_en_place(ecrans) if physique else None
         if deja is not None:
-            return "ok", f"pas d'écran virtuel, mais {deja} est à sa place", []
+            return "ok", f"pas d'écran virtuel : {deja[0]}, choisi à l'installation", []
         return "manque", "aucun : les écrans du cockpit iraient sur la vue", [
             "Lancer Installer.bat : il propose de l'installer (répondre O) et le place."
         ] + MANUEL[1:3]
     if placement is None:
         return "manque", raisons[0], raisons[1:]
     p = placement
-    voulu = (f"{p.largeur}×{p.hauteur}, {p.frequence} Hz, à droite du principal, "
-             "aligné en haut")
+    voulu = f"{p.largeur}×{p.hauteur}, {p.frequence} Hz, {p.ou}"
     if not reparer:
         return "a_faire", f"{p.ecran} n'est pas à sa place", [
             "« Vérifier » pour réessayer de le remettre, ou relancer Installer.bat.",
@@ -557,7 +623,7 @@ def remettre(reparer: bool = True, lister: Callable[[], List[Ecran]] = lister,
     lignes: List[str] = []
     if preparer(lignes.append, lambda question: None, lister, etendre, appliquer,
                 attendre=attendre):
-        return "repare", lignes[-1], []
+        return "repare", next((l for l in lignes if " placé : " in l), lignes[-1]), []
     return "manque", lignes[-2] if len(lignes) > 1 else lignes[-1], lignes[-1:]
 
 
@@ -565,23 +631,33 @@ def preparer(afficher: Callable[[str], None], demander: Callable[[str], Optional
              lister: Callable[[], List[Ecran]] = lister, etendre: Callable[[], bool] = etendre,
              appliquer: Callable[[Placement], Optional[str]] = appliquer,
              installer: Callable[[Mode], Tuple[int, List[str]]] = lancer_installation,
-             attendre: Callable[[float], None] = time.sleep) -> bool:
+             attendre: Callable[[float], None] = time.sleep) -> Optional[str]:
     """L'étape « écran virtuel » d'Installer.bat : trouvé, installé s'il le
-    faut et si le pilote est d'accord, mis à sa place. Rend True s'il est prêt.
+    faut et si le pilote est d'accord, mis à sa place. Rend « virtuel » s'il
+    est prêt, « physique » si le pilote a donné un de ses écrans (prise HDMI
+    factice), None sinon.
 
     `demander` rend None quand personne ne peut répondre (pas de console) :
-    rien n'est alors installé sans accord.
+    rien n'est alors installé ni pris sans accord.
     """
     ecrans = lister()
     principal = next((e for e in ecrans if e.principal), None)
     if principal is None:
         afficher("Écran principal introuvable.")
-        return False
+        return None
     if not any(e.virtuel and not e.principal for e in ecrans) and not principal.virtuel:
-        deja = _deja_a_droite(ecrans)
+        deja = physique_en_place(ecrans)
         if deja is not None:
-            afficher(f"Second écran {deja} déjà à droite du principal, aligné en haut : gardé.")
-            return True
+            # Jamais pris d'office : c'est peut-être l'écran qu'il regarde.
+            ecran, cote = deja
+            afficher(f"L'écran {ecran} est {'à droite du' if cote == 'droite' else 'sous le'} "
+                     "principal.")
+            afficher("Si personne ne le regarde (prise HDMI factice), les écrans du cockpit")
+            afficher("peuvent aller dessus ; DCS le couvrira pendant le vol.")
+            if oui(demander("Est-ce un écran que personne ne regarde ? [o/N] ")):
+                afficher(f"Écran {ecran} gardé pour les écrans du cockpit.")
+                return "physique"
+            afficher("Cet écran reste à vous : un écran virtuel sera ajouté à côté.")
         for ligne in ("Aucun écran virtuel. Il en faut un, que personne ne regarde, pour que",
                       "DCS y dessine les écrans exportés au lieu de les poser sur la vue.",
                       "DCS Tablette peut installer Virtual Display Driver (gratuit, open source) :",
@@ -589,18 +665,18 @@ def preparer(afficher: Callable[[str], None], demander: Callable[[str], Optional
                       "Windows demandera l'autorisation administrateur, puis peut-être de",
                       "confirmer l'installation du pilote : accepter les deux."):
             afficher(ligne)
-        if not _accepte(demander("Installer l'écran virtuel maintenant ? [O/n] ")):
+        if not accepte(demander("Installer l'écran virtuel maintenant ? [O/n] ")):
             afficher("Écran virtuel non installé.")
             for ligne in MANUEL:
                 afficher(ligne)
-            return False
+            return None
         code, lignes = installer((principal.largeur, principal.hauteur, principal.frequence))
         for ligne in lignes:
             afficher("  " + ligne)
         if code not in (0, REDEMARRAGE):
             for ligne in MANUEL:
                 afficher(ligne)
-            return False
+            return None
         # Windows met quelques secondes à brancher le nouvel écran.
         for _ in range(ATTENTE_ECRAN_S):
             ecrans = lister()
@@ -610,7 +686,7 @@ def preparer(afficher: Callable[[str], None], demander: Callable[[str], Optional
         else:
             afficher("Le pilote est installé, mais aucun écran virtuel n'apparaît.")
             afficher("Redémarrer le PC, puis relancer Installer.bat.")
-            return False
+            return None
 
     if not any(e.virtuel and e.actif and not e.principal for e in ecrans):
         afficher("L'écran virtuel est dupliqué ou déconnecté : passage en mode « Étendre ».")
@@ -621,12 +697,12 @@ def preparer(afficher: Callable[[str], None], demander: Callable[[str], Optional
     if placement is None:
         for ligne in lignes:
             afficher(ligne)
-        return False
+        return None
     p = placement
-    voulu = f"{p.largeur}×{p.hauteur}, {p.frequence} Hz, à droite du principal, aligné en haut"
+    voulu = f"{p.largeur}×{p.hauteur}, {p.frequence} Hz, {p.ou}"
     if not p.a_faire:
-        afficher(f"Écran virtuel {p.ecran} déjà en place.")
-        return True
+        afficher(f"Écran virtuel {p.ecran} déjà en place, {p.ou}.")
+        return "virtuel"
     erreur = appliquer(p)
     if erreur is None:
         attendre(1)
@@ -637,6 +713,8 @@ def preparer(afficher: Callable[[str], None], demander: Callable[[str], Optional
     if erreur:
         afficher(f"Écran virtuel {p.ecran} non placé : {erreur}.")
         afficher(f"À régler dans Paramètres → Système → Écran : {voulu}.")
-        return False
+        return None
     afficher(f"Écran virtuel « {p.ecran.carte} » placé : {voulu}.")
-    return True
+    if p.cote == "dessous":
+        afficher("(Un écran occupe déjà la droite du principal : l'écran virtuel va dessous.)")
+    return "virtuel"

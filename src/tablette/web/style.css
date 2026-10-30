@@ -327,6 +327,36 @@ body.en-kneeboard #modes { opacity: .45; }
    basse : les marges suivent, pour que le bouton garde une forme de touche. */
 .pb.cote-gauche, .pb.cote-droite { margin: 18% 12%; }
 .pb.cote-haut, .pb.cote-bas { margin: 12% 18%; }
+/* La molette de luminosité, dans le coin bas gauche du cadre : un bouton
+   rond strié, son repère tourne de 30° par cran (--angle, posé par la page). */
+.molette-lum {
+  position: relative;
+  margin: 10%;
+  border-radius: 50%;
+  background: #2f3436;               /* navigateurs sans dégradé conique */
+  background:
+    repeating-conic-gradient(from 0deg, rgba(255, 255, 255, .07) 0 6deg, transparent 6deg 12deg),
+    radial-gradient(circle at 35% 30%, #5d6367, #2f3436 60%, #1f2324);
+  border: 1px solid #141617;
+  box-shadow: 0 3px 0 #141617, 0 0 0 2px #2a2f31, inset 0 1px 0 rgba(255, 255, 255, .12);
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+  cursor: grab;
+}
+.molette-lum .repere {
+  position: absolute;
+  top: 8%;
+  bottom: 50%;
+  left: calc(50% - 1.5px);
+  width: 3px;
+  border-radius: 2px;
+  background: #f0c060;
+  box-shadow: 0 0 4px rgba(240, 192, 96, .6);
+  transform-origin: 50% 100%;
+  transform: rotate(var(--angle, 0deg));
+}
+.molette-lum.tourne { cursor: grabbing; box-shadow: 0 1px 0 #141617, 0 0 0 2px #6b5a2e; }
+.molette-lum:focus-visible { outline: 2px solid var(--ambre); outline-offset: 2px; }
 .touches-fixes {
   display: flex;
   gap: 1.5%;

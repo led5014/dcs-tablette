@@ -69,7 +69,7 @@ que par les tests (écrans décrits) : à essayer sur un PC sans écran virtuel.
 
 Après l'installation, `diagnostic.py` (30/10/2026) : la console de
 diagnostic, dans la fenêtre du serveur et sur la tablette (pastille ou
-badge « ⚠ n », `/api/diagnostic`). Dix points vérifiés au lancement puis
+badge « ⚠ n », `/api/diagnostic`). Une douzaine de points vérifiés au lancement puis
 toutes les 10 s ; répare seule ce qui est sûr (scripts périmés recopiés,
 écran virtuel remis par `ecran_virtuel.remettre`, `tablette.lua` réécrite
 si ses zones ne tombent plus sur l'écran — retouchée à la main et toujours
@@ -80,10 +80,34 @@ Lancé sans être passé par Installer.bat, l'exécutable installe d'abord
 (`premiere_fois`). Vu au premier essai : le Wi-Fi du poste de
 développement était en réseau Public.
 
-Publier une version : `scripts\publier_tablette.py` recopie la tablette, et
-elle seule (liste blanche), dans `..\dcs-tablette` ; y lancer
-`scripts\construire_tablette.py` pour le zip, puis commit, tag et release.
-Monter `VERSION` dans `src/tablette/__init__.py` avant.
+Toutes les configurations d'écrans (30/10/2026, `installation.supports`,
+`ecran_virtuel.planifier`) : la fenêtre de DCS part du coin haut gauche du
+principal et s'étend à droite et vers le bas (les fichiers MonitorSetup
+livrés « auto_placement » le confirment : `displays[i].x - screen.x`). Les
+écrans exportés vont donc sur l'écran collé à droite (bords du haut) ou
+dessous (bords de gauche), et la fenêtre ne doit couvrir aucun autre écran,
+qui resterait noir en vol. L'écran virtuel va à droite si c'est libre (la
+disposition éprouvée en vol), sinon dessous. Le kneeboard suit la formule
+de ViewportHandling.lua (`min(h/2, w/2)`, en bas à droite de la fenêtre) :
+`ecrans_dcs.disposition` loge les quatre écrans hors de lui, quel que soit
+le côté. En disposition « dessous », le kneeboard ouvert déborde en partie
+sur l'écran principal — c'est DCS qui le place. **Pas encore essayé en vol :
+la fenêtre de DCS étendue vers le bas (2560 × 2880).**
+Un écran réel n'est jamais pris d'office (avant : une prise HDMI factice à
+droite était supposée) ; une configuration du pilote qui exporte déjà les
+écrans est gardée si il le veut ; le choix est retenu dans
+`%LOCALAPPDATA%\DCS-Tablette\installation.json` pour le diagnostic.
+
+Luminosité : molette dans le coin bas gauche de chaque cadre (`app.js`,
+`moletteLuminosite`), crans de -2 à +5, courbe gamma appliquée par le PC
+avant le JPEG (`video.table_luminosite`), retenue par appareil et par écran
+sur chaque tablette.
+
+Publier une version : monter `VERSION` dans `src/tablette/__init__.py`,
+lancer `scripts\construire_tablette.py` pour le zip, puis commit, tag et
+release GitHub avec le zip. Les notes de version gardent une section
+« ## Nouveau » en puces (`mise_a_jour.nouveautes` les montre au pilote) et
+l'empreinte SHA-256 du zip (repli si GitHub ne la donne pas).
 
 Depuis le code :
 

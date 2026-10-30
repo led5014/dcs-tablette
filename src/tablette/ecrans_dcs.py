@@ -71,20 +71,34 @@ def zone_kneeboard(largeur: int, hauteur: int) -> Rect:
     return (largeur - l, hauteur - h, l, h)
 
 
+def disposition(support: Rect, fenetre: Tuple[int, int]) -> Dict[str, Rect]:
+    """Les écrans exportés sur l'écran `support` (en coordonnées de la
+    fenêtre de DCS, de taille `fenetre`), qu'il soit à droite du principal
+    ou dessous.
+
+    Un carré de quatre au coin haut gauche du support : écrans gauche et
+    droit en haut, central (AMPCD) et TEDAC dessous, aussi grands que
+    possible sans passer sous le kneeboard, que DCS colle en bas à droite de
+    TOUTE sa fenêtre (ViewportHandling.lua) et qui les recouvrirait. Vide si
+    le support est trop petit.
+    """
+    sx, sy, sl, sh = support
+    kx, ky, _, _ = zone_kneeboard(*fenetre)
+    c = min(sl // 2, sh // 2,
+            max((kx - BANDEAU_KNEEBOARD - sx) // 2, (ky - sy) // 2))
+    if c < 100:
+        return {}
+    return {"LEFT_MFCD": (sx, sy, c, c),
+            "RIGHT_MFCD": (sx + c, sy, c, c),
+            "CENTER_MFCD": (sx, sy + c, c, c),
+            "TEDAC": (sx + c, sy + c, c, c)}
+
+
 def disposition_second_ecran(largeur: int, hauteur: int,
                              largeur2: int, hauteur2: int) -> Dict[str, Rect]:
-    """Second écran (largeur2 × hauteur2) à droite du principal, alignés en haut.
-
-    Un carré de quatre : écrans gauche et droit en haut, central (AMPCD) et
-    TEDAC dessous. Le coin bas droit reste libre : c'est là que DCS ouvre le
-    kneeboard, et il recouvrirait un écran placé dessous.
-    """
-    _, _, lk, _ = zone_kneeboard(largeur + largeur2, max(hauteur, hauteur2))
-    c = min(hauteur2 // 2, (largeur2 - lk - BANDEAU_KNEEBOARD) // 2)
-    return {"LEFT_MFCD": (largeur, 0, c, c),
-            "RIGHT_MFCD": (largeur + c, 0, c, c),
-            "CENTER_MFCD": (largeur, c, c, c),
-            "TEDAC": (largeur + c, c, c, c)}
+    """Second écran (largeur2 × hauteur2) à droite du principal, alignés en haut."""
+    return disposition((largeur, 0, largeur2, hauteur2),
+                       (largeur + largeur2, max(hauteur, hauteur2)))
 
 
 def _chaine_lua(texte: str) -> str:
@@ -97,7 +111,7 @@ def generer(vue: Rect, zones: Dict[str, Rect], description: str) -> str:
     """Texte du fichier MonitorSetup. En ASCII : DCS le lit tel quel."""
     x, y, l, h = vue
     lignes = [
-        "-- Genere par DCS Tablette (scripts/configurer_ecrans_dcs.py).",
+        "-- Genere par DCS Tablette (Installer.bat, ou sa console de diagnostic).",
         "-- Le serveur de la tablette relit ce fichier pour capturer les ecrans",
         "-- exportes : on peut le retoucher a la main, il suivra.",
         "_  = function(p) return p; end;",

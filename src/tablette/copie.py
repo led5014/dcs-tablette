@@ -29,11 +29,14 @@ def zone_temoin(taille: Tuple[int, int]) -> Rect:
     """Un carré au milieu de la vue principale. S'il est noir aussi, ce n'est
     pas un écran éteint, c'est la copie qui ne voit rien.
 
-    Pas au centre de la fenêtre : quand DCS s'étend sur deux écrans, le
-    centre tombe sur la frontière, souvent hors de la vue.
+    Pas au centre de la fenêtre : quand DCS s'étend sur deux écrans, côte à
+    côte ou l'un sous l'autre, le centre tombe sur la frontière. Le carré de
+    côté min(largeur, hauteur) au coin haut gauche est dans la vue, dans les
+    deux cas.
     """
     c = COTE_TEMOIN
-    return (min(taille) // 2 - c // 2, taille[1] // 2 - c // 2, c, c)
+    milieu = min(taille) // 2 - c // 2
+    return (milieu, milieu, c, c)
 
 
 def decouper(fenetre: Image.Image, zones: Dict[str, Rect]) -> Copie:

@@ -5,6 +5,7 @@ un faux script Lua reçoit les ordres et envoie les annonces, comme le ferait
 `DCS-Tablette-Export.lua`. Les numéros des profils sont recoupés avec les
 scripts des modules installés (ou leur copie dans le dépôt) quand ils sont là.
 """
+import io
 import re
 import socket
 import sys
@@ -479,17 +480,24 @@ class TestInstallation(unittest.TestCase):
         from tablette import installation
         reponses = list(reponses)
         sortie = io.StringIO()
+        self.chemin_choix = self.saved / "installation.json"
 
         def demander(question):
             print(question)
             return reponses.pop(0)
 
-        with mock.patch("tablette.installation.moniteurs",
-                        return_value=[self.PRINCIPAL, self.VIRTUEL]), \
-                mock.patch("tablette.ecran_virtuel.preparer", return_value=pret), \
+        ecrans = [ecran("\\\\.\\DISPLAY1", "AMD Radeon", "PCI", 0, 0, principal=True), ecran()]
+        with mock.patch("tablette.ecran_virtuel.preparer", return_value=pret) as preparer, \
                 contextlib.redirect_stdout(sortie):
-            code = installation.installer(self.saved, demander=demander, ouvert=ouvert)
+            code = installation.installer(self.saved, demander=demander, ouvert=ouvert,
+                                          lister_ecrans=lambda: ecrans,
+                                          chemin_choix=self.chemin_choix)
+        self.preparer_appele = preparer.called
         return code, sortie.getvalue()
+
+    def choix(self):
+        from tablette.installation import lire_choix
+        return lire_choix(self.chemin_choix)
 
     def test_installer_attend_que_dcs_soit_ferme(self):
         etats = [True, True, False, False]
@@ -498,6 +506,13 @@ class TestInstallation(unittest.TestCase):
         self.assertEqual(etats, [])                 # deux fois ouvert, puis fermé
         self.assertEqual(sortie.count("DCS est ouvert"), 2)
         self.assertIn('"tablette"', lire(self.saved / "Config" / "options.lua"))
+        self.assertEqual(self.choix(), {"mode": "second_ecran", "physique": False})
+
+    def test_installer_montre_les_ecrans_et_dcs_avant_tout(self):
+        _, sortie = self.installer([], lambda: False)
+        self.assertIn("Vos écrans :", sortie)
+        self.assertIn("— virtuel — à droite du principal", sortie)
+        self.assertIn("DCS : configuration « 1camera », 2560×1440, plein écran", sortie)
 
     def test_installer_dcs_laisse_ouvert_dit_quoi_regler(self):
         avant = lire(self.saved / "Config" / "options.lua")
@@ -508,11 +523,41 @@ class TestInstallation(unittest.TestCase):
 
     def test_installer_sans_ecran_virtuel_ne_touche_pas_a_dcs(self):
         avant = lire(self.saved / "Config" / "options.lua")
-        code, sortie = self.installer([], lambda: False, pret=False)
+        code, sortie = self.installer(["n"], lambda: False, pret=None)
         self.assertEqual(code, 1)
         self.assertTrue((self.saved / "Scripts" / "DCS-Tablette-Export.lua").exists())
         self.assertEqual(lire(self.saved / "Config" / "options.lua"), avant)
         self.assertIn("À la main", sortie)
+
+    def test_installer_sans_ecran_propose_le_mode_essai(self):
+        from tablette.ecrans_dcs import zones_actives
+        code, sortie = self.installer(["o"], lambda: False, pret=None)
+        self.assertEqual(code, 0)
+        self.assertEqual(self.choix()["mode"], "essai")
+        for x, y, l, h in zones_actives(self.saved).values():
+            self.assertLessEqual(x + l, 2560)        # sur l'écran principal
+
+    def test_installer_garde_la_configuration_du_pilote(self):
+        """Ses vrais MFD (ou Helios) exportent déjà : on ne remplace rien."""
+        options = self.saved / "Config" / "options.lua"
+        options.write_text(lire(options).replace('"1camera"', '"Mes MFD"'), encoding="utf-8")
+        (self.saved / "Config" / "MonitorSetup").mkdir()
+        (self.saved / "Config" / "MonitorSetup" / "mesmfd.lua").write_text(
+            "_ = function(p) return p; end;\nname = _('Mes MFD');\n"
+            "LEFT_MFCD =\n{\n     x = 2560;\n     y = 0;\n     width = 600;\n     height = 600;\n}\n",
+            encoding="utf-8")
+        avant = lire(options)
+        code, sortie = self.installer([""], lambda: False)
+        self.assertEqual(code, 0)
+        self.assertIn("votre configuration « Mes MFD » : LEFT_MFCD", sortie)
+        self.assertFalse(self.preparer_appele)
+        self.assertEqual(lire(options), avant)
+        self.assertEqual(self.choix(), {"mode": "existante", "configuration": "Mes MFD"})
+        self.assertFalse((self.saved / "Config" / "MonitorSetup" / "tablette.lua").exists())
+
+    def test_installer_ecran_reel_donne_par_le_pilote(self):
+        self.installer([""], lambda: False, pret="physique")
+        self.assertEqual(self.choix(), {"mode": "second_ecran", "physique": True})
 
 
 def ecran(nom="\\\\.\\DISPLAY2", carte="Virtual Display Driver",
@@ -536,7 +581,9 @@ class TestEcranVirtuel(unittest.TestCase):
 
     def test_l_ecran_virtuel_est_reconnu_et_pas_la_carte_graphique(self):
         self.assertTrue(ecran().virtuel)
-        self.assertTrue(ecran(carte="Parsec Virtual Display Adapter", ident="").virtuel)
+        # Virtual Desktop (VR), Parsec : écrans du pilote, jamais pris pour le nôtre.
+        self.assertFalse(ecran(carte="Parsec Virtual Display Adapter", ident="").virtuel)
+        self.assertFalse(ecran(carte="Virtual Desktop Monitor", ident="ROOT\\VDM").virtuel)
         self.assertFalse(PRINCIPAL.virtuel)
         self.assertFalse(ecran(carte="Generic PnP Monitor", ident="PCI\\VEN_10DE").virtuel)
 
@@ -567,18 +614,98 @@ class TestEcranVirtuel(unittest.TestCase):
         self.assertEqual(choisir_mode(MODES_VDD, 2560, 1600, 60), (2560, 1440, 60))
         self.assertIsNone(choisir_mode((), 2560, 1440, 60))
 
-    def test_un_ecran_physique_a_droite_n_est_pas_deplace(self):
+    def test_un_ecran_reel_a_droite_l_ecran_virtuel_va_dessous(self):
+        """Le cas courant de deux vrais écrans côte à côte."""
         from tablette.ecran_virtuel import planifier
         physique = ecran("\\\\.\\DISPLAY3", "Generic PnP Monitor", "PCI\\VEN_1002", 2560, 0,
                          1920, 1080, 60)
         p, lignes = planifier([PRINCIPAL, physique, ecran(x=-2560, modes=MODES_VDD)])
+        self.assertEqual((p.x, p.y, p.largeur, p.hauteur, p.cote),
+                         (0, 1440, 2560, 1440, "dessous"), lignes)
+        # À gauche ou au-dessus, il ne gêne pas : l'écran virtuel va à droite.
+        for x, y in ((-1920, 0), (0, -1080)):
+            p, _ = planifier([PRINCIPAL, ecran(x=x, y=y, largeur=1920, hauteur=1080,
+                                               carte="Generic PnP Monitor", ident="PCI"),
+                              ecran(x=0, y=1440, modes=MODES_VDD)])
+            self.assertEqual((p.x, p.y, p.cote), (2560, 0, "droite"))
+
+    def test_droite_et_dessous_pris_on_dit_lesquels(self):
+        from tablette.ecran_virtuel import planifier
+        droite = ecran("\\\\.\\DISPLAY3", "Dell", "PCI", 2560, 0, 1920, 1080, 60)
+        dessous = ecran("\\\\.\\DISPLAY4", "Tactile", "PCI", 0, 1440, 1920, 1080, 60)
+        p, lignes = planifier([PRINCIPAL, droite, dessous, ecran(x=-2560, modes=MODES_VDD)])
         self.assertIsNone(p)
-        self.assertIn("Generic PnP Monitor", lignes[0])
-        # Ailleurs, il ne gêne pas.
-        p, _ = planifier([PRINCIPAL, ecran(x=-1920, y=0, largeur=1920, hauteur=1080,
-                                           carte="Generic PnP Monitor", ident="PCI"),
-                          ecran(x=0, y=1440, modes=MODES_VDD)])
-        self.assertEqual((p.x, p.y), (2560, 0))
+        texte = " ".join(lignes)
+        self.assertIn("Dell", texte)
+        self.assertIn("Tactile", texte)
+        self.assertIn("--essai", texte)
+
+    def test_la_fenetre_de_dcs_ne_couvre_jamais_un_autre_ecran(self):
+        """Un écran réel sous le principal ET un écran virtuel plus haut que le
+        principal à droite : la fenêtre de DCS (5120 × 1600) mordrait sur le
+        réel ; le virtuel est ramené à la hauteur du principal."""
+        from tablette.ecran_virtuel import planifier
+        dessous = ecran("\\\\.\\DISPLAY4", "Tactile", "PCI", 0, 1440, 1920, 1080, 60)
+        p, _ = planifier([PRINCIPAL, dessous,
+                          ecran(largeur=2560, hauteur=1600, modes=MODES_VDD + ((2560, 1600, 60),))])
+        self.assertEqual((p.x, p.y, p.hauteur), (2560, 0, 1440))
+
+    def test_dessous_la_largeur_compte(self):
+        """Principal 3440 × 1440 et écran virtuel sans ce mode : dessous, on
+        garde la largeur (une fenêtre plus large qu'eux tomberait à côté)."""
+        from tablette.ecran_virtuel import choisir_mode
+        modes = ((2560, 1440, 60), (3440, 1080, 60), (3840, 2160, 60))
+        self.assertEqual(choisir_mode(modes, 3440, 1440, 60, "droite"), (2560, 1440, 60))
+        self.assertEqual(choisir_mode(modes, 3440, 1440, 60, "dessous"), (3440, 1080, 60))
+
+    def test_remis_dessous_dit_ou(self):
+        from tablette.ecran_virtuel import remettre
+        reel = ecran("\\\\.\\DISPLAY3", "Dell", "PCI", 2560, 0, 1920, 1080, 60)
+        listes = [[PRINCIPAL, reel, ecran(x=-2560, modes=MODES_VDD)]] * 2 + [
+            [PRINCIPAL, reel, ecran(x=0, y=1440, modes=MODES_VDD)]]
+        etat, detail, _ = remettre(True, lister=lambda: listes.pop(0) if len(listes) > 1
+                                   else listes[0], etendre=lambda: True,
+                                   appliquer=lambda p: None, attendre=lambda s: None)
+        self.assertEqual(etat, "repare")
+        self.assertIn("placé", detail)
+        self.assertIn("sous le principal", detail)
+
+    def test_supports_jamais_un_ecran_reel_sans_accord(self):
+        from tablette.installation import supports, support_ecrans
+        principal = (0, 0, 2560, 1440, True, False)
+        reel_droite = (2560, 0, 1920, 1080, False, False)
+        virtuel_dessous = (0, 1440, 2560, 1440, False, True)
+        self.assertEqual([t[1] for t in supports([principal, reel_droite], physique=False)], [])
+        self.assertEqual([t[1] for t in supports([principal, reel_droite], physique=True)],
+                         ["droite"])
+        self.assertEqual(support_ecrans([principal, reel_droite, virtuel_dessous], False, False),
+                         ((0, 1440, 2560, 1440), (2560, 2880)))
+        # Inconnu (relevé sans le savoir, versions d'avant) : pris, comme avant.
+        self.assertEqual(support_ecrans([principal[:5], reel_droite[:5]], False),
+                         ((2560, 0, 1920, 1080), (4480, 1440)))
+
+    def test_ecrans_du_cockpit_sous_le_principal(self):
+        from tablette.ecrans_dcs import zone_kneeboard
+        from tablette.installation import configurer_ecrans
+        from tablette.ecrans_dcs import options_affichage, zones_actives
+        tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.addCleanup(tmp.cleanup)
+        saved = Path(tmp.name)
+        (saved / "Config").mkdir()
+        (saved / "Config" / "options.lua").write_text(
+            '\t\t["aspect"] = 1.7777777777778,\n\t\t["fullScreen"] = true,\n'
+            '\t\t["height"] = 1440,\n\t\t["multiMonitorSetup"] = "1camera",\n'
+            '\t\t["width"] = 2560,\n', encoding="utf-8")
+        ecrans = [(0, 0, 2560, 1440, True, False), (2560, 0, 1920, 1080, False, False),
+                  (0, 1440, 2560, 1440, False, True)]
+        complet, lignes = configurer_ecrans(saved, ecrans=ecrans, ouvert=lambda: False,
+                                            physique=False)
+        self.assertTrue(complet, lignes)
+        self.assertEqual(options_affichage(saved), ("tablette", 2560, 2880))
+        kx, ky, kl, kh = zone_kneeboard(2560, 2880)
+        for nom, (x, y, l, h) in zones_actives(saved).items():
+            self.assertTrue(y >= 1440 and y + h <= 2880 and x + l <= 2560, nom)   # sur le virtuel
+            self.assertLessEqual(x + l, kx - 32, nom)                           # pas sous le kneeboard
 
     def test_ecran_principal_virtuel(self):
         from tablette.ecran_virtuel import planifier
@@ -683,12 +810,17 @@ class TestEcranVirtuel(unittest.TestCase):
                          ([], [], 0))
         self.assertIn("déjà en place", texte)
 
-    def test_prise_hdmi_factice_deja_a_droite_gardee(self):
+    def test_un_ecran_reel_a_droite_n_est_pris_qu_avec_l_accord_du_pilote(self):
         factice = ecran(carte="Generic PnP Monitor", ident="PCI\\VEN_1002", largeur=1920,
                         hauteur=1080, frequence=60)
-        pret, appels, _ = self.preparer([[PRINCIPAL, factice]])
-        self.assertTrue(pret)
+        pret, appels, texte = self.preparer([[PRINCIPAL, factice]], reponse="o")
+        self.assertEqual(pret, "physique")
         self.assertEqual(appels["installer"], [])
+        self.assertIn("personne ne le regarde", texte)
+        # Entrée seule : c'est non, l'écran reste au pilote et on propose l'écran virtuel.
+        pret, appels, texte = self.preparer([[PRINCIPAL, factice]], reponse="")
+        self.assertEqual(appels["installer"], [(2560, 1440, 240)])
+        self.assertIn("Cet écran reste à vous", texte)
 
     def test_windows_refuse_le_placement(self):
         pret, _, texte = self.preparer([[PRINCIPAL, ecran(x=-2560, modes=MODES_VDD)]],
@@ -927,10 +1059,21 @@ class TestKneeboardDCS(unittest.TestCase):
 class TestMiroir(unittest.TestCase):
     def test_miroir_seulement_si_le_kneeboard_quitte_l_ecran_principal(self):
         from tablette.ecrans_dcs import zone_kneeboard
-        from tablette.miroir import hors_ecran_principal
+        from tablette.miroir import sort_de_l_ecran_principal
         principal = (0, 0, 2560, 1440)
-        self.assertTrue(hors_ecran_principal(zone_kneeboard(5120, 1440), principal))
-        self.assertFalse(hors_ecran_principal(zone_kneeboard(2560, 1440), principal))
+        self.assertTrue(sort_de_l_ecran_principal(zone_kneeboard(5120, 1440), principal))
+        self.assertFalse(sort_de_l_ecran_principal(zone_kneeboard(2560, 1440), principal))
+        # Écran virtuel dessous : à cheval sur les deux, le miroir aussi.
+        self.assertTrue(sort_de_l_ecran_principal(zone_kneeboard(2560, 2880), principal))
+
+    def test_temoin_dans_la_vue_principale_quel_que_soit_le_cote(self):
+        from tablette.copie import zone_temoin
+        for taille, principal in (((5120, 1440), (0, 0, 2560, 1440)),
+                                  ((2560, 2880), (0, 0, 2560, 1440)),
+                                  ((2560, 1440), (0, 0, 2560, 1440))):
+            x, y, l, h = zone_temoin(taille)
+            px, py, pl, ph = principal
+            self.assertTrue(px <= x and x + l <= px + pl and py <= y and y + h <= py + ph, taille)
 
     def test_place_la_ou_dcs_l_aurait_mis_sur_un_ecran_unique(self):
         from tablette.ecrans_dcs import zone_kneeboard
@@ -1337,7 +1480,7 @@ class TestApiTablette(unittest.TestCase):
         from tablette.video import PasDImage
 
         class FausseVideo:
-            def image(self, viewport):
+            def image(self, viewport, luminosite=0):
                 if viewport == "CENTER_MFCD":
                     raise PasDImage("CENTER_MFCD non exporté")
                 return b"\xff\xd8\xff" + viewport.encode()
@@ -1357,6 +1500,298 @@ class TestApiTablette(unittest.TestCase):
         r = self.client.get("/")
         self.assertEqual(r.status_code, 200)
         self.assertIn("DCS Tablette", r.text)
+
+
+class TestMiseAJour(unittest.TestCase):
+    """Mise à jour depuis GitHub, simulée : rien n'est téléchargé ni remplacé."""
+
+    def reponse(self, donnees: bytes):
+        import contextlib
+        return contextlib.nullcontext(io.BytesIO(donnees))
+
+    def publication(self, version="9.0.0", digest=True, corps=None):
+        import json
+        zip_ = {"name": f"DCS-Tablette-{version}.zip", "size": 24_000_000,
+                "browser_download_url": f"https://exemple/{version}.zip"}
+        if digest:
+            zip_["digest"] = "sha256:" + "a" * 64
+        corps = corps if corps is not None else (
+            "## Nouveau\n\n- **Une nouveauté.** Expliquée.\n- Une autre.\n\n## Mettre à jour\n\n"
+            f"SHA-256 de `DCS-Tablette-{version}.zip` :\n```\n{'b' * 64}\n```\n")
+        return json.dumps({"tag_name": f"v{version}", "assets": [zip_], "body": corps}).encode()
+
+    def test_derniere_version_et_son_empreinte(self):
+        from tablette.mise_a_jour import derniere_version
+        lire = lambda donnees: (lambda requete, timeout: self.reponse(donnees))  # noqa: E731
+        publiee = derniere_version(lire(self.publication()))
+        self.assertEqual((publiee["version"], publiee["empreinte"]), ("9.0.0", "a" * 64))
+        # GitHub sans empreinte : celle des notes de version.
+        self.assertEqual(derniere_version(lire(self.publication(digest=False)))["empreinte"],
+                         "b" * 64)
+        # Ni l'une ni l'autre : on ne propose rien qu'on ne puisse vérifier.
+        self.assertIsNone(derniere_version(lire(self.publication(digest=False, corps=""))))
+
+        def hors_ligne(requete, timeout):
+            raise OSError("pas de réseau")
+        self.assertIsNone(derniere_version(hors_ligne))
+
+    def test_comparaison_des_versions(self):
+        from tablette.mise_a_jour import numero, plus_recente
+        self.assertGreater(numero("v1.10.0"), numero("1.9.9"))       # pas l'ordre du texte
+        self.assertTrue(plus_recente({"version": "1.5.0"}, "1.4.0"))
+        self.assertFalse(plus_recente({"version": "1.4.0"}, "1.4.0"))
+        self.assertFalse(plus_recente(None, "1.4.0"))
+
+    def test_nouveautes_des_notes(self):
+        import json
+
+        from tablette.mise_a_jour import nouveautes
+        corps = json.loads(self.publication())["body"]
+        self.assertEqual(nouveautes(corps), ["Une nouveauté. Expliquée.", "Une autre."])
+
+    def zip_publie(self, avec_exe=True):
+        tampon = io.BytesIO()
+        with zipfile.ZipFile(tampon, "w") as z:
+            z.writestr("DCS-Tablette/LISEZ-MOI.txt", "lisez")
+            if avec_exe:
+                z.writestr("DCS-Tablette/DCS-Tablette.exe", "MZ")
+        return tampon.getvalue()
+
+    def test_telechargement_verifie_avant_tout(self):
+        import hashlib
+
+        from tablette.mise_a_jour import telecharger
+        donnees = self.zip_publie()
+        ouvrir = lambda url, timeout: self.reponse(donnees)        # noqa: E731
+        with tempfile.TemporaryDirectory() as dossier:
+            publiee = {"version": "9.0.0", "url": "u",
+                       "empreinte": hashlib.sha256(donnees).hexdigest()}
+            source = telecharger(publiee, Path(dossier), ouvrir)
+            self.assertTrue((source / "DCS-Tablette.exe").exists())
+        with tempfile.TemporaryDirectory() as dossier:
+            with self.assertRaises(OSError):                       # empreinte différente
+                telecharger(dict(publiee, empreinte="0" * 64), Path(dossier), ouvrir)
+            self.assertFalse((Path(dossier) / "extrait").exists())  # rien d'extrait
+        sans_exe = self.zip_publie(avec_exe=False)
+        with tempfile.TemporaryDirectory() as dossier, self.assertRaises(OSError):
+            telecharger(dict(publiee, empreinte=hashlib.sha256(sans_exe).hexdigest()),
+                        Path(dossier), lambda url, timeout: self.reponse(sans_exe))
+
+    def proposer(self, reponse, publiee):
+        from unittest import mock
+
+        from tablette import mise_a_jour
+        lignes, lances = [], []
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        with mock.patch.object(sys, "frozen", True, create=True), \
+                mock.patch.object(mise_a_jour.tempfile, "mkdtemp", lambda prefix: temp.name), \
+                mock.patch.object(mise_a_jour, "telecharger",
+                                  lambda p, d: d / "extrait" / "DCS-Tablette"), \
+                mock.patch.object(mise_a_jour, "lancer_remplacement",
+                                  lambda *a: lances.append(a)):
+            relance = mise_a_jour.proposer(lignes.append, lambda q: reponse, publiee)
+        return relance, lances, "\n".join(lignes)
+
+    def test_proposee_et_lancee_seulement_avec_accord(self):
+        from tablette.mise_a_jour import derniere_version
+        publiee = derniere_version(lambda r, timeout: self.reponse(self.publication()))
+        relance, lances, texte = self.proposer("", publiee)
+        self.assertTrue(relance)
+        self.assertEqual(len(lances), 1)
+        self.assertIn("9.0.0", texte)
+        self.assertIn("Une nouveauté", texte)
+        relance, lances, texte = self.proposer("n", publiee)
+        self.assertEqual((relance, lances), (False, []))
+        self.assertIn("reproposera", texte)
+        relance, lances, _ = self.proposer(None, publiee)          # pas de console
+        self.assertEqual((relance, lances), (False, []))
+        a_jour = dict(publiee, version="0.1")
+        self.assertEqual(self.proposer("", a_jour)[:2], (False, []))
+
+    def test_le_script_de_remplacement_passe_tout_par_l_environnement(self):
+        from tablette.mise_a_jour import REMPLACER
+        self.assertTrue(REMPLACER.isascii())          # lu par cmd tel quel
+        for variable in ("%DT_PID%", "%DT_SOURCE%", "%DT_CIBLE%", "%DT_ZIP%"):
+            self.assertIn(variable, REMPLACER)
+        self.assertIn("Robocopy.exe", REMPLACER)
+        self.assertIn("if errorlevel 8", REMPLACER)   # robocopy : 8 et plus = échec
+        self.assertNotIn("(\n", REMPLACER)             # aucun bloc qu'un « ) » refermerait
+
+    @unittest.skipUnless(sys.platform == "win32", "cmd et robocopy")
+    def test_le_script_de_remplacement_avec_un_chemin_retors(self):
+        """Exécuté pour de vrai par cmd : chemin avec espaces, ( ), & et
+        accents, comme « DCS-Tablette (1) » d'un zip téléchargé deux fois.
+        La relance de l'exe est remplacée par une trace."""
+        import subprocess
+
+        from tablette.mise_a_jour import REMPLACER, commande, environnement_remplacement
+        with tempfile.TemporaryDirectory() as racine:
+            racine = Path(racine) / "Pilote & Co (1) – été"
+            temp = racine / "temp"
+            source, cible = temp / "extrait" / "DCS-Tablette", racine / "DCS-Tablette (1)"
+            (source / "_internal").mkdir(parents=True)
+            (source / "DCS-Tablette.exe").write_text("nouveau")
+            (source / "_internal" / "lib.dll").write_text("nouvelle")
+            cible.mkdir()
+            (cible / "DCS-Tablette.exe").write_text("ancien")
+            (cible / "garde.txt").write_text("a moi")
+            script = racine / "remplacer.bat"
+            texte = REMPLACER.replace('start "" "%DT_CIBLE%\\DCS-Tablette.exe"',
+                                      'echo relance>"%DT_CIBLE%\\relance.txt"')
+            self.assertNotEqual(texte, REMPLACER)
+            script.write_text(texte.replace("\n", "\r\n"), encoding="ascii")
+            env = environnement_remplacement(source, cible, temp, temp / "x.zip")
+            env["DT_PID"] = "999999"                   # déjà fermé
+            sortie = subprocess.run(commande(script), env=env, capture_output=True, timeout=60)
+            self.assertEqual(sortie.returncode, 0, sortie.stdout + sortie.stderr)
+            self.assertEqual((cible / "DCS-Tablette.exe").read_text(), "nouveau")
+            self.assertEqual((cible / "_internal" / "lib.dll").read_text(), "nouvelle")
+            self.assertEqual((cible / "garde.txt").read_text(), "a moi")
+            self.assertTrue((cible / "relance.txt").exists())
+            self.assertFalse(temp.exists())            # ménage fait
+
+    def test_derniere_version_ne_leve_jamais(self):
+        import http.client
+
+        from tablette.mise_a_jour import derniere_version
+        for panne in (http.client.IncompleteRead(b""), http.client.BadStatusLine("x"),
+                      ValueError("json"), RuntimeError("?")):
+            def ouvrir(requete, timeout, panne=panne):
+                raise panne
+            self.assertIsNone(derniere_version(ouvrir))
+        self.assertIsNone(derniere_version(lambda r, timeout: self.reponse(b"[1, 2]")))
+        self.assertIsNone(derniere_version(lambda r, timeout: self.reponse(b'{"tag_name": 5}')))
+
+    def test_derniere_version_bornee_dans_le_temps(self):
+        from unittest import mock
+
+        from tablette import mise_a_jour
+
+        def lent(requete, timeout):
+            time.sleep(5)
+            return self.reponse(self.publication())
+        debut = time.monotonic()
+        with mock.patch.object(mise_a_jour, "DELAI_S", 0.2):
+            self.assertIsNone(mise_a_jour.derniere_version(lent))
+        self.assertLess(time.monotonic() - debut, 2)
+
+    def test_point_version_du_diagnostic(self):
+        from tablette.diagnostic import Diagnostic
+        from tablette import VERSION
+        reglages = dict(ouvert=lambda: False, ecrans=lambda: [], virtuel=lambda *a: ("ok", "", []),
+                        lancement=lambda: None, reseaux=lambda: [], choix=lambda: {})
+        with tempfile.TemporaryDirectory() as dossier:
+            points = {p.titre: p for p in Diagnostic(
+                Path(dossier), publiee={"version": "99.0.0"}, **reglages).verifier()}
+            self.assertIn("99.0.0 disponible", points["Version"].detail)
+            points = {p.titre: p for p in Diagnostic(
+                Path(dossier), publiee={"version": VERSION}, **reglages).verifier()}
+            self.assertEqual(points["Version"].detail, f"{VERSION}, à jour")
+
+
+class TestReseauLocal(unittest.TestCase):
+    """Le serveur écoute tout le réseau local : un site piégé ne doit pas
+    pouvoir appuyer sur les boutons ni déplacer les écrans."""
+
+    def test_seuls_l_adresse_ip_et_le_nom_du_pc_passent(self):
+        from tablette.app import hote_permis
+        for hote in ("192.168.1.7:8320", "127.0.0.1:8320", "[fe80::1]:8320", "localhost:8320",
+                     f"{socket.gethostname()}:8320", "192.168.1.7"):
+            self.assertTrue(hote_permis(hote), hote)
+        for hote in ("piege.example:8320", "piege.example", "", "192.168.1.7.nip.io:8320"):
+            self.assertFalse(hote_permis(hote), hote)
+
+    def test_un_nom_inconnu_est_refuse_par_le_serveur(self):
+        from fastapi.testclient import TestClient
+
+        from tablette.app import create_app
+        from tablette.config import Config
+        app = create_app(Config(saved_games=Path(".")), FauxPont(), dossier_dcs=lambda: None,
+                         controle_hote=True)
+        self.assertEqual(TestClient(app, base_url="http://192.168.1.7:8320")
+                         .get("/api/etat").status_code, 200)
+        self.assertEqual(TestClient(app, base_url="http://piege.example:8320")
+                         .get("/api/etat").status_code, 400)
+
+
+class TestDesinstallation(unittest.TestCase):
+    def test_attend_que_le_serveur_soit_ferme(self):
+        import contextlib
+        from unittest import mock
+
+        from tablette import installation
+        ouverts, questions = [1, 1, 0], []
+        with tempfile.TemporaryDirectory() as dossier, \
+                mock.patch.object(installation, "dossier_bureau", lambda: Path(dossier)), \
+                mock.patch.object(installation, "fichier_choix",
+                                  lambda: Path(dossier) / "installation.json"), \
+                contextlib.redirect_stdout(io.StringIO()):
+            installation.desinstaller(Path(dossier), demander=lambda q: questions.append(q) or "",
+                                      autres=lambda: ouverts.pop(0))
+        self.assertEqual(ouverts, [])
+        self.assertEqual(len(questions), 2)
+        self.assertIn("encore ouvert", questions[0])
+
+
+class TestLuminosite(unittest.TestCase):
+    """Luminosité réglée écran par écran sur la tablette (TGP du F-16 sombre)."""
+
+    def test_courbe_eclaircit_les_gris_sans_toucher_noir_ni_blanc(self):
+        from tablette.video import table_luminosite
+        for niveau in range(1, 6):
+            table = table_luminosite(niveau, 1)
+            self.assertEqual((table[0], table[255]), (0, 255))
+            self.assertGreater(table[60], 60)
+            self.assertEqual(table, sorted(table))           # jamais d'inversion
+        self.assertLess(table_luminosite(-2, 1)[128], 128)
+        self.assertEqual(table_luminosite(0, 1), list(range(256)))
+        self.assertGreater(table_luminosite(4, 1)[40], 2 * 40)   # un TGP sombre ressort
+
+    def test_image_eclaircie_avant_compression_et_par_reglage(self):
+        from PIL import Image, ImageStat
+
+        from tablette.ecrans_dcs import NOM_FICHIER, disposition_essai, generer
+        from tablette.copie import Copie
+        from tablette.video import LUMINOSITE_MAX, Video
+        tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.addCleanup(tmp.cleanup)
+        saved = Path(tmp.name)
+        (saved / "Config" / "MonitorSetup").mkdir(parents=True)
+        (saved / "Config" / "MonitorSetup" / NOM_FICHIER).write_text(
+            generer((0, 0, 2560, 1440), disposition_essai(2560, 1440), "test"), encoding="ascii")
+        (saved / "Config" / "options.lua").write_text(
+            '["multiMonitorSetup"] = "tablette",\n["width"] = 2560,\n["height"] = 1440,\n',
+            encoding="utf-8")
+        gris = Image.new("RGB", (480, 480), (40, 40, 40))     # un TGP de nuit
+        video = Video(saved, capturer=lambda zones: Copie((2560, 1440), {n: gris for n in zones}),
+                      lancement=lambda: None)
+
+        def moyenne(donnees):
+            return ImageStat.Stat(Image.open(io.BytesIO(donnees)).convert("L")).mean[0]
+        normal, clair = video.image("LEFT_MFCD"), video.image("LEFT_MFCD", 3)
+        self.assertAlmostEqual(moyenne(normal), 40, delta=3)
+        self.assertGreater(moyenne(clair), 90)
+        self.assertNotEqual(video.image("LEFT_MFCD"), clair)    # chaque réglage son image
+        self.assertEqual(video.image("LEFT_MFCD", 99), video.image("LEFT_MFCD", LUMINOSITE_MAX))
+
+    def test_api_transmet_le_reglage(self):
+        from fastapi.testclient import TestClient
+
+        from tablette.app import create_app
+        from tablette.config import Config
+        demandes = []
+
+        class FausseVideo:
+            def image(self, viewport, luminosite=0):
+                demandes.append((viewport, luminosite))
+                return b"\xff\xd8\xff"
+        client = TestClient(create_app(Config(saved_games=Path(".")), FauxPont(),
+                                       FausseVideo(), dossier_dcs=lambda: None))
+        client.cookies.set("tablette_appareil", "fa18c")
+        client.get("/api/video/ddi_gauche?lum=3")
+        client.get("/api/video/ddi_gauche")
+        self.assertEqual([l for _, l in demandes], [3, 0])
 
 
 class FauxPont:
@@ -1388,19 +1823,74 @@ class TestDiagnostic(unittest.TestCase):
         self.reseaux = [("Maison", "Private")]
         self.virtuel = ("ok", "« Virtual Display Driver » (2560×1440, 240 Hz)", [])
         self.reparer = []
+        self.choix = {}
 
     def tearDown(self):
         self.tmp.cleanup()
 
+    def test_configuration_du_pilote_gardee_jamais_remplacee(self):
+        options = self.saved / "Config" / "options.lua"
+        options.write_text(lire(options).replace('"tablette"', '"Mes MFD"'), encoding="utf-8")
+        (self.saved / "Config" / "MonitorSetup" / "mesmfd.lua").write_text(
+            "name = _('Mes MFD');\nLEFT_MFCD =\n{\n x = 2560;\n y = 0;\n width = 600;\n"
+            " height = 600;\n}\n", encoding="utf-8")
+        avant = lire(options)
+        self.choix = {"mode": "existante", "configuration": "Mes MFD"}
+        points = self.points()
+        self.assertEqual(points["Écrans de DCS"].etat, "ok")
+        self.assertIn("Mes MFD", points["Écran virtuel"].detail)
+        self.assertEqual(self.reparer, [])                  # l'écran virtuel n'est pas touché
+        self.assertEqual(lire(options), avant)
+        options.write_text(avant.replace('"Mes MFD"', '"1camera"'), encoding="utf-8")
+        point = self.points()["Écrans de DCS"]
+        self.assertEqual(point.etat, "a_faire")
+        self.assertIn("1camera", lire(options))             # dit, pas remis d'office
+
+    def test_desinstallation_jamais_annulee_par_le_diagnostic(self):
+        """Désinstallé pendant que DCS Tablette tournait : rien n'est remis."""
+        from tablette.installation import desinstaller_scripts, retirer_ecrans
+        desinstaller_scripts(self.saved)
+        retirer_ecrans(self.saved, ouvert=lambda: False)
+        options = lire(self.saved / "Config" / "options.lua")
+        points = self.points()
+        self.assertEqual(points["Installation"].etat, "a_faire")
+        self.assertNotIn("Scripts dans DCS", points)
+        self.assertEqual(self.reparer, [])
+        self.assertFalse((self.saved / "Scripts" / "DCS-Tablette-Export.lua").exists())
+        self.assertFalse((self.saved / "Config" / "MonitorSetup" / "tablette.lua").exists())
+        self.assertEqual(lire(self.saved / "Config" / "options.lua"), options)
+        # La copie d'origine a servi : supprimée, une future installation en prendra une neuve.
+        self.assertFalse((self.saved / "Config" / "options.lua.avant-tablette").exists())
+
+    def test_dcs_ouvert_rien_ne_bouge(self):
+        """En vol, un écran qui s'endort ne doit pas faire perdre la tablette."""
+        fichier = self.saved / "Config" / "MonitorSetup" / "tablette.lua"
+        avant = lire(fichier)
+        self.lance = True
+        self.ecrans = [self.PRINCIPAL, (2560, 0, 1920, 1080, False)]
+        point = self.points()["Écrans de DCS"]
+        self.assertEqual(point.etat, "a_faire")
+        self.assertIn("Quitter DCS", point.solution[0])
+        self.assertEqual(lire(fichier), avant)
+        self.assertEqual(self.reparer, [False])              # écran virtuel : constaté, pas déplacé
+
+    def test_ecran_reel_pris_seulement_s_il_a_ete_donne(self):
+        self.choix = {"mode": "second_ecran", "physique": False}
+        self.ecrans = [(0, 0, 2560, 1440, True, False), (2560, 0, 2560, 1440, False, False)]
+        self.virtuel = ("manque", "aucun : les écrans du cockpit iraient sur la vue", [])
+        points = self.points()
+        self.assertEqual(points["Écrans de DCS"].etat, "attente")
+        self.assertEqual(self.reparer[-1:], [True])
+
     def diagnostic(self, **autres):
         from tablette.diagnostic import Diagnostic
 
-        def virtuel(reparer):
+        def virtuel(reparer, physique=False):
             self.reparer.append(reparer)
             return self.virtuel
         reglages = dict(ouvert=lambda: self.lance, ecrans=lambda: self.ecrans,
                         virtuel=virtuel, lancement=lambda: None,
-                        reseaux=lambda: self.reseaux)
+                        reseaux=lambda: self.reseaux, choix=lambda: self.choix)
         reglages.update(autres)
         return Diagnostic(self.saved, **reglages)
 
@@ -1414,7 +1904,7 @@ class TestDiagnostic(unittest.TestCase):
         self.assertEqual({p.etat for p in points.values()}, {"ok", "attente"},
                          {t: (p.etat, p.detail) for t, p in points.items()})
         self.assertEqual(points["Écrans de DCS"].detail,
-                         "« Tablette DCS » : 4 écrans sur l'écran virtuel")
+                         "« Tablette DCS » : 4 écrans sur le second écran")
         self.assertEqual(d.etat()["problemes"], 0)
         self.assertEqual(d.etat()["journal"], [])
 
@@ -1522,7 +2012,8 @@ class TestDiagnostic(unittest.TestCase):
         client = TestClient(create_app(Config(saved_games=self.saved), FauxPont(),
                                        dossier_dcs=lambda: None, diagnostic=d))
         self.assertEqual(client.get("/api/etat").json()["problemes"], 1)
-        corps = client.post("/api/diagnostic").json()
+        self.assertEqual(client.post("/api/diagnostic").status_code, 422)    # POST vide
+        corps = client.post("/api/diagnostic", json={"verifier": True}).json()
         tablette = next(p for p in corps["points"] if p["titre"] == "Tablette")
         self.assertEqual(tablette["etat"], "ok")
         self.assertEqual(corps["problemes"], 1)

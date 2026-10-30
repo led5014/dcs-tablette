@@ -1,7 +1,7 @@
 """La console de diagnostic : ce qui manque pour que la tablette marche, et
 comment le régler.
 
-Dix points, de l'installation au vol, vérifiés au lancement de DCS Tablette
+Une douzaine de points, de l'installation au vol, vérifiés au lancement de DCS Tablette
 puis toutes les 10 secondes. Ce qui se répare sans risque l'est aussitôt, et
 c'est dit : scripts d'une ancienne version, écran virtuel déplacé (mise à
 jour de Windows ou du pilote graphique), configuration d'écrans qui ne tombe
@@ -23,11 +23,14 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Sequence, Tuple
 
+from . import VERSION
 from .config import PORT_WEB, adresses_locales
+from .mise_a_jour import numero
 from .ecrans_dcs import (NOM_AFFICHE, NOM_FICHIER, PasDExport, fichier_actif, lire_zones,
                          options_affichage, plein_ecran, regler_options)
-from .installation import (LIGNE, configurer_ecrans, dcs_ouvert, dcs_regle, installer_scripts,
-                           mode_essai, scripts_a_jour, support_ecrans)
+from .installation import (LIGNE, configuration_existante, configurer_ecrans, dcs_ouvert,
+                           dcs_regle, installer_scripts, lire_choix, mode_essai, premiere_fois,
+                           scripts_a_jour, support_ecrans)
 
 OK, REPARE, ATTENTE, A_FAIRE, MANQUE = "ok", "repare", "attente", "a_faire", "manque"
 ETIQUETTES = {OK: "OK", REPARE: "RÉPARÉ", ATTENTE: "ATTENTE", A_FAIRE: "À FAIRE",
@@ -108,26 +111,32 @@ class Diagnostic:
     """Les vérifications, leur dernier résultat, et ce qui a changé.
 
     Tout ce qui touche Windows ou DCS se remplace (tests) : `ouvert` (DCS
-    tourne ?), `ecrans` (moniteurs), `virtuel` (ecran_virtuel.remettre),
-    `lancement` (heure de lancement de DCS), `reseaux` (profils_reseau).
+    tourne ?), `ecrans` (moniteurs, virtuels signalés), `virtuel`
+    (ecran_virtuel.remettre), `lancement` (heure de lancement de DCS),
+    `reseaux` (profils_reseau), `choix` (ce que le pilote a choisi à
+    l'installation, installation.lire_choix).
     """
 
     def __init__(self, saved_games: Path, pont=None, video=None, port_web: int = PORT_WEB,
                  ouvert: Callable[[], bool] = dcs_ouvert,
                  ecrans: Optional[Callable[[], list]] = None,
-                 virtuel: Optional[Callable[[bool], Tuple[str, str, List[str]]]] = None,
+                 virtuel: Optional[Callable[..., Tuple[str, str, List[str]]]] = None,
                  lancement: Optional[Callable[[], Optional[float]]] = None,
                  reseaux: Callable[[], Optional[List[Tuple[str, str]]]] = profils_reseau,
+                 choix: Callable[[], Dict] = lire_choix,
+                 publiee: Optional[Dict] = None,
                  horloge: Callable[[], float] = time.monotonic):
         if ecrans is None or virtuel is None or lancement is None:
             from . import capture, ecran_virtuel    # Windows seulement
-            ecrans = ecrans or capture.moniteurs
+            ecrans = ecrans or ecran_virtuel.moniteurs
             virtuel = virtuel or ecran_virtuel.remettre
             lancement = lancement or capture.lancement_dcs
         self.saved_games = saved_games
         self.pont, self.video, self.port_web = pont, video, port_web
         self._ouvert, self._ecrans, self._virtuel = ouvert, ecrans, virtuel
         self._lancement, self._reseaux, self._horloge = lancement, reseaux, horloge
+        self._choix = choix
+        self._publiee = publiee          # dernière version sur GitHub, lue au lancement
         self._verrou = threading.Lock()          # une vérification à la fois
         # Le résultat, lu par la page toutes les 750 ms : jamais bloqué par
         # une vérification en cours (PowerShell, tasklist : une seconde).
@@ -168,24 +177,49 @@ class Diagnostic:
                      + ("relancer la mission pour qu'ils servent" if lance
                         else "ils serviront dès la prochaine mission"))
 
-    def _ecran_virtuel(self, essai: bool, forcer: bool) -> Point:
+    def _ecran_virtuel(self, essai: bool, forcer: bool, physique: bool, lance: bool) -> Point:
         titre = "Écran virtuel"
         if essai:
             return Point(titre, OK, "mode essai : écrans du cockpit en bas de la vue")
-        reparer = forcer or self._horloge() - self._echec_ecran > PAUSE_APRES_ECHEC_S
-        etat, detail, solution = self._virtuel(reparer)
+        # DCS ouvert, on ne déplace rien : un écran qui s'endort ou une télé
+        # qu'on allume en vol ne doit pas faire perdre la tablette. On le dit.
+        reparer = not lance and (forcer or self._horloge() - self._echec_ecran
+                                 > PAUSE_APRES_ECHEC_S)
+        etat, detail, solution = self._virtuel(reparer, physique)
         if etat == MANQUE and reparer and not detail.startswith("aucun"):
             self._echec_ecran = self._horloge()
         return Point(titre, etat, detail, tuple(solution))
 
-    def _configuration(self, essai: bool, ecrans: list, lance: bool) -> Tuple[Point, Optional[
-            Tuple[int, int]]]:
+    def _existante(self, nom: str) -> List[Point]:
+        """Le pilote a gardé sa configuration d'écrans, qui exporte déjà les
+        écrans du cockpit : on ne la remplace pas, on vérifie qu'elle est là."""
+        points = [Point("Écran virtuel", OK, f"pas utilisé : DCS exporte avec « {nom} »")]
+        actuelle = configuration_existante(self.saved_games)
+        if actuelle and actuelle[0] == nom:
+            points.append(Point("Écrans de DCS", OK, f"« {nom} » (la vôtre) : "
+                                f"{len(actuelle[1])} écrans exportés"))
+        else:
+            points.append(Point("Écrans de DCS", A_FAIRE,
+                                f"DCS n'est plus sur votre configuration « {nom} »", (
+                                    f"Dans DCS : Options → Système → Moniteurs « {nom} », puis "
+                                    "relancer DCS.",
+                                    f"Ou relancer Installer.bat pour passer à « {NOM_AFFICHE} ».")))
+        if plein_ecran(self.saved_games):
+            points.append(Point("Réglages de DCS", A_FAIRE, "plein écran : la tablette n'y voit "
+                                "rien", ("Dans DCS : Options → Système, décocher « Plein "
+                                         "écran », puis relancer DCS.",)))
+        else:
+            points.append(Point("Réglages de DCS", OK, "fenêtré"))
+        return points
+
+    def _configuration(self, essai: bool, ecrans: list, lance: bool,
+                       physique: bool) -> Tuple[Point, Optional[Tuple[int, int]]]:
         titre = "Écrans de DCS"
-        support = support_ecrans(ecrans, essai)
+        support = support_ecrans(ecrans, essai, physique)
         if support is None:
             return Point(titre, ATTENTE, "en attente de l'écran virtuel"), None
         ecran, resolution = support
-        ou = "en bas de la vue" if essai else "sur l'écran virtuel"
+        ou = "en bas de la vue" if essai else "sur le second écran"
         fichier = self.saved_games / "Config" / "MonitorSetup" / NOM_FICHIER
         try:
             zones = lire_zones(fichier.read_text(encoding="utf-8", errors="replace"),
@@ -195,12 +229,17 @@ class Diagnostic:
         # Retouchée à la main et toujours sur l'écran : elle reste telle quelle.
         if zones and all(_dans(z, ecran) for z in zones.values()):
             return Point(titre, OK, f"« {NOM_AFFICHE} » : {len(zones)} écrans {ou}"), resolution
-        complet, lignes = configurer_ecrans(self.saved_games, essai, ecrans, lambda: lance)
+        if lance:
+            # Réécrite DCS ouvert, la tablette refuserait toute capture jusqu'au
+            # redémarrage de DCS (video.py) : on attend qu'il soit fermé.
+            return Point(titre, A_FAIRE, f"« {NOM_AFFICHE} » ne tombe plus sur les écrans", (
+                "Quitter DCS : DCS Tablette la récrit tout seul, puis relancer DCS.",)), None
+        complet, lignes = configurer_ecrans(self.saved_games, essai, ecrans, lambda: lance,
+                                            physique=physique)
         if not complet:
             return Point(titre, MANQUE, lignes[0], tuple(lignes[1:])), resolution
         return Point(titre, REPARE, f"« {NOM_AFFICHE} » écrite à la taille des écrans, "
-                     f"écrans du cockpit {ou}"
-                     + (" : relancer DCS pour qu'il la relise" if lance else "")), resolution
+                     f"écrans du cockpit {ou}"), resolution
 
     def _reglages(self, resolution: Tuple[int, int], lance: bool) -> Point:
         titre = "Réglages de DCS"
@@ -319,6 +358,16 @@ class Diagnostic:
             "du réseau → Autoriser une application via le pare-feu → DCS-Tablette, case "
             "Privé cochée."))
 
+    def _version(self) -> Point:
+        if self._publiee is None:
+            return Point("Version", OK, f"{VERSION} (pas de nouvelle vérifiée au lancement)")
+        if numero(self._publiee["version"]) > numero(VERSION):
+            return Point("Version", ATTENTE, f"{self._publiee['version']} disponible, vous "
+                         f"avez la {VERSION}", (
+                             "Fermer DCS Tablette et le relancer : il propose la mise à jour, "
+                             "réglages gardés.",))
+        return Point("Version", OK, f"{VERSION}, à jour")
+
     # ------------------------------------------------------------ l'ensemble
 
     def _sur(self, titre: str, verification: Callable[[], Optional[Point]]) -> Optional[Point]:
@@ -355,12 +404,32 @@ class Diagnostic:
         except (OSError, subprocess.SubprocessError):
             lance = False
         points = [self._sur("Dossier de DCS", self._dossier)]
-        if points[0].etat == OK:
-            essai = bool(mode_essai(self.saved_games))
+        config = None
+        if points[0].etat == OK and premiere_fois(self.saved_games):
+            # Pas installée, ou désinstallée pendant que DCS Tablette tournait :
+            # on ne remet rien d'office, la désinstallation doit tenir.
+            points.append(Point("Installation", A_FAIRE, "DCS Tablette n'est pas installé "
+                                "dans DCS (ou vient d'être désinstallé)", (
+                                    "Lancer Installer.bat pour l'installer.",)))
+        elif points[0].etat == OK:
+            choix = self._choix()
+            # Installé avant que le choix soit retenu (1.4 et avant) : un écran
+            # réel déjà en place était pris d'office, il le reste.
+            physique = bool(choix.get("physique", not choix))
+            mode = choix.get("mode") or ("essai" if mode_essai(self.saved_games)
+                                         else "second_ecran")
+            essai = mode == "essai"
             points.append(self._sur("Scripts dans DCS", lambda: self._scripts(lance)))
-            points.append(self._sur("Écran virtuel", lambda: self._ecran_virtuel(essai, forcer)))
-            config = self._sur("Écrans de DCS",
-                               lambda: self._configuration(essai, self._ecrans(), lance))
+            if mode == "existante":
+                existante = self._sur("Écrans de DCS",
+                                      lambda: self._existante(choix.get("configuration", "")))
+                points += existante if isinstance(existante, list) else [existante]
+            else:
+                points.append(self._sur("Écran virtuel", lambda: self._ecran_virtuel(
+                    essai, forcer, physique, lance)))
+                config = self._sur("Écrans de DCS", lambda: self._configuration(
+                    essai, self._ecrans(), lance, physique))
+        if config is not None:
             if isinstance(config, tuple):
                 point, resolution = config
                 points.append(point)
@@ -374,6 +443,7 @@ class Diagnostic:
         points.append(self._sur("Images des écrans", lambda: self._images(lance)))
         points.append(self._sur("Réseau du PC", self._reseau_pc))
         points.append(self._sur("Tablette", self._la_tablette))
+        points.append(self._sur("Version", self._version))
         return [p for p in points if p is not None]
 
     def etat(self) -> Dict:
@@ -397,8 +467,11 @@ class Diagnostic:
         """La liste complète tout de suite, puis toutes les PERIODE_S ce qui
         a changé, horodaté, dans la fenêtre de DCS Tablette."""
         afficher("Vérification :")
-        for ligne in lignes_console(self.verifier()):
-            afficher(ligne)
+        try:
+            for ligne in lignes_console(self.verifier()):
+                afficher(ligne)
+        except Exception as e:                  # noqa: BLE001 — le serveur démarre quand même
+            afficher(f"  vérification impossible ({type(e).__name__} : {e})")
         afficher("")
 
         def boucle():
@@ -407,7 +480,11 @@ class Diagnostic:
                 self._reveil.clear()
                 if self._arret.is_set():
                     return
-                self.verifier()
+                try:
+                    self.verifier()
+                except Exception as e:          # noqa: BLE001 — la boucle continue
+                    afficher(f"Diagnostic : vérification impossible ({type(e).__name__} : {e}).")
+                    continue
                 for evenement in self._derniers_nouveaux:
                     p = Point(evenement["titre"], evenement["etat"], evenement["detail"],
                               tuple(evenement["solution"]))

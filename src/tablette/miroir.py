@@ -46,11 +46,13 @@ LWA_ALPHA = 0x2
 journal = logging.getLogger("tablette")
 
 
-def hors_ecran_principal(zone_ecran: Rect, principal: Rect) -> bool:
-    """La zone (coordonnées écran) est-elle entièrement hors de l'écran principal ?"""
+def sort_de_l_ecran_principal(zone_ecran: Rect, principal: Rect) -> bool:
+    """La zone (coordonnées écran) sort-elle, même en partie, de l'écran
+    principal ? Écran virtuel dessous : le kneeboard est à cheval, le
+    pilote n'en verrait que le haut sans le miroir."""
     x, y, l, h = zone_ecran
     px, py, pl, ph = principal
-    return x >= px + pl or x + l <= px or y >= py + ph or y + h <= py
+    return x < px or y < py or x + l > px + pl or y + h > py + ph
 
 
 def place_miroir(principal: Rect, taille: Tuple[int, int]) -> Rect:
@@ -122,7 +124,7 @@ class Miroir(threading.Thread):
             ecran = next((m[:4] for m in moniteurs() if m[4]), None)
             if origine and ecran:
                 x, y, l, h = zone_kneeboard(largeur, hauteur)
-                if hors_ecran_principal((origine[0] + x, origine[1] + y, l, h), ecran):
+                if sort_de_l_ecran_principal((origine[0] + x, origine[1] + y, l, h), ecran):
                     principal = zone_utile_principale() or ecran
         except PasDExport:
             pass

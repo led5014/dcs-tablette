@@ -19,8 +19,14 @@ INSTALLATION
      Si Windows affiche « Windows a protégé votre ordinateur » : cliquer
      « Informations complémentaires » puis « Exécuter quand même ».
      L'exécutable n'est pas signé ; le code source est sur GitHub.
-  3. Répondre aux questions de la fenêtre. Elle fait tout le reste, en
-     trois étapes :
+  3. Répondre aux questions de la fenêtre. Elle commence par afficher vos
+     écrans et vos réglages de DCS, puis fait le reste en tenant compte de
+     ce que vous avez déjà :
+
+     Votre configuration d'écrans de DCS exporte déjà les écrans du
+     cockpit (vrais MFD, Helios, écran tactile…) ?
+         Elle propose de la garder : la tablette les prend là où ils sont,
+         rien n'est changé à vos écrans ni à DCS.
 
      1/3 Écran virtuel
          DCS dessine les écrans du cockpit sur un écran : sans second écran,
@@ -31,10 +37,17 @@ INSTALLATION
            cette étape. Windows demande alors :
              « Voulez-vous autoriser cette application… » → Oui
              « Voulez-vous installer ce logiciel de périphérique ? » → Installer
-         - Puis elle le règle comme il faut : à droite de l'écran principal,
-           aligné en haut, même définition et même fréquence. Le bureau
-           s'agrandit vers la droite : c'est normal, la souris peut y
-           filer. Rien à toucher dans les paramètres d'écran.
+         - Puis elle le règle comme il faut : collé à droite de l'écran
+           principal, même définition et même fréquence. Si un de vos
+           écrans occupe déjà la droite, l'écran virtuel va DESSOUS : DCS ne
+           doit jamais couvrir un de vos écrans, il resterait noir en vol.
+           Le bureau s'agrandit de ce côté : la souris peut y filer.
+           Rien à toucher dans les paramètres d'écran.
+         - Vos écrans ne sont jamais pris d'office : un écran déjà à côté du
+           principal n'est utilisé que si vous répondez qu'il s'agit d'une
+           prise HDMI factice que personne ne regarde.
+         - Plus aucune place (écrans à droite ET dessous) : elle propose le
+           mode essai, ou dit quel écran déplacer.
      2/3 Scripts de la tablette
          Deux scripts copiés dans Saved Games\DCS\Scripts, une ligne ajoutée
          à Export.lua (copie de l'ancien à côté). Tacview, SRS et les autres
@@ -54,8 +67,28 @@ Pas d'écran virtuel voulu, juste pour essayer : « Installer.bat --essai »
 met les écrans du cockpit en bas de la vue.
 
 Lancé directement (« DCS-Tablette.exe ») sans être passé par
-« Installer.bat », DCS Tablette fait l'installation d'abord. Après une mise
-à jour, il recopie lui-même les nouveaux scripts dans DCS.
+« Installer.bat », DCS Tablette fait l'installation d'abord.
+
+
+MISE À JOUR
+-----------
+Rien à réinstaller. À son lancement, DCS Tablette regarde sur GitHub s'il
+existe une version plus récente (une demande de quelques secondes au plus,
+rien si le PC est hors ligne ; jamais pendant le vol). S'il y en a une, il
+dit ce qu'elle apporte et demande « Mettre à jour maintenant ? » :
+répondre O. Il la télécharge, vérifie qu'elle est bien celle publiée
+(empreinte SHA-256), se ferme, remplace ses fichiers et se relance tout
+seul. Tout est gardé : écran virtuel, réglages de DCS, raccourci du bureau.
+Les nouveaux scripts sont recopiés dans DCS au passage, et la page de la
+tablette se recharge d'elle-même.
+
+Répondre n : il le reproposera au prochain lancement. Le diagnostic de la
+tablette indique aussi quand une version plus récente existe.
+Pour ne jamais rien demander à GitHub : lancer « DCS-Tablette.exe
+--sans-mise-a-jour ».
+Si la mise à jour échoue (dossier protégé en écriture, par exemple), la
+fenêtre dit où est le zip téléchargé : l'extraire à la place de l'ancien
+dossier.
 
 
 EN VOL
@@ -73,6 +106,10 @@ EN VOL
      Le menu en haut à gauche permet aussi de choisir son appareil à la
      main, avant même la mission. S'il ne correspond pas à celui que DCS
      pilote, la pastille passe à l'orange et les boutons sont coupés.
+  4. Un écran trop sombre (le TGP du F-16, par exemple) ou trop pâle :
+     tourner la molette ronde du coin bas gauche de son cadre — glisser
+     le doigt vers le haut ou la droite éclaircit. Réglée écran par écran
+     et appareil par appareil, retenue sur la tablette.
 
 DIAGNOSTIC
 ----------
@@ -147,8 +184,10 @@ B. Placer l'écran virtuel (Paramètres → Système → Écran)
    5. Glisser l'écran virtuel collé À DROITE du principal, les bords du HAUT
       au même niveau (Windows aimante les bords : lâcher quand ils sont
       alignés), puis « Appliquer ».
-   Si un autre écran réel est déjà à droite du principal, le glisser à
-   gauche ou dessous : la place de droite revient à l'écran virtuel.
+   Si un de vos écrans est déjà à droite du principal, mettre l'écran
+   virtuel DESSOUS, les bords de GAUCHE au même niveau. DCS ne dessine ni à
+   gauche ni au-dessus du principal, et sa fenêtre ne doit couvrir aucun de
+   vos écrans.
 
 C. Scripts de la tablette
    « Installer.bat » le fait toujours, même quand le reste échoue.
@@ -156,8 +195,9 @@ C. Scripts de la tablette
 D. Régler DCS (DCS ouvert, puis le relancer)
    Options → Système :
    - « Moniteurs » : « Tablette DCS » ;
-   - « Résolution » : la largeur des DEUX écrans × leur hauteur
-     (2560 × 1440 + 2560 × 1440 → 5120 × 1440) ; la fenêtre de
+   - « Résolution » : ce que couvrent les deux écrans — côte à côte, la
+     somme des largeurs (2560 × 1440 + 2560 × 1440 → 5120 × 1440) ; l'un
+     sous l'autre, la somme des hauteurs (→ 2560 × 2880) ; la fenêtre de
      « Installer.bat » affiche la bonne valeur ;
    - « Plein écran » décoché.
    Puis quitter DCS et le relancer : il ne lit les écrans qu'au démarrage.
@@ -180,13 +220,16 @@ pastille de la tablette. Il dit ce qui manque et comment le régler.
   place (une mise à jour de Windows ou de la carte graphique peut le
   déplacer). DCS Tablette le remet tout seul ; quitter DCS et le relancer.
   S'il n'y arrive pas, le diagnostic dit pourquoi.
-- La souris part sur la droite et disparaît : elle est sur l'écran virtuel.
-  La ramener vers la gauche.
+- La souris part sur la droite (ou vers le bas) et disparaît : elle est sur
+  l'écran virtuel. La ramener vers l'écran principal.
+- Les boutons ne réagissent pas sur un vieil iPad : il faut iOS / iPadOS 13
+  ou plus (iPad Air 2, mini 4, 5e génération et suivants).
 
 
 DÉSINSTALLATION
 ---------------
-DCS fermé, double-cliquer « Desinstaller.bat » : il retire la ligne
+DCS et DCS Tablette fermés (sinon la fenêtre le demande et attend),
+double-cliquer « Desinstaller.bat » : il retire la ligne
 d'Export.lua, les scripts et le raccourci du bureau, et remet l'affichage de
 DCS d'avant. Supprimer ensuite ce dossier.
 

@@ -20,6 +20,7 @@ multijoueur ne voit rien.
 """
 from __future__ import annotations
 
+import json
 import os
 import re
 import shutil
@@ -27,12 +28,12 @@ import subprocess
 import sys
 from datetime import date
 from pathlib import Path
-from typing import Callable, List, Optional, Sequence, Tuple
+from typing import Callable, Dict, List, Optional, Sequence, Tuple
 
 from .capture import moniteurs
 from .config import BUREAU, dossier_windows
-from .ecrans_dcs import (NOM_AFFICHE, NOM_FICHIER, PasDExport, disposition_essai,
-                         disposition_second_ecran, generer, options_affichage,
+from .ecrans_dcs import (NOM_AFFICHE, NOM_FICHIER, PasDExport, disposition, disposition_essai,
+                         fichier_actif, generer, lire_zones, options_affichage,
                          plein_ecran, regler_options, retablir_options)
 
 SCRIPTS = ("DCS-Tablette-Export.lua", "DCS-Tablette-Appareils.lua")
@@ -140,30 +141,116 @@ def desinstaller_scripts(saved_games: Path) -> List[str]:
     return lignes
 
 
-def second_ecran(ecrans: Sequence[Moniteur]) -> Optional[Moniteur]:
-    """L'écran collé à droite du principal, aligné en haut : là où DCS
-    s'étend, et où vont les écrans exportés."""
+# ------------------------------------------------------------ où, selon les écrans
+#
+# La fenêtre de DCS part du coin haut gauche de l'écran principal et s'étend
+# vers la droite et vers le bas : DCS ne dessine ni à gauche ni au-dessus du
+# principal. Les écrans exportés vont donc sur un écran collé à DROITE du
+# principal (bords du haut alignés) ou DESSOUS (bords de gauche alignés), et
+# la fenêtre de DCS couvre le principal et cet écran-là. Elle ne doit couvrir
+# AUCUN autre écran : il resterait noir pendant le vol. Un écran réel à
+# droite du principal fait donc passer l'écran virtuel dessous.
+
+COTES = ("droite", "dessous")
+
+
+def _virtuel(m: Sequence) -> Optional[bool]:
+    """Un écran est décrit par (x, y, largeur, hauteur, principal[, virtuel]) ;
+    sans 6e valeur, on ne sait pas (relevé d'EnumDisplayMonitors)."""
+    return m[5] if len(m) > 5 else None
+
+
+def _chevauche(a: Sequence[int], b: Sequence[int]) -> bool:
+    return a[0] < b[0] + b[2] and b[0] < a[0] + a[2] and a[1] < b[1] + b[3] and b[1] < a[1] + a[3]
+
+
+def supports(ecrans: Sequence[Sequence], physique: bool = True) -> List[Tuple[
+        Sequence, str, Tuple[int, int, int, int], Tuple[int, int]]]:
+    """Les écrans qui peuvent recevoir les écrans du cockpit, du meilleur au
+    moins bon : (écran, côté, sa zone dans la fenêtre de DCS, taille de la
+    fenêtre). Virtuels d'abord, puis à droite avant dessous. `physique`
+    faux : un écran réel n'est jamais pris — on ne le prend que si le
+    pilote a dit que personne ne le regarde (prise HDMI factice)."""
+    principal = next((m for m in ecrans if m[4]), None)
+    if principal is None:
+        return []
+    px, py, pl, ph = principal[:4]
+    trouves = []
+    for m in ecrans:
+        if m[4] or (_virtuel(m) is False and not physique):
+            continue
+        zone = (m[0] - px, m[1] - py, m[2], m[3])
+        if zone[:2] == (pl, 0):
+            cote = "droite"
+        elif zone[:2] == (0, ph):
+            cote = "dessous"
+        else:
+            continue
+        fenetre = (max(pl, zone[0] + zone[2]), max(ph, zone[1] + zone[3]))
+        if any(o is not m and not o[4]
+               and _chevauche((o[0] - px, o[1] - py, o[2], o[3]), (0, 0) + fenetre)
+               for o in ecrans):
+            continue
+        trouves.append((m, cote, zone, fenetre))
+    trouves.sort(key=lambda t: (_virtuel(t[0]) is not True, COTES.index(t[1])))
+    return trouves
+
+
+def support_ecrans(ecrans: Sequence[Sequence], essai: bool, physique: bool = True
+                   ) -> Optional[Tuple[Tuple[int, int, int, int], Tuple[int, int]]]:
+    """Où vont les écrans exportés (zone dans la fenêtre de DCS) et la taille
+    de cette fenêtre, c'est-à-dire la résolution à régler dans DCS ; None
+    sans écran à sa place."""
     principal = next((m for m in ecrans if m[4]), None)
     if principal is None:
         return None
-    px, py, pl, _, _ = principal
-    return next((m for m in ecrans if not m[4] and m[0] == px + pl and m[1] == py), None)
-
-
-def support_ecrans(ecrans: Sequence[Moniteur],
-                   essai: bool) -> Optional[Tuple[Moniteur, Tuple[int, int]]]:
-    """L'écran où vont les écrans exportés, et la résolution de DCS qui va
-    avec ; None sans second écran à sa place."""
-    principal = next((m for m in ecrans if m[4]), None)
-    if principal is None:
-        return None
-    _, _, pl, ph, _ = principal
+    pl, ph = principal[2:4]
     if essai:
-        return principal, (pl, ph)
-    second = second_ecran(ecrans)
-    if second is None:
+        return (0, 0, pl, ph), (pl, ph)
+    trouves = supports(ecrans, physique)
+    return (trouves[0][2], trouves[0][3]) if trouves else None
+
+
+# ------------------------------------------------------------ le choix du pilote
+#
+# Fait à l'installation, relu par la console de diagnostic pour savoir quoi
+# remettre : « second_ecran » (le cas courant), « essai » (écrans du cockpit
+# en bas de la vue), ou « existante » (la configuration d'écrans du pilote,
+# qui exporte déjà les écrans : on la laisse et on capture là où elle les
+# met). `physique` : un écran réel a été accepté comme support.
+
+def fichier_choix() -> Path:
+    racine = os.environ.get("LOCALAPPDATA")
+    return (Path(racine) if racine else Path.home()) / "DCS-Tablette" / "installation.json"
+
+
+def lire_choix(chemin: Optional[Path] = None) -> Dict:
+    try:
+        choix = json.loads((chemin or fichier_choix()).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return choix if isinstance(choix, dict) else {}
+
+
+def ecrire_choix(choix: Dict, chemin: Optional[Path] = None) -> None:
+    chemin = chemin or fichier_choix()
+    chemin.parent.mkdir(parents=True, exist_ok=True)
+    chemin.write_text(json.dumps(choix, ensure_ascii=False, indent=1), encoding="utf-8")
+
+
+def configuration_existante(saved_games: Path) -> Optional[Tuple[str, Dict]]:
+    """La configuration d'écrans du pilote, quand ce n'est pas « Tablette
+    DCS » et qu'elle exporte déjà des écrans du cockpit (vrais MFD, Helios,
+    écran tactile…) : son nom et ses zones. La tablette peut les prendre là."""
+    try:
+        choix, largeur, hauteur = options_affichage(saved_games)
+        if choix.lower() in (Path(NOM_FICHIER).stem, NOM_AFFICHE.lower()):
+            return None
+        zones = lire_zones(fichier_actif(saved_games).read_text(
+            encoding="utf-8", errors="replace"), largeur, hauteur)
+    except (OSError, PasDExport):
         return None
-    return second, (pl + second[2], max(ph, second[3]))
+    return (choix, zones) if zones else None
 
 
 def dcs_regle(saved_games: Path, resolution: Tuple[int, int]) -> bool:
@@ -188,14 +275,16 @@ def mode_essai(saved_games: Path) -> Optional[bool]:
 
 
 def configurer_ecrans(saved_games: Path, essai: bool = False,
-                      ecrans: Optional[Sequence[Moniteur]] = None,
-                      ouvert: Callable[[], bool] = dcs_ouvert) -> Tuple[bool, List[str]]:
+                      ecrans: Optional[Sequence[Sequence]] = None,
+                      ouvert: Callable[[], bool] = dcs_ouvert,
+                      physique: bool = True) -> Tuple[bool, List[str]]:
     """Écrit « Tablette DCS » et, DCS fermé, la sélectionne dans options.lua.
 
     Second écran (le bon usage) : la vue reste sur l'écran principal, les
-    écrans exportés occupent celui qui le touche à droite, aligné en haut —
-    écran virtuel ou prise HDMI factice. DCS s'étend sur les deux. Essai : un
-    seul écran, les écrans exportés dessinés en bas, par-dessus la vue.
+    écrans exportés occupent l'écran virtuel collé à droite ou dessous (voir
+    `supports`), ou une prise HDMI factice si `physique`. DCS s'étend sur les
+    deux, sans couvrir aucun autre écran. Essai : un seul écran, les écrans
+    exportés dessinés en bas, par-dessus la vue.
 
     DCS ouvert, options.lua n'est pas touché : DCS le réécrit en quittant et
     effacerait la modification. On dit quoi régler à la place.
@@ -204,7 +293,7 @@ def configurer_ecrans(saved_games: Path, essai: bool = False,
     principal = next((m for m in ecrans if m[4]), None)
     if not principal:
         return False, ["Écran principal introuvable."]
-    px, py, pl, ph, _ = principal
+    pl, ph = principal[2:4]
     if essai:
         # La taille de l'ÉCRAN, pas celle réglée dans DCS : après un réglage
         # raté, la résolution de DCS ne dit plus où est le bas de la vue.
@@ -212,21 +301,22 @@ def configurer_ecrans(saved_games: Path, essai: bool = False,
         description = "Essai : ecrans exportes en bas de l'ecran unique"
         resolution = (pl, ph)
     else:
-        second = second_ecran(ecrans)
-        if second is None:
+        trouves = supports(ecrans, physique)
+        if not trouves:
             return False, [
-                "Pas de second écran à droite de l'écran principal, aligné en haut.",
+                "Pas d'écran libre collé à droite ou sous l'écran principal.",
                 "Il en faut un que personne ne regarde, pour que DCS y dessine les écrans",
                 "exportés au lieu de les poser sur la vue :",
                 f"  - écran virtuel : Virtual Display Driver, gratuit — {VDD}",
                 "  - ou une prise HDMI factice.",
                 "Installer.bat installe et place l'écran virtuel lui-même. À la main :",
                 "Paramètres → Système → Écran, « Étendre ces affichages », le glisser à",
-                "droite du principal, bords du haut alignés, puis relancer l'installation."]
-        _, _, sl, sh, _ = second
-        zones = disposition_second_ecran(pl, ph, sl, sh)
-        description = "Vue sur l'ecran principal, ecrans exportes sur le second"
-        resolution = (pl + sl, max(ph, sh))
+                "droite du principal (bords du haut alignés) ou dessous (bords de gauche",
+                "alignés), là où aucun autre écran ne se trouve, puis relancer l'installation."]
+        _, cote, zone, resolution = trouves[0]
+        zones = disposition(zone, resolution)
+        description = "Vue sur l'ecran principal, ecrans exportes sur le second" + (
+            ", dessous" if cote == "dessous" else "")
 
     dossier = saved_games / "Config" / "MonitorSetup"
     dossier.mkdir(parents=True, exist_ok=True)
@@ -292,6 +382,9 @@ def retirer_ecrans(saved_games: Path, ouvert: Callable[[], bool] = dcs_ouvert) -
                     "« 1 Screen » dans Moniteurs et ta résolution, puis relance la",
                     "désinstallation pour retirer « Tablette DCS »."]
         lignes.append(f"Affichage de DCS remis comme avant la tablette (d'après {copie.name}).")
+        # Gardée, elle servirait à une prochaine installation : on reviendrait
+        # un jour à une résolution vieille de plusieurs écrans.
+        copie.unlink(missing_ok=True)
     for chemin in (fichier, fichier.with_suffix(".lua.precedent")):
         if chemin.exists():
             chemin.unlink()
@@ -334,26 +427,78 @@ def demander(question: str) -> Optional[str]:
 
 def installer(saved_games: Path, essai: bool = False,
               demander: Callable[[str], Optional[str]] = demander,
-              ouvert: Callable[[], bool] = dcs_ouvert) -> int:
+              ouvert: Callable[[], bool] = dcs_ouvert,
+              lister_ecrans: Optional[Callable[[], list]] = None,
+              chemin_choix: Optional[Path] = None) -> int:
     """`DCS-Tablette.exe installer` : écran virtuel, scripts, écrans de DCS,
-    raccourci. Fait tout ce qu'il peut, et dit à la main ce qu'il n'a pas pu."""
+    raccourci. Fait tout ce qu'il peut, et dit à la main ce qu'il n'a pas pu.
+
+    Part de ce que le pilote a déjà : ses écrans (un écran réel n'est jamais
+    pris sans son accord, l'écran virtuel va à droite ou dessous selon la
+    place), et sa configuration d'écrans de DCS (si elle exporte déjà les
+    écrans du cockpit, on propose de la garder). Le choix est retenu pour la
+    console de diagnostic (`ecrire_choix`).
+    """
+    from . import ecran_virtuel
     if not saved_games.is_dir():
         print(f"Dossier de DCS introuvable ({saved_games}).")
         print("Lance DCS une fois pour qu'il le crée, puis recommence.")
         return 1
-    etapes = 2 if essai else 3
+    lister_ecrans = lister_ecrans or ecran_virtuel.lister
     print(f"Dossier de DCS : {saved_games}")
+
+    # Ce que le pilote a déjà, avant de toucher à quoi que ce soit.
+    try:
+        ecrans = lister_ecrans()
+    except OSError:
+        ecrans = []
+    print("\nVos écrans :")
+    for ligne in ecran_virtuel.decrire(ecrans) or ["(illisibles)"]:
+        print("  " + ligne)
+    try:
+        nom, largeur, hauteur = options_affichage(saved_games)
+        print(f"DCS : configuration « {nom} », {largeur}×{hauteur}, "
+              + ("plein écran" if plein_ecran(saved_games) else "fenêtré"))
+    except PasDExport as e:
+        print(f"DCS : {e}")
+
+    choix: Dict = {"mode": "essai" if essai else "second_ecran", "physique": False}
+    existante = None if essai else configuration_existante(saved_games)
+    if existante:
+        nom, zones = existante
+        print(f"\nDCS exporte déjà {len(zones)} écrans du cockpit avec votre configuration "
+              f"« {nom} » : {', '.join(sorted(zones))}.")
+        print("La tablette peut les prendre là où ils sont, sans toucher à vos écrans ni à DCS.")
+        if ecran_virtuel.accepte(demander("Garder votre configuration ? [O/n] ")):
+            choix = {"mode": "existante", "configuration": nom}
+
+    etapes = 3 if choix["mode"] == "second_ecran" else 2
     pret = True
-    if not essai:
-        from .ecran_virtuel import preparer
+    if choix["mode"] == "second_ecran":
         print(f"\n1/{etapes}  Écran virtuel")
-        pret = preparer(lambda ligne: print("  " + ligne),
-                        lambda question: demander("  " + question))
+        resultat = ecran_virtuel.preparer(lambda ligne: print("  " + ligne),
+                                          lambda question: demander("  " + question))
+        if resultat is None:
+            print("  Sans écran pour eux, la tablette marche quand même en mode essai : les")
+            print("  écrans du cockpit sont dessinés en bas de la vue, par-dessus le cockpit.")
+            if ecran_virtuel.oui(demander("  Passer en mode essai ? [o/N] ")):
+                choix["mode"] = "essai"
+            else:
+                pret = False
+        else:
+            choix["physique"] = resultat == "physique"
+    ecrire_choix(choix, chemin_choix)
     print(f"\n{etapes - 1}/{etapes}  Scripts de la tablette")
     for ligne in installer_scripts(saved_games):
         print("  " + ligne)
     print(f"\n{etapes}/{etapes}  Écrans de DCS")
-    if not pret:
+    if choix["mode"] == "existante":
+        print(f"  Votre configuration « {choix['configuration']} » est gardée : rien à changer.")
+        complet = True
+        if plein_ecran(saved_games):
+            print("  Mais DCS est en plein écran, que la tablette ne voit pas : dans DCS,")
+            print("  Options → Système, décocher « Plein écran », puis relancer DCS.")
+    elif not pret:
         print("  Écran virtuel pas prêt : la configuration d'écrans de DCS attendra.")
         print("  Relancer Installer.bat une fois l'écran virtuel en place.")
         complet = False
@@ -365,7 +510,14 @@ def installer(saved_games: Path, essai: bool = False,
                                "(ou tape p pour passer) : ")
             if reponse is None or reponse.strip().lower() == "p":
                 break
-        complet, lignes = configurer_ecrans(saved_games, essai, ouvert=ouvert)
+        # Relus : l'écran virtuel vient peut-être d'arriver ou de bouger.
+        try:
+            actuels = [(e.x, e.y, e.largeur, e.hauteur, e.principal, e.virtuel)
+                       for e in lister_ecrans() if e.actif]
+        except OSError:
+            actuels = None
+        complet, lignes = configurer_ecrans(saved_games, choix["mode"] == "essai", actuels,
+                                            ouvert, physique=choix["physique"])
         for ligne in lignes:
             print("  " + ligne)
     lancer = "DCS-Tablette.exe"
@@ -385,13 +537,33 @@ def installer(saved_games: Path, essai: bool = False,
     return 0 if complet else 1
 
 
-def desinstaller(saved_games: Path) -> int:
+def autres_instances() -> int:
+    """Combien d'autres DCS-Tablette.exe tournent : le serveur resté ouvert
+    pendant qu'on désinstalle avec le même exécutable."""
+    try:
+        sortie = subprocess.run(["tasklist", "/FI", "IMAGENAME eq DCS-Tablette.exe",
+                                 "/FO", "CSV", "/NH"], capture_output=True, text=True,
+                                errors="replace", timeout=30).stdout
+    except (OSError, subprocess.SubprocessError):
+        return 0
+    pids = re.findall(r'^"[^"]*","(\d+)"', sortie, re.M)
+    return sum(int(p) != os.getpid() for p in pids)
+
+
+def desinstaller(saved_games: Path, demander: Callable[[str], Optional[str]] = demander,
+                 autres: Callable[[], int] = autres_instances) -> int:
     """`DCS-Tablette.exe desinstaller` : l'inverse d'`installer`."""
+    while autres():
+        reponse = demander("  DCS Tablette est encore ouvert. Ferme sa fenêtre, puis appuie "
+                           "sur Entrée (ou tape p pour passer) : ")
+        if reponse is None or reponse.strip().lower() == "p":
+            break
     lignes = desinstaller_scripts(saved_games) + retirer_ecrans(saved_games)
     lien = dossier_bureau() / RACCOURCI
-    if lien.exists():
-        lien.unlink()
-        lignes.append(f"Supprimé : {lien}")
+    for chemin in (lien, fichier_choix()):
+        if chemin.exists():
+            chemin.unlink()
+            lignes.append(f"Supprimé : {chemin}")
     for ligne in lignes or ["Rien à retirer : la tablette n'était pas installée."]:
         print("  " + ligne)
     print("\nOn peut maintenant supprimer le dossier de DCS Tablette.")

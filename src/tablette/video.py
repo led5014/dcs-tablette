@@ -14,6 +14,7 @@ from __future__ import annotations
 import io
 import threading
 import time
+from functools import lru_cache
 from pathlib import Path
 from typing import Callable, Dict, Optional, Tuple
 
@@ -36,6 +37,21 @@ FRAICHEUR_S = 1 / 30             # une copie sert tous les écrans demandés
 DEMANDE_RECENTE_S = 1.0          # un écran réclamé depuis moins longtemps est copié
 VALIDITE_ZONES_S = 2.0           # options.lua n'est relu qu'une fois toutes les 2 s
 SEUIL_NOIR = 8                   # luminosité max sous laquelle une image est noire
+# Luminosité réglée écran par écran sur la tablette (le TGP du F-16 est
+# sombre) : une courbe gamma, qui éclaircit les gris sans brûler les
+# symboles blancs, appliquée AVANT le JPEG — éclaircie après, l'image
+# n'aurait plus les détails que la compression a mangés dans les ombres.
+# Un cran = gamma × 1,25 : +4 ≈ gamma 2,4.
+LUMINOSITE_MIN, LUMINOSITE_MAX = -2, 5
+PAS_GAMMA = 1.25
+
+
+@lru_cache(maxsize=None)
+def table_luminosite(niveau: int, bandes: int = 3) -> list:
+    """Table de correspondance Pillow (`Image.point`) pour un cran de luminosité."""
+    gamma = PAS_GAMMA ** niveau
+    table = [round(255 * (i / 255) ** (1 / gamma)) for i in range(256)]
+    return table * bandes
 # DCS dessine les écrans du Hornet arrondis (rayon ≈ 1/6 du côté, mesuré) et
 # laisse un liseré du cockpit sur les bords : on le rogne. Rogner davantage
 # couperait les libellés des boutons, collés au bord ; les coins arrondis
@@ -79,7 +95,7 @@ class Video:
         self._resolution: Optional[Tuple[int, int]] = None
         self._copie: Optional[Tuple[float, Optional[Copie]]] = None
         self._demandes: Dict[str, float] = {}
-        self._jpeg: Dict[str, Tuple[float, bytes]] = {}
+        self._jpeg: Dict[Tuple[str, int], Tuple[float, bytes]] = {}
         # Pour le diagnostic : la dernière image demandée par la tablette,
         # (instant, None si servie, sinon la raison donnée à la tablette).
         self.dernier: Optional[Tuple[float, Optional[str]]] = None
@@ -188,8 +204,10 @@ class Video:
         except PasDImage:
             return None
 
-    def image(self, nom: str) -> bytes:
-        """JPEG de l'écran `nom` (LEFT_MFCD…, ou KNEEBOARD)."""
+    def image(self, nom: str, luminosite: int = 0) -> bytes:
+        """JPEG de l'écran `nom` (LEFT_MFCD…, ou KNEEBOARD), éclairci ou
+        assombri de `luminosite` crans (0 : tel que DCS le dessine)."""
+        luminosite = max(LUMINOSITE_MIN, min(LUMINOSITE_MAX, int(luminosite)))
         with self._verrou:
             try:
                 instant, image = self._brute(nom)
@@ -199,15 +217,18 @@ class Video:
                 self.dernier = (self._horloge(), str(e))
                 raise
             self.dernier = (self._horloge(), None)
-            deja = self._jpeg.get(nom)
+            # Deux tablettes peuvent régler le même écran différemment.
+            deja = self._jpeg.get((nom, luminosite))
             if deja and deja[0] == instant:
                 return deja[1]
             if max(image.size) > COTE_MAX:
                 image = image.copy()
                 image.thumbnail((COTE_MAX, COTE_MAX))
+            if luminosite:
+                image = image.point(table_luminosite(luminosite, len(image.getbands())))
             tampon = io.BytesIO()
             image.save(tampon, "JPEG", quality=QUALITE_JPEG,
                        subsampling=SOUS_ECHANTILLONNAGE)
             donnees = tampon.getvalue()
-            self._jpeg[nom] = (instant, donnees)
+            self._jpeg[(nom, luminosite)] = (instant, donnees)
             return donnees

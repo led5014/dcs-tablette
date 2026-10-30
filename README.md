@@ -7,6 +7,9 @@ l'affiche : iPad, tablette Android, téléphone, navigateur d'un autre PC.
 - **Écrans en direct** : DDI, MFD, MPD… recopiés depuis DCS, sans scintillement.
 - **Boutons tactiles** : chaque appui est joué dans le cockpit, tant que le
   doigt est posé.
+- **Luminosité écran par écran** : une molette dans le coin bas gauche de
+  chaque cadre, pour un TGP trop sombre ou un écran trop pâle ; retenue par
+  appareil.
 - **Planche avant du Hornet** redessinée : UFC tactile, IFEI, instruments de
   secours, voyants.
 - **Kneeboard** : les pages de l'avion piloté lues directement dans les
@@ -29,6 +32,14 @@ Dernière version : **[Releases](../../releases/latest)** → `DCS-Tablette-x.y.
 
 Le zip contient `DCS-Tablette.exe`, `Installer.bat`, `Desinstaller.bat` et un
 `LISEZ-MOI.txt` qui reprend ce qui suit.
+
+**Mettre à jour : rien à réinstaller.** À partir de la 1.5.0, DCS Tablette
+regarde à son lancement s'il existe une version plus récente et propose de
+se mettre à jour : téléchargement vérifié (SHA-256), remplacement de ses
+fichiers, relance — vos réglages restent. Seule demande faite à internet,
+au lancement et jamais en vol ; `--sans-mise-a-jour` la supprime. Depuis
+une version plus ancienne, extraire une dernière fois le zip à la place de
+l'ancien dossier.
 
 ## Appareils
 
@@ -53,7 +64,11 @@ en vol : un retour est bienvenu.
 2. Si Windows affiche « Windows a protégé votre ordinateur » : *Informations
    complémentaires* → *Exécuter quand même*. L'exécutable n'est pas signé ; il
    est construit à partir de ce dépôt (`scripts/construire_tablette.py`).
-3. Répondre aux questions de la fenêtre. Elle fait le reste :
+3. Répondre aux questions de la fenêtre. Elle affiche d'abord vos écrans et
+   vos réglages de DCS, puis fait le reste en tenant compte de ce que vous
+   avez déjà. Si votre configuration d'écrans de DCS exporte déjà les écrans
+   du cockpit (vrais MFD, Helios…), elle propose de la garder : la tablette
+   les prend là où ils sont.
 
    1. **Écran virtuel.** DCS dessine les écrans exportés sur un écran : sans
       second écran, ils recouvrent la vue. S'il n'y a pas d'écran virtuel,
@@ -61,10 +76,12 @@ en vol : un retour est bienvenu.
       [Virtual Display Driver](https://github.com/VirtualDrivers/Virtual-Display-Driver)
       (gratuit, open source ; internet nécessaire pour cette étape). Windows
       demande l'autorisation administrateur, puis de confirmer le pilote.
-      Elle le place ensuite **à droite** du principal, **aligné en haut**, à
-      la même définition et à la même fréquence : rien à régler dans
-      Paramètres → Écran. Une prise HDMI factice déjà à cette place est
-      gardée telle quelle.
+      Elle le place ensuite **à droite** du principal, ou **dessous** si un de
+      vos écrans occupe déjà la droite (la fenêtre de DCS ne doit couvrir
+      aucun de vos écrans), à la même définition et à la même fréquence :
+      rien à régler dans Paramètres → Écran. Un de vos écrans n'est utilisé
+      que si vous dites que c'est une prise HDMI factice ; sans aucune place
+      libre, elle propose le mode essai.
    2. **Scripts** de la tablette dans `Saved Games\DCS\Scripts`.
    3. **Écrans de DCS** : configuration « Tablette DCS », résolution des deux
       écrans, fenêtré. Si DCS est ouvert, la fenêtre attend qu'on le ferme.
@@ -92,6 +109,8 @@ du principal, glissé à sa droite, bords du haut alignés ; relancer
 
 Navigateurs : la page évite les fonctions récentes, pour tourner aussi sur
 les iPad restés sous un ancien iOS et sur les Android d'entrée de gamme.
+Minimum : **iOS / iPadOS 13** (iPad Air 2, iPad mini 4, iPad 5e génération et
+suivants) — avant, les boutons ne réagissent pas au doigt.
 Essayée dans Chrome aux tailles des téléphones, tablettes et écrans de PC
 courants ; un retour sur votre appareil est bienvenu.
 
@@ -102,7 +121,8 @@ DCS (le contrôle d'intégrité du multijoueur n'est pas concerné) :
 
 | Fichier | Changement | Copie gardée |
 |---|---|---|
-| Windows : écran virtuel | installé s'il manque et si on accepte (Virtual Display Driver 25.7.23, empreinte vérifiée, réglages dans `C:\VirtualDisplayDriver`) ; placé à droite du principal | — |
+| Windows : écran virtuel | installé s'il manque et si on accepte (Virtual Display Driver 25.7.23, empreinte vérifiée, réglages dans `C:\VirtualDisplayDriver`) ; placé à droite du principal, ou dessous | — |
+| `%LOCALAPPDATA%\DCS-Tablette\installation.json` | ce que vous avez choisi à l'installation (votre configuration gardée, écran HDMI factice…), relu par le diagnostic | — |
 | `Scripts\DCS-Tablette-Export.lua`, `Scripts\DCS-Tablette-Appareils.lua` | ajoutés | — |
 | `Scripts\Export.lua` | une ligne ajoutée à la fin ; Tacview, SRS… intacts | `Export.lua.avant-tablette-<date>` |
 | `Config\MonitorSetup\tablette.lua` | configuration d'écrans « Tablette DCS » | — |
@@ -112,7 +132,7 @@ DCS (le contrôle d'intégrité du multijoueur n'est pas concerné) :
 Le script Lua n'accepte que les commandes des boutons affichés (une liste
 blanche par appareil) et relâche tout bouton tenu plus de 5 secondes.
 
-**Désinstaller** : DCS fermé, `Desinstaller.bat` retire tout et remet
+**Désinstaller** : DCS et DCS Tablette fermés, `Desinstaller.bat` retire tout et remet
 l'affichage d'avant. Supprimer ensuite le dossier. L'écran virtuel reste
 (Gestionnaire de périphériques → Cartes graphiques → Virtual Display Driver →
 *Désinstaller l'appareil* pour le retirer).
