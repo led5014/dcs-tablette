@@ -36,6 +36,10 @@ l'affiche : iPad, tablette Android, téléphone, navigateur d'un autre PC.
 Pas de Python à installer, rien sur internet en vol : le serveur tourne sur
 le PC, l'iPad s'y connecte par le Wi-Fi de la maison.
 
+**Aide, idées, communauté** : le Discord **[L'atelier DCS OS](https://discord.gg/4KJYjt7pbc)**,
+gratuit, en français — questions dans #aide, appareils et fonctions à
+demander dans #idées, nouvelles versions dans #annonces.
+
 ## Télécharger
 
 Dernière version : **[Releases](../../releases/latest)** → `DCS-Tablette-x.y.z.zip`.
