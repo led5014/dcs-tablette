@@ -74,11 +74,34 @@ Lua en dépend) et `scripts\installer_dcs.py`.
 
 Pour l'escadron : le zip des Releases du dépôt public
 (`DCS-Tablette.exe` + `Installer.bat`), sans Python. `Installer.bat` lance
-`DCS-Tablette.exe installer`, qui fait les étapes 2 à 4 ci-dessous et pose
-le raccourci « DCS Tablette » sur le bureau ; `Desinstaller.bat` défait 2
+`DCS-Tablette.exe installer`, qui fait les étapes 2 à 4 ci-dessous ; la
+désinstallation (`Desinstaller.bat`, ou Applications installées) défait 2
 et 4 (l'écran virtuel reste). Le mode d'emploi est dans le README et dans
 `distribution/tablette/zip/LISEZ-MOI.txt`, qui décrit aussi chaque étape à
 la main.
+
+Installation et mise à jour les plus simples possible (demande du
+31/10/2026, « à chaque fois ») :
+- le programme s'installe pour l'utilisateur seul dans
+  `%LOCALAPPDATA%\Programs\DCS-Tablette`, comme VS Code ou Discord : sans
+  droits d'administrateur, et la mise à jour peut y écrire. Le zip
+  s'extrait n'importe où ; `installation.installer_programme` copie ce
+  qu'il a posé (`LIVRES`), pose les raccourcis du bureau et du menu
+  Démarrer, et l'entrée d'Applications installées (`HKCU\…\Uninstall\
+  DCS-Tablette`, `enregistrer`), puis `Installer.bat` démarre le serveur.
+  Jusqu'à la 1.8.0, le programme restait là où le zip avait été extrait ;
+- lancé depuis un autre dossier alors qu'il est installé (le dossier extrait
+  gardé), l'exécutable démarre l'installé (`exe_installe`) : un seul
+  exemplaire à tenir à jour. À chaque lancement, `tenir_a_jour` remet la
+  version de l'entrée de Windows et pose le raccourci du menu Démarrer s'il
+  manque (installations d'avant) ;
+- la mise à jour se fait sans question (`mise_a_jour.appliquer`) : la
+  question O/n de la 1.5.0 à la 1.8.0 (15 s pour répondre) passait le plus
+  souvent sans réponse, DCS Tablette lancé puis laissé derrière DCS ;
+- la désinstallation, depuis Windows (`desinstaller --attendre`, pour que la
+  fenêtre reste lisible) ou `Desinstaller.bat`, efface aussi le programme :
+  un script cmd sans fenêtre (`EFFACER`) attend la fermeture de l'exe, puis
+  ne retire que les fichiers de `LIVRES` et le dossier s'il est alors vide.
 
 L'étape 3 était celle où les pilotes bloquaient : placer l'écran virtuel au
 pixel près, à droite et aligné en haut (30/10/2026). `ecran_virtuel.py` la
@@ -312,6 +335,22 @@ cadrans, et la page redemande les siens quand elle change.
 - Les boutons partent en UDP vers le script Lua, qui n'accepte que la liste
   blanche de l'appareil piloté et relâche de lui-même un bouton tenu plus de
   5 secondes.
+- Les captures (`captures.py`, 31/10/2026 ; retour : « quand on fait une
+  capture ou un stream sur Discord, ça montre les 2 écrans ») : la fenêtre
+  de DCS couvre l'écran principal et l'écran virtuel, et tout ce qui la
+  capture en prend toute la largeur (vu : un F12 de Steam en 5120 × 1440).
+  Toutes les 2 s, les nouvelles images des dossiers de captures — DCS
+  (`Saved Games\DCS\Screenshots`), Steam (`userdata\*\760\remote\223750\
+  screenshots`, vignette refaite), Windows (dossier connu Captures d'écran)
+  et Game Bar (`Vidéos\Captures`) — qui ont exactement la taille de l'image
+  de DCS (`options.lua`) sont recadrées sur la vue `Center` de la
+  configuration d'écrans. JPEG réenregistré avec ses tables de
+  quantification (même qualité), date du fichier gardée, fichier remplacé
+  d'un coup ; une image illisible (en cours d'écriture) est reprise au
+  passage suivant. Les anciennes captures et celles d'une zone ne bougent
+  pas. Mesuré sur la capture Steam : 67 ms. `--captures-entieres` coupe tout.
+  La vignette de Steam est refaite, mais `screenshots.vdf` garde la taille
+  d'origine : Steam le tient ouvert et le réécrit.
 
 ## Essayé et écarté
 
@@ -324,6 +363,13 @@ cadrans, et la page redemande les siens quand elle change.
   miroir.
 - RWR et HUD redessinés : DCS ne donne pas la position des symboles du RWR,
   ni de quoi refaire le HUD. Le RWR reste lisible sur la page EW d'un écran.
+- Un stream de la seule vue principale (31/10/2026) : Discord, OBS ou la
+  Game Bar partagent la fenêtre de DCS en entier, et DCS n'en fait qu'une,
+  écran virtuel compris — rien à recadrer de notre côté. Une fenêtre « vue
+  seule » recopiant la vue par une vignette DWM (façon OnTopReplica) se
+  partagerait, mais ni Discord ni OBS n'ont été essayés dessus, et partager
+  l'écran principal donne la même chose sans rien installer : c'est la
+  marche à suivre (README, « Captures et stream »).
 
 ## Essai sans DCS
 

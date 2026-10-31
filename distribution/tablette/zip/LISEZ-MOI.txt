@@ -13,8 +13,8 @@ sur le PC et le Wi-Fi de la maison.
 
 INSTALLATION
 ------------
-  1. Placer ce dossier là où il restera (par exemple dans Documents) : le
-     raccourci du bureau pointera dessus.
+  1. Extraire le zip n'importe où : Téléchargements convient, DCS Tablette
+     s'installe ensuite tout seul à sa place.
   2. Double-cliquer « Installer.bat ».
      Si Windows affiche « Windows a protégé votre ordinateur » : cliquer
      « Informations complémentaires » puis « Exécuter quand même ».
@@ -58,7 +58,11 @@ INSTALLATION
          réglages d'origine à côté). Si DCS est ouvert, la fenêtre demande
          de le fermer et attend.
 
-     Puis elle pose un raccourci « DCS Tablette » sur le bureau.
+     Puis elle installe le programme dans
+     %LOCALAPPDATA%\Programs\DCS-Tablette, pose un raccourci « DCS
+     Tablette » sur le bureau et dans le menu Démarrer, l'inscrit dans
+     Paramètres → Applications → Applications installées, et le démarre.
+     Le dossier extrait du zip ne sert plus : il peut être supprimé.
   4. Si une étape n'aboutit pas, la fenêtre dit laquelle et quoi faire.
      Voir aussi « À la main » plus bas : chaque étape s'y fait sans
      l'installation.
@@ -72,31 +76,29 @@ Lancé directement (« DCS-Tablette.exe ») sans être passé par
 
 MISE À JOUR
 -----------
-Rien à réinstaller. À son lancement, DCS Tablette regarde sur GitHub s'il
-existe une version plus récente (une demande de quelques secondes au plus,
-rien si le PC est hors ligne). S'il y en a une, il dit ce qu'elle apporte
-et demande « Mettre à jour maintenant ? » : répondre O, puis Entrée — DCS
-peut rester ouvert. Sans réponse au bout de 15 secondes, il démarre sans
-mettre à jour : relancé en plein vol, il ne reste pas bloqué.
-Il la télécharge, vérifie qu'elle est bien celle publiée
-(empreinte SHA-256), se ferme, remplace ses fichiers et se relance tout
-seul. Tout est gardé : écran virtuel, réglages de DCS, raccourci du bureau.
-Les nouveaux scripts sont recopiés dans DCS au passage, et la page de la
-tablette se recharge d'elle-même.
+Rien à faire : lancer DCS Tablette comme d'habitude. À son lancement, il
+regarde sur GitHub s'il existe une version plus récente (une demande de
+quelques secondes au plus, rien si le PC est hors ligne). S'il y en a une,
+il dit ce qu'elle apporte, la télécharge, vérifie qu'elle est bien celle
+publiée (empreinte SHA-256), se ferme, remplace ses fichiers et se relance
+tout seul, sans rien demander — DCS peut rester ouvert. Tout est gardé :
+écran virtuel, réglages de DCS, raccourcis. Les nouveaux scripts sont
+recopiés dans DCS au passage (DCS les prend à la mission suivante), et la
+page de la tablette se recharge d'elle-même.
 
-Répondre n : il le reproposera au prochain lancement. Le diagnostic de la
-tablette indique aussi quand une version plus récente existe.
+Jusqu'à la 1.8.0, DCS Tablette demandait « Mettre à jour maintenant ? » :
+depuis ces versions, répondre O une dernière fois.
+
 Pour ne jamais rien demander à GitHub : lancer « DCS-Tablette.exe
---sans-mise-a-jour ».
-Si la mise à jour échoue (dossier protégé en écriture, par exemple), la
-fenêtre dit où est le zip téléchargé : l'extraire à la place de l'ancien
-dossier.
+--sans-mise-a-jour ». Si la mise à jour échoue (pas d'internet, dossier
+protégé en écriture…), la fenêtre dit pourquoi et DCS Tablette démarre à
+sa version ; le diagnostic de la tablette signale la nouvelle.
 
 
 EN VOL
 ------
-  1. Double-cliquer « DCS Tablette » sur le bureau. La fenêtre affiche une
-     adresse, par exemple http://192.168.1.20:8320
+  1. Lancer « DCS Tablette » (bureau ou menu Démarrer). La fenêtre affiche
+     une adresse, par exemple http://192.168.1.20:8320
      Au premier lancement, Windows demande d'autoriser le programme sur le
      réseau : accepter pour le réseau PRIVÉ.
   2. Sur la tablette ou le téléphone (même Wi-Fi), ouvrir cette adresse :
@@ -178,6 +180,30 @@ Si la tablette se déconnecte, il revient sur le PC au bout de 10 secondes.
 
 Fermer la fenêtre de DCS Tablette arrête tout.
 
+CAPTURES ET STREAM
+------------------
+DCS s'étend sur l'écran principal ET sur l'écran virtuel : sa fenêtre fait
+deux écrans de large (5120 × 1440 pour deux écrans de 2560 × 1440). Tout ce
+qui la prend en entier montre donc aussi l'écran virtuel.
+
+Captures : tant que DCS Tablette tourne, chaque nouvelle capture de toute
+la fenêtre de DCS est recadrée d'elle-même sur l'écran principal, à la même
+qualité — F12 de Steam, Impr. écran dans DCS, Win + Impr. écran (tout le
+bureau), Win + Alt + Impr. écran (Game Bar). Les captures d'une zone
+(Win + Maj + S) et les anciennes ne sont pas touchées. Pour garder les
+captures entières : lancer « DCS-Tablette.exe --captures-entieres ».
+
+Stream et vidéo : une fenêtre se partage en entier, rien ne peut la
+recadrer en direct. Partager l'ÉCRAN principal, pas l'application :
+  - Discord : « Partager votre écran » → onglet « Écrans » → l'écran
+    principal, et non « Applications » → DCS (ni le Go Live proposé pour
+    le jeu, qui prend sa fenêtre) ;
+  - OBS : source « Capture d'écran » sur l'écran principal ; ou « Capture
+    de jeu » avec un filtre « Rogner/Remplir », à droite : la largeur de
+    l'écran virtuel (2560 pour un écran de 2560 × 1440) ;
+  - l'enregistrement de la Game Bar (Win + Alt + R) prend la fenêtre
+    entière : préférer OBS.
+
 
 À LA MAIN, SI L'INSTALLATION N'Y ARRIVE PAS
 -------------------------------------------
@@ -246,16 +272,21 @@ pastille de la tablette. Il dit ce qui manque et comment le régler.
   S'il n'y arrive pas, le diagnostic dit pourquoi.
 - La souris part sur la droite (ou vers le bas) et disparaît : elle est sur
   l'écran virtuel. La ramener vers l'écran principal.
+- Un stream ou une capture montre deux écrans côte à côte : voir
+  « Captures et stream ».
 - Les boutons ne réagissent pas sur un vieil iPad : il faut iOS / iPadOS 13
   ou plus (iPad Air 2, mini 4, 5e génération et suivants).
 
 
 DÉSINSTALLATION
 ---------------
-DCS et DCS Tablette fermés (sinon la fenêtre le demande et attend),
-double-cliquer « Desinstaller.bat » : il retire la ligne
-d'Export.lua, les scripts et le raccourci du bureau, et remet l'affichage de
-DCS d'avant. Supprimer ensuite ce dossier.
+DCS et DCS Tablette fermés (sinon la fenêtre le demande et attend) :
+Paramètres → Applications → Applications installées → DCS Tablette →
+Désinstaller (ou « Desinstaller.bat », dans le dossier du programme). Il
+retire la ligne d'Export.lua, les scripts, les raccourcis et l'entrée de
+Windows, remet l'affichage de DCS d'avant, puis efface le programme. Seuls
+les fichiers posés par le zip sont effacés : un dossier où vous avez mis
+autre chose reste, avec vos fichiers.
 
 L'écran virtuel reste installé (il peut servir à autre chose). Pour le
 retirer : Gestionnaire de périphériques → Cartes graphiques → « Virtual

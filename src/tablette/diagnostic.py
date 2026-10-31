@@ -364,8 +364,8 @@ class Diagnostic:
         if numero(self._publiee["version"]) > numero(VERSION):
             return Point("Version", ATTENTE, f"{self._publiee['version']} disponible, vous "
                          f"avez la {VERSION}", (
-                             "Fermer DCS Tablette et le relancer : il propose la mise à jour, "
-                             "réglages gardés.",))
+                             "Fermer DCS Tablette et le relancer : il se met à jour tout seul, "
+                             "réglages gardés. S'il n'y arrive pas, sa fenêtre dit pourquoi.",))
         return Point("Version", OK, f"{VERSION}, à jour")
 
     # ------------------------------------------------------------ l'ensemble

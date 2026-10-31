@@ -43,14 +43,14 @@ Dernière version : **[Releases](../../releases/latest)** → `DCS-Tablette-x.y.
 Le zip contient `DCS-Tablette.exe`, `Installer.bat`, `Desinstaller.bat` et un
 `LISEZ-MOI.txt` qui reprend ce qui suit.
 
-**Mettre à jour : rien à réinstaller.** À partir de la 1.5.0, DCS Tablette
-regarde à son lancement s'il existe une version plus récente et propose de
-se mettre à jour : téléchargement vérifié (SHA-256), remplacement de ses
-fichiers, relance — vos réglages restent. DCS peut rester ouvert ; sans
-réponse au bout de 15 s, il démarre sans mettre à jour. Seule demande faite
-à internet, au lancement ; `--sans-mise-a-jour` la supprime. Depuis
-une version plus ancienne, extraire une dernière fois le zip à la place de
-l'ancien dossier.
+**Mettre à jour : rien à faire.** DCS Tablette regarde à son lancement s'il
+existe une version plus récente et se met à jour tout seul, sans rien
+demander : téléchargement vérifié (SHA-256), remplacement de ses fichiers,
+relance — vos réglages restent, DCS peut rester ouvert. Seule demande faite
+à internet, au lancement ; `--sans-mise-a-jour` la supprime. De la 1.5.0 à
+la 1.8.0, il demandait « Mettre à jour maintenant ? » : répondre O une
+dernière fois. Depuis une version plus ancienne, extraire une dernière fois
+le zip à la place de l'ancien dossier.
 
 ## Appareils
 
@@ -94,7 +94,7 @@ une capture d'écran de leurs MFD permettra de les caler aussi.
 
 ## Installation
 
-1. Extraire le zip là où il restera (par exemple dans Documents), puis
+1. Extraire le zip n'importe où (Téléchargements convient), puis
    double-cliquer **`Installer.bat`**.
 2. Si Windows affiche « Windows a protégé votre ordinateur » : *Informations
    complémentaires* → *Exécuter quand même*. L'exécutable n'est pas signé ; il
@@ -121,7 +121,11 @@ une capture d'écran de leurs MFD permettra de les caler aussi.
    3. **Écrans de DCS** : configuration « Tablette DCS », résolution des deux
       écrans, fenêtré. Si DCS est ouvert, la fenêtre attend qu'on le ferme.
 
-   Puis elle pose un raccourci **DCS Tablette** sur le bureau.
+   Puis elle installe le programme dans `%LOCALAPPDATA%\Programs\DCS-Tablette`
+   (pour vous seul, sans droits d'administrateur), pose un raccourci
+   **DCS Tablette** sur le bureau et dans le menu Démarrer, l'inscrit dans
+   *Paramètres → Applications → Applications installées* et le démarre. Le
+   dossier extrait du zip peut ensuite être supprimé.
 
 Si une étape n'aboutit pas, la fenêtre dit laquelle et quoi faire. Chaque
 étape se fait aussi à la main : section « À la main » du `LISEZ-MOI.txt`
@@ -133,7 +137,7 @@ du principal, glissé à sa droite, bords du haut alignés ; relancer
 
 ### En vol
 
-1. Double-cliquer **DCS Tablette** sur le bureau : la fenêtre affiche
+1. Lancer **DCS Tablette** (bureau ou menu Démarrer) : la fenêtre affiche
    l'adresse à ouvrir sur la tablette (`http://192.168.x.x:8320`). Au premier
    lancement, autoriser le programme sur le réseau **privé**.
 2. Sur la tablette ou le téléphone, ouvrir l'adresse :
@@ -162,15 +166,37 @@ DCS (le contrôle d'intégrité du multijoueur n'est pas concerné) :
 | `Scripts\Export.lua` | une ligne ajoutée à la fin ; Tacview, SRS… intacts | `Export.lua.avant-tablette-<date>` |
 | `Config\MonitorSetup\tablette.lua` | configuration d'écrans « Tablette DCS » | — |
 | `Config\options.lua` | configuration d'écrans, résolution, fenêtré | `options.lua.avant-tablette` |
-| Bureau | raccourci « DCS Tablette » | — |
+| `%LOCALAPPDATA%\Programs\DCS-Tablette` | le programme (ce que contient le zip) | — |
+| Bureau, menu Démarrer | raccourci « DCS Tablette » | — |
+| Registre, `HKCU\…\Uninstall\DCS-Tablette` | l'entrée d'*Applications installées* | — |
 
 Le script Lua n'accepte que les commandes des boutons affichés (une liste
 blanche par appareil) et relâche tout bouton tenu plus de 5 secondes.
 
-**Désinstaller** : DCS et DCS Tablette fermés, `Desinstaller.bat` retire tout et remet
-l'affichage d'avant. Supprimer ensuite le dossier. L'écran virtuel reste
-(Gestionnaire de périphériques → Cartes graphiques → Virtual Display Driver →
-*Désinstaller l'appareil* pour le retirer).
+**Désinstaller** : DCS et DCS Tablette fermés, *Paramètres → Applications →
+Applications installées → DCS Tablette → Désinstaller* (ou `Desinstaller.bat`
+dans le dossier du programme) retire tout, remet l'affichage d'avant et
+efface le programme — seulement les fichiers posés par le zip. L'écran
+virtuel reste (Gestionnaire de périphériques → Cartes graphiques → Virtual
+Display Driver → *Désinstaller l'appareil* pour le retirer).
+
+## Captures et stream
+
+DCS s'étend sur l'écran principal **et** sur l'écran virtuel : sa fenêtre
+fait deux écrans de large (5120 × 1440 pour deux écrans de 2560 × 1440).
+Tout ce qui la prend en entier montre aussi l'écran virtuel.
+
+- **Captures** : tant que DCS Tablette tourne, chaque nouvelle capture de
+  toute la fenêtre de DCS est recadrée d'elle-même sur l'écran principal, à
+  la même qualité — F12 de Steam, *Impr. écran* dans DCS, *Win + Impr. écran*,
+  Game Bar. Les captures d'une zone et les anciennes ne sont pas touchées ;
+  `--captures-entieres` les garde entières.
+- **Stream** : une fenêtre se partage en entier, rien ne peut la recadrer en
+  direct. Partager l'**écran** principal, pas l'application : dans Discord,
+  *Partager votre écran* → onglet *Écrans* → l'écran principal (pas
+  *Applications* → DCS) ; dans OBS, *Capture d'écran* de l'écran principal,
+  ou *Capture de jeu* avec un filtre *Rogner/Remplir* (à droite : la largeur
+  de l'écran virtuel).
 
 ## Appareil détecté ou choisi
 
@@ -228,6 +254,8 @@ D'abord, le diagnostic ci-dessus. Les cas les plus fréquents :
   apparaît quand vous l'ouvrez : *PC* (une fenêtre le recopie en bas à
   droite de l'écran principal) ou *Tablette* (elle bascule dessus, rien sur
   le PC). Si la tablette se déconnecte, il revient sur le PC au bout de 10 s.
+- **Un stream ou une capture montre deux écrans côte à côte** : voir
+  [Captures et stream](#captures-et-stream).
 - **La tablette montre une ancienne version après une mise à jour** : à
   partir de la 1.2.1 elle se recharge seule ; avant, fermer l'app (ou
   l'onglet) et la rouvrir.

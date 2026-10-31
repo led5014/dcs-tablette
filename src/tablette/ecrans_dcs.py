@@ -169,24 +169,36 @@ def _evaluer(expression: str, largeur: int, hauteur: int) -> float:
     return calculer(ast.parse(texte.strip(), mode="eval"))
 
 
+def _lire_bloc(texte: str, nom: str, largeur: int, hauteur: int) -> Optional[Rect]:
+    bloc = re.search(rf"^\s*{nom}\s*=\s*\{{(.*?)\}}", texte, re.M | re.S)
+    if not bloc:
+        return None
+    valeurs = {}
+    for cle in ("x", "y", "width", "height"):
+        m = re.search(rf"\b{cle}\s*=\s*([^;,\n]+)", bloc.group(1))
+        if m:
+            try:
+                valeurs[cle] = round(_evaluer(m.group(1), largeur, hauteur))
+            except (ValueError, SyntaxError, ZeroDivisionError):
+                pass
+    if len(valeurs) == 4 and valeurs["width"] > 0 and valeurs["height"] > 0:
+        return valeurs["x"], valeurs["y"], valeurs["width"], valeurs["height"]
+    return None
+
+
 def lire_zones(texte: str, largeur: int, hauteur: int) -> Dict[str, Rect]:
     """Zones d'export définies dans un fichier MonitorSetup."""
     zones = {}
     for nom in EXPORTS:
-        bloc = re.search(rf"^\s*{nom}\s*=\s*\{{(.*?)\}}", texte, re.M | re.S)
-        if not bloc:
-            continue
-        valeurs = {}
-        for cle in ("x", "y", "width", "height"):
-            m = re.search(rf"\b{cle}\s*=\s*([^;,\n]+)", bloc.group(1))
-            if m:
-                try:
-                    valeurs[cle] = round(_evaluer(m.group(1), largeur, hauteur))
-                except (ValueError, SyntaxError, ZeroDivisionError):
-                    pass
-        if len(valeurs) == 4 and valeurs["width"] > 0 and valeurs["height"] > 0:
-            zones[nom] = (valeurs["x"], valeurs["y"], valeurs["width"], valeurs["height"])
+        zone = _lire_bloc(texte, nom, largeur, hauteur)
+        if zone:
+            zones[nom] = zone
     return zones
+
+
+def lire_vue(texte: str, largeur: int, hauteur: int) -> Optional[Rect]:
+    """La vue principale (Center) d'un fichier MonitorSetup."""
+    return _lire_bloc(texte, "Center", largeur, hauteur)
 
 
 def _option(texte: str, cle: str) -> Optional[str]:

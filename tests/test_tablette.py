@@ -1698,7 +1698,7 @@ class TestMiseAJour(unittest.TestCase):
             telecharger(dict(publiee, empreinte=hashlib.sha256(sans_exe).hexdigest()),
                         Path(dossier), lambda url, timeout: self.reponse(sans_exe))
 
-    def proposer(self, reponse, publiee):
+    def appliquer(self, publiee, telecharger=None):
         from unittest import mock
 
         from tablette import mise_a_jour
@@ -1707,28 +1707,37 @@ class TestMiseAJour(unittest.TestCase):
         self.addCleanup(temp.cleanup)
         with mock.patch.object(sys, "frozen", True, create=True), \
                 mock.patch.object(mise_a_jour.tempfile, "mkdtemp", lambda prefix: temp.name), \
-                mock.patch.object(mise_a_jour, "telecharger",
-                                  lambda p, d: d / "extrait" / "DCS-Tablette"), \
+                mock.patch.object(mise_a_jour, "telecharger", telecharger or (
+                    lambda p, d: d / "extrait" / "DCS-Tablette")), \
                 mock.patch.object(mise_a_jour, "lancer_remplacement",
                                   lambda *a: lances.append(a)):
-            relance = mise_a_jour.proposer(lignes.append, lambda q: reponse, publiee)
+            relance = mise_a_jour.appliquer(lignes.append, publiee)
         return relance, lances, "\n".join(lignes)
 
-    def test_proposee_et_lancee_seulement_avec_accord(self):
+    def test_installee_sans_rien_demander(self):
+        """Demande du 31/10/2026 : la mise à jour la plus simple possible.
+        Jusqu'à la 1.8.0, la question O/n passait souvent sans réponse."""
         from tablette.mise_a_jour import derniere_version
         publiee = derniere_version(lambda r, timeout: self.reponse(self.publication()))
-        relance, lances, texte = self.proposer("", publiee)
+        relance, lances, texte = self.appliquer(publiee)
         self.assertTrue(relance)
         self.assertEqual(len(lances), 1)
         self.assertIn("9.0.0", texte)
         self.assertIn("Une nouveauté", texte)
-        relance, lances, texte = self.proposer("n", publiee)
-        self.assertEqual((relance, lances), (False, []))
-        self.assertIn("reproposera", texte)
-        relance, lances, _ = self.proposer(None, publiee)          # pas de console
-        self.assertEqual((relance, lances), (False, []))
+        self.assertNotIn("[O/n]", texte)
         a_jour = dict(publiee, version="0.1")
-        self.assertEqual(self.proposer("", a_jour)[:2], (False, []))
+        self.assertEqual(self.appliquer(a_jour)[:2], (False, []))
+        self.assertEqual(self.appliquer(None)[:2], (False, []))       # GitHub muet
+
+    def test_telechargement_rate_on_demarre_quand_meme(self):
+        from tablette.mise_a_jour import derniere_version
+        publiee = derniere_version(lambda r, timeout: self.reponse(self.publication()))
+
+        def rate(p, d):
+            raise OSError("empreinte différente")
+        relance, lances, texte = self.appliquer(publiee, rate)
+        self.assertEqual((relance, lances), (False, []))
+        self.assertIn("On continue avec la", texte)
 
     def test_le_script_de_remplacement_passe_tout_par_l_environnement(self):
         from tablette.mise_a_jour import REMPLACER
@@ -1783,34 +1792,6 @@ class TestMiseAJour(unittest.TestCase):
             self.assertIsNone(derniere_version(ouvrir))
         self.assertIsNone(derniere_version(lambda r, timeout: self.reponse(b"[1, 2]")))
         self.assertIsNone(derniere_version(lambda r, timeout: self.reponse(b'{"tag_name": 5}')))
-
-    def clavier(self, touches):
-        """Un faux msvcrt qui rend `touches` une à une, et une console."""
-        import types
-        from unittest import mock
-        touches = list(touches)
-        faux = types.SimpleNamespace(kbhit=lambda: bool(touches),
-                                     getwche=lambda: touches.pop(0))
-        console = mock.Mock()
-        console.isatty.return_value = True
-        return mock.patch.dict(sys.modules, {"msvcrt": faux}), mock.patch.object(sys, "stdin", console)
-
-    def test_question_qui_n_attend_pas_indefiniment(self):
-        """Relancé en vol (retour du 30/10 : DCS ouvert, rien n'était proposé),
-        la question attend un moment puis DCS Tablette démarre quand même."""
-        import contextlib
-
-        from tablette.mise_a_jour import demander_un_temps
-        modules, stdin = self.clavier("o\r")
-        with modules, stdin, contextlib.redirect_stdout(io.StringIO()):
-            self.assertEqual(demander_un_temps("? ", 2), "o")
-        modules, stdin = self.clavier("")
-        sortie = io.StringIO()
-        debut = time.monotonic()
-        with modules, stdin, contextlib.redirect_stdout(sortie):
-            self.assertIsNone(demander_un_temps("? ", 0.3))
-        self.assertLess(time.monotonic() - debut, 2)
-        self.assertIn("sans mettre à jour", sortie.getvalue())
 
     def test_derniere_version_bornee_dans_le_temps(self):
         from unittest import mock
@@ -1873,6 +1854,7 @@ class TestDesinstallation(unittest.TestCase):
         ouverts, questions = [1, 1, 0], []
         with tempfile.TemporaryDirectory() as dossier, \
                 mock.patch.object(installation, "dossier_bureau", lambda: Path(dossier)), \
+                mock.patch.object(installation, "dossier_menu", lambda: Path(dossier)), \
                 mock.patch.object(installation, "fichier_choix",
                                   lambda: Path(dossier) / "installation.json"), \
                 contextlib.redirect_stdout(io.StringIO()):
@@ -1881,6 +1863,290 @@ class TestDesinstallation(unittest.TestCase):
         self.assertEqual(ouverts, [])
         self.assertEqual(len(questions), 2)
         self.assertIn("encore ouvert", questions[0])
+
+    def test_depuis_windows_efface_le_programme_et_son_entree(self):
+        """Paramètres → Applications installées → Désinstaller : tout part,
+        programme compris, et la fenêtre attend qu'on l'ait lue."""
+        import contextlib
+        from unittest import mock
+
+        from tablette import installation
+        effaces, questions = [], []
+        sortie = io.StringIO()
+        with tempfile.TemporaryDirectory() as dossier:
+            dossier = Path(dossier)
+            programme = dossier / "Programs" / "DCS-Tablette"
+            programme.mkdir(parents=True)
+            (dossier / installation.RACCOURCI).write_bytes(b"L")
+            with mock.patch.object(sys, "frozen", True, create=True), \
+                    mock.patch.object(sys, "executable", str(programme / installation.EXE)), \
+                    mock.patch.object(installation, "dossier_bureau", lambda: dossier), \
+                    mock.patch.object(installation, "dossier_menu", lambda: dossier), \
+                    mock.patch.object(installation, "fichier_choix",
+                                      lambda: dossier / "installation.json"), \
+                    mock.patch.object(installation, "oublier", lambda: True), \
+                    mock.patch.object(installation, "effacer_programme_apres", effaces.append), \
+                    contextlib.redirect_stdout(sortie):
+                installation.desinstaller(dossier, demander=questions.append,
+                                          autres=lambda: 0, attendre=True)
+            self.assertFalse((dossier / installation.RACCOURCI).exists())
+        self.assertEqual(effaces, [programme])
+        self.assertIn("Applications installées", sortie.getvalue())
+        self.assertIn("Entrée pour fermer", questions[-1])
+
+
+class TestProgramme(unittest.TestCase):
+    """Le programme à sa place (%LOCALAPPDATA%\\Programs\\DCS-Tablette), ses
+    raccourcis, son entrée dans Windows : tout dans des dossiers temporaires,
+    jamais ceux du poste ni le registre."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.racine = Path(self.tmp.name)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def zip_extrait(self, dossier: Path) -> Path:
+        from tablette.installation import EXE
+        (dossier / "_internal").mkdir(parents=True)
+        (dossier / "_internal" / "python312.dll").write_text("dll")
+        for nom in (EXE, "Installer.bat", "Desinstaller.bat", "LISEZ-MOI.txt"):
+            (dossier / nom).write_text(nom)
+        return dossier
+
+    def test_installe_pour_l_utilisateur_seul(self):
+        from unittest import mock
+
+        from tablette.installation import dossier_programme
+        with mock.patch.dict(os.environ, {"LOCALAPPDATA": str(self.racine)}):
+            self.assertEqual(dossier_programme(), self.racine / "Programs" / "DCS-Tablette")
+
+    def test_copie_ce_que_le_zip_a_pose_et_rien_d_autre(self):
+        from tablette.installation import LIVRES, copier_programme
+        source = self.zip_extrait(self.racine / "Téléchargements" / "DCS-Tablette (1)")
+        (source / "notes à moi.txt").write_text("perso")
+        cible = self.racine / "Programs" / "DCS-Tablette"
+        self.assertTrue(copier_programme(source, cible))
+        self.assertEqual(sorted(p.name for p in cible.iterdir()), sorted(LIVRES))
+        self.assertEqual((cible / "_internal" / "python312.dll").read_text(), "dll")
+        self.assertFalse(copier_programme(cible, cible))          # déjà à sa place
+
+    def test_le_dossier_extrait_demarre_l_installe(self):
+        from tablette.installation import EXE, exe_installe
+        extrait = self.zip_extrait(self.racine / "extrait") / EXE
+        programme = self.racine / "Programs" / "DCS-Tablette"
+        self.assertIsNone(exe_installe(extrait, programme))       # pas encore installé
+        self.zip_extrait(programme)
+        self.assertEqual(exe_installe(extrait, programme), programme / EXE)
+        self.assertIsNone(exe_installe(programme / EXE, programme))   # c'est lui qui tourne
+
+    def test_installation_copie_pose_les_raccourcis_et_l_entree(self):
+        import contextlib
+        from unittest import mock
+
+        from tablette import installation
+        extrait = self.zip_extrait(self.racine / "extrait")
+        programme = self.racine / "Programs" / "DCS-Tablette"
+        raccourcis, entrees = [], []
+        with mock.patch.object(sys, "frozen", True, create=True), \
+                mock.patch.object(sys, "executable", str(extrait / installation.EXE)), \
+                mock.patch.object(installation, "dossier_programme", lambda: programme), \
+                mock.patch.object(installation, "dossier_bureau", lambda: self.racine / "Bureau"), \
+                mock.patch.object(installation, "dossier_menu", lambda: self.racine / "Menu"), \
+                mock.patch.object(installation, "creer_raccourci",
+                                  lambda cible, dossier: raccourcis.append((cible, dossier))), \
+                mock.patch.object(installation, "enregistrer", entrees.append), \
+                contextlib.redirect_stdout(io.StringIO()):
+            exe = installation.installer_programme(lambda q: "", lambda: 0)
+        self.assertEqual(exe, programme / installation.EXE)
+        self.assertTrue(exe.exists())
+        self.assertEqual(raccourcis, [(exe, self.racine / "Bureau"), (exe, self.racine / "Menu")])
+        self.assertEqual(entrees, [programme])
+
+    def test_entree_des_applications_installees(self):
+        from tablette import VERSION
+        from tablette.installation import valeurs_windows
+        valeurs = valeurs_windows(Path("C:/Users/Jean & Marie/Programs/DCS-Tablette"))
+        self.assertEqual(valeurs["DisplayVersion"], VERSION)
+        self.assertEqual(valeurs["UninstallString"],
+                         f'"{Path("C:/Users/Jean & Marie/Programs/DCS-Tablette/DCS-Tablette.exe")}"'
+                         " desinstaller --attendre")
+        self.assertEqual((valeurs["NoModify"], valeurs["NoRepair"]), (1, 1))
+
+    def test_entree_ecrite_sous_hkcu(self):
+        """Un faux winreg : le vrai registre du poste n'est jamais touché."""
+        import contextlib
+        import types
+        from unittest import mock
+
+        from tablette import installation
+        ecrites, cles = {}, []
+        faux = types.SimpleNamespace(
+            HKEY_CURRENT_USER="HKCU", KEY_SET_VALUE=2, REG_SZ=1, REG_DWORD=4,
+            CreateKeyEx=lambda racine, cle, reserve, acces: cles.append((racine, cle))
+            or contextlib.nullcontext("cle"),
+            SetValueEx=lambda cle, nom, reserve, type_, valeur: ecrites.update(
+                {nom: (type_, valeur)}))
+        programme = self.zip_extrait(self.racine / "DCS-Tablette")
+        with mock.patch.dict(sys.modules, {"winreg": faux}):
+            installation.enregistrer(programme)
+        self.assertEqual(cles, [("HKCU", installation.CLE_WINDOWS)])
+        self.assertEqual(ecrites["DisplayName"], (1, "DCS Tablette"))
+        self.assertEqual(ecrites["NoRepair"], (4, 1))
+        self.assertEqual(ecrites["EstimatedSize"][0], 4)
+
+    def test_menu_demarrer_complete_au_lancement(self):
+        """Installé avant la 1.9.0 : le raccourci du menu Démarrer arrive au
+        lancement suivant, l'entrée de Windows suit la version."""
+        from unittest import mock
+
+        from tablette import installation
+        menu, poses, entrees = self.racine / "Menu", [], []
+        menu.mkdir()
+        exe = self.zip_extrait(self.racine / "DCS-Tablette") / installation.EXE
+        with mock.patch.object(installation, "dossier_menu", lambda: menu), \
+                mock.patch.object(installation, "enregistrer", entrees.append), \
+                mock.patch.object(installation, "creer_raccourci",
+                                  lambda cible, dossier: poses.append(cible)
+                                  or (dossier / installation.RACCOURCI).write_bytes(b"L")):
+            self.assertIn("menu Démarrer", "".join(installation.tenir_a_jour(exe)))
+            self.assertEqual(installation.tenir_a_jour(exe), [])       # déjà là
+        self.assertEqual(poses, [exe])
+        self.assertEqual(entrees, [exe.parent, exe.parent])
+
+    @unittest.skipUnless(sys.platform == "win32", "cmd")
+    def test_le_script_d_effacement_ne_prend_que_le_programme(self):
+        """Exécuté pour de vrai par cmd, dans un dossier au nom retors : les
+        fichiers du zip partent, ce que le pilote y a mis reste, et le
+        dossier ne part que vide."""
+        import subprocess
+
+        from tablette.installation import EFFACER
+        from tablette.mise_a_jour import commande
+        self.assertTrue(EFFACER.isascii())
+        programme = self.zip_extrait(self.racine / "Pilote & Co (1) – été" / "DCS-Tablette")
+        (programme / "garde.txt").write_text("à moi")
+
+        def effacer():
+            script = self.racine / "effacer.bat"
+            script.write_text(EFFACER.replace("\n", "\r\n"), encoding="ascii")
+            env = dict(os.environ, DT_PID="999999", DT_DOSSIER=str(programme))    # déjà fermé
+            sortie = subprocess.run(commande(script), env=env, capture_output=True, timeout=60)
+            self.assertEqual(sortie.returncode, 0, sortie.stdout + sortie.stderr)
+            self.assertFalse(script.exists())                       # il s'efface aussi
+
+        effacer()
+        self.assertEqual([p.name for p in programme.iterdir()], ["garde.txt"])
+        (programme / "garde.txt").unlink()
+        effacer()
+        self.assertFalse(programme.exists())
+
+
+class TestCaptures(unittest.TestCase):
+    """Les captures de DCS recadrées sur l'écran principal, dans un faux
+    Saved Games et de faux dossiers de captures."""
+
+    def setUp(self):
+        from tablette.ecrans_dcs import NOM_FICHIER, disposition_second_ecran, generer
+        self.tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.saved = Path(self.tmp.name) / "DCS"
+        (self.saved / "Config" / "MonitorSetup").mkdir(parents=True)
+        self.options(5120)
+        (self.saved / "Config" / "MonitorSetup" / NOM_FICHIER).write_text(
+            generer((0, 0, 2560, 1440), disposition_second_ecran(2560, 1440, 2560, 1440),
+                    "essai"), encoding="ascii")
+        self.steam = Path(self.tmp.name) / "Steam" / "223750" / "screenshots"
+        (self.steam / "thumbnails").mkdir(parents=True)
+        self.maintenant = time.time()
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def options(self, largeur, choix="tablette"):
+        (self.saved / "Config" / "options.lua").write_text(
+            f'["multiMonitorSetup"] = "{choix}",\n["width"] = {largeur},\n'
+            '["height"] = 1440,\n', encoding="utf-8")
+
+    def capture(self, nom, taille=(5120, 1440), age=5.0, format_="JPEG", dossier=None):
+        """La vue en rouge, l'écran virtuel en bleu."""
+        from PIL import Image, ImageDraw
+        image = Image.new("RGB", taille, (200, 20, 20))
+        if taille[0] > 2560:
+            ImageDraw.Draw(image).rectangle((2560, 0, taille[0], taille[1]), fill=(20, 20, 200))
+        chemin = (dossier or self.steam) / nom
+        image.save(chemin, format_, **({"quality": 90} if format_ == "JPEG" else {}))
+        os.utime(chemin, (self.maintenant - age, self.maintenant - age))
+        return chemin
+
+    def captures(self, *dossiers, depuis=None):
+        from tablette.captures import Captures
+        return Captures(self.saved, lambda: list(dossiers) or [self.steam],
+                        depuis=self.maintenant - 60 if depuis is None else depuis)
+
+    def test_vue_principale_seulement_avec_l_ecran_virtuel(self):
+        from tablette.captures import vue_a_rogner
+        from tablette.ecrans_dcs import NOM_FICHIER, disposition_essai, generer
+        self.assertEqual(vue_a_rogner(self.saved), ((0, 0, 2560, 1440), (5120, 1440)))
+        self.options(2560, "1camera")                        # configuration de DCS
+        self.assertIsNone(vue_a_rogner(self.saved))
+        self.options(2560)                                   # mode essai : rien à couper
+        (self.saved / "Config" / "MonitorSetup" / NOM_FICHIER).write_text(
+            generer((0, 0, 2560, 1440), disposition_essai(2560, 1440), "Essai"), encoding="ascii")
+        self.assertIsNone(vue_a_rogner(self.saved))
+
+    def test_capture_steam_recadree_a_la_meme_qualite(self):
+        """Vu le 31/10/2026 : F12 de Steam en 5120 × 1440, moitié droite noire."""
+        from PIL import Image
+        chemin = self.capture("20261031153051_1.jpg")
+        Image.new("RGB", (200, 56)).save(self.steam / "thumbnails" / chemin.name)
+        with Image.open(chemin) as avant:
+            tables = avant.quantization
+        self.assertEqual(self.captures().tour(self.maintenant), [chemin])
+        with Image.open(chemin) as apres:
+            self.assertEqual(apres.size, (2560, 1440))
+            self.assertEqual(apres.quantization, tables)
+            r, g, b = apres.getpixel((2550, 700))
+            self.assertGreater(r, 150)                       # la vue, pas l'écran virtuel
+        self.assertAlmostEqual(chemin.stat().st_mtime, self.maintenant - 5, delta=0.01)
+        with Image.open(self.steam / "thumbnails" / chemin.name) as vignette:
+            self.assertEqual(vignette.size, (200, 112))     # comme celles de Steam en 16:9
+        self.assertEqual(sorted(p.name for p in self.steam.iterdir()),
+                         [chemin.name, "thumbnails"])        # aucun fichier temporaire
+
+    def test_seulement_les_nouvelles_a_la_taille_de_dcs(self):
+        from PIL import Image
+        ancienne = self.capture("ancienne.jpg", age=3600)
+        zone = self.capture("zone.png", taille=(800, 600), format_="PNG")
+        bureau = self.capture("Capture d'écran.png", format_="PNG")
+        captures = self.captures()
+        self.assertEqual(captures.tour(self.maintenant), [bureau])
+        for chemin, taille in ((ancienne, (5120, 1440)), (zone, (800, 600)),
+                               (bureau, (2560, 1440))):
+            with Image.open(chemin) as image:
+                self.assertEqual(image.size, taille, chemin.name)
+        self.assertEqual(captures.tour(self.maintenant), [])        # une fois chacune
+
+    def test_capture_en_cours_d_ecriture_reprise_plus_tard(self):
+        chemin = self.capture("en_cours.jpg")
+        entiere = chemin.read_bytes()
+        chemin.write_bytes(entiere[:len(entiere) // 3])
+        os.utime(chemin, (self.maintenant - 5, self.maintenant - 5))
+        captures = self.captures()
+        self.assertEqual(captures.tour(self.maintenant), [])
+        trop_jeune = self.capture("trop_jeune.jpg", age=0.2)
+        self.assertEqual(captures.tour(self.maintenant), [])
+        chemin.write_bytes(entiere)
+        os.utime(chemin, (self.maintenant - 5, self.maintenant - 5))
+        self.assertEqual(sorted(captures.tour(self.maintenant + 2)), sorted([chemin, trop_jeune]))
+
+    def test_rien_en_mode_essai(self):
+        from PIL import Image
+        self.options(2560, "1camera")
+        chemin = self.capture("essai.jpg")
+        self.assertEqual(self.captures().tour(self.maintenant), [])
+        with Image.open(chemin) as image:
+            self.assertEqual(image.size, (5120, 1440))
 
 
 LUA_DCS = Path("C:/Program Files (x86)/Steam/steamapps/common/DCSWorld/bin/lua.dll")

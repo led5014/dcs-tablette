@@ -1,4 +1,4 @@
-"""Installation dans DCS : les scripts Lua, la ligne d'Export.lua, les écrans.
+r"""Installation dans DCS : les scripts Lua, la ligne d'Export.lua, les écrans.
 
 Sert à l'exécutable (`DCS-Tablette.exe installer`, `desinstaller`) comme aux
 scripts du dépôt (`scripts/installer_dcs.py`, `scripts/configurer_ecrans_dcs.py`).
@@ -14,7 +14,10 @@ Ce qui est touché, et rien d'autre :
   « Tablette DCS » ;
 - Saved Games/DCS/Config/options.lua, DCS fermé seulement : configuration
   d'écrans, résolution, fenêtré (copie de l'original à côté) ;
-- le raccourci « DCS Tablette » sur le bureau, depuis l'exécutable seulement.
+- depuis l'exécutable seulement : le programme copié dans
+  %LOCALAPPDATA%\Programs\DCS-Tablette, les raccourcis « DCS Tablette » du
+  bureau et du menu Démarrer, et son entrée dans Paramètres → Applications
+  installées, d'où il se désinstalle.
 Jamais le dossier d'installation de DCS : le contrôle d'intégrité du
 multijoueur ne voit rien.
 """
@@ -26,10 +29,13 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
+import uuid
 from datetime import date
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Sequence, Tuple
 
+from . import VERSION
 from .capture import moniteurs
 from .config import BUREAU, dossier_windows
 from .ecrans_dcs import (NOM_AFFICHE, NOM_FICHIER, PasDExport, disposition, disposition_essai,
@@ -43,6 +49,14 @@ LIGNE = ("pcall(function() local dt_lfs=require('lfs'); "
          "dofile(dt_lfs.writedir()..[[Scripts\\DCS-Tablette-Export.lua]]) end)")
 ANCIENS = ("tablette_hornet.lua", "tablette_hornet.lua.precedent")
 VDD = "https://github.com/VirtualDrivers/Virtual-Display-Driver"
+PROGRAMME = "DCS-Tablette"
+EXE = f"{PROGRAMME}.exe"
+# Ce que le zip pose dans le dossier du programme : copié à l'installation,
+# et seul effacé à la désinstallation — rien d'autre de ce dossier.
+LIVRES = (EXE, "_internal", "Installer.bat", "Desinstaller.bat", "LISEZ-MOI.txt")
+CLE_WINDOWS = rf"Software\Microsoft\Windows\CurrentVersion\Uninstall\{PROGRAMME}"
+MENU_DEMARRER = uuid.UUID("A77F5D77-2E2B-44C3-A6A2-ABA601054A51")      # FOLDERID_Programs
+DEPOT = "https://github.com/led5014/dcs-tablette"
 
 Moniteur = Tuple[int, int, int, int, bool]      # x, y, largeur, hauteur, principal
 
@@ -417,6 +431,176 @@ def creer_raccourci(cible: Path, dossier: Optional[Path] = None) -> Path:
     return lien
 
 
+# ------------------------------------------------------------ le programme
+#
+# Installé pour l'utilisateur seul, comme VS Code ou Discord : sans droits
+# d'administrateur, et la mise à jour peut y écrire. Le zip s'extrait donc
+# n'importe où (Téléchargements convient) : l'installation copie le programme
+# à sa place, et le dossier extrait peut ensuite partir. Jusqu'à la 1.8.0, le
+# programme restait là où on avait extrait le zip, « là où il restera ».
+
+# Lancé par cmd une fois DCS Tablette fermé (un exécutable qui tourne ne
+# peut pas s'effacer). PING pour attendre : sans console, timeout.exe refuse.
+EFFACER = r"""@echo off
+set "SYS=%SystemRoot%\System32"
+:attente
+"%SYS%\tasklist.exe" /FI "PID eq %DT_PID%" /NH | "%SYS%\find.exe" "%DT_PID%" >nul
+if errorlevel 1 goto efface
+"%SYS%\PING.EXE" -n 2 127.0.0.1 >nul
+goto attente
+:efface
+rem Le temps que Desinstaller.bat, qui a lance l'exe, finisse de se lire.
+"%SYS%\PING.EXE" -n 3 127.0.0.1 >nul
+""" + "".join(
+    f'rmdir /s /q "%DT_DOSSIER%\\{nom}" 2>nul\n' if "." not in nom
+    else f'del /f /q "%DT_DOSSIER%\\{nom}" 2>nul\n' for nom in LIVRES) + r"""rmdir "%DT_DOSSIER%" 2>nul
+(goto) 2>nul & del /f /q "%~f0"
+"""
+
+
+def dossier_programme() -> Path:
+    racine = os.environ.get("LOCALAPPDATA")
+    return ((Path(racine) if racine else Path.home() / "AppData" / "Local")
+            / "Programs" / PROGRAMME)
+
+
+def dossier_menu() -> Path:
+    racine = os.environ.get("APPDATA")
+    return dossier_windows(MENU_DEMARRER) or (
+        (Path(racine) if racine else Path.home() / "AppData" / "Roaming")
+        / "Microsoft" / "Windows" / "Start Menu" / "Programs")
+
+
+def meme_fichier(a: Path, b: Path) -> bool:
+    try:
+        return os.path.samefile(a, b)
+    except OSError:
+        return False
+
+
+def copier_programme(source: Path, cible: Path) -> bool:
+    """Copie dans `cible` ce que le zip a posé dans `source`. False s'il y est déjà."""
+    if meme_fichier(source, cible):
+        return False
+    cible.mkdir(parents=True, exist_ok=True)
+    for nom in LIVRES:
+        de = source / nom
+        if de.is_dir():
+            shutil.copytree(de, cible / nom, dirs_exist_ok=True)
+        elif de.is_file():
+            shutil.copy2(de, cible / nom)
+    return True
+
+
+def exe_installe(courant: Optional[Path] = None,
+                 dossier: Optional[Path] = None) -> Optional[Path]:
+    """Le DCS-Tablette.exe installé, s'il existe et n'est pas celui qui
+    tourne : lancé depuis le dossier extrait du zip, c'est lui qu'on démarre
+    — c'est aussi lui que les mises à jour tiennent à jour."""
+    exe = (dossier or dossier_programme()) / EXE
+    courant = courant or Path(sys.executable)
+    return exe if exe.is_file() and not meme_fichier(exe, courant) else None
+
+
+def lancer(exe: Path, arguments: Sequence[str] = ()) -> None:
+    """DCS Tablette dans sa propre fenêtre."""
+    subprocess.Popen([str(exe), *arguments], cwd=str(exe.parent), close_fds=True,
+                     creationflags=getattr(subprocess, "CREATE_NEW_CONSOLE", 0))
+
+
+def valeurs_windows(dossier: Path, version: str = VERSION) -> Dict[str, object]:
+    """L'entrée de Paramètres → Applications installées."""
+    exe = dossier / EXE
+    return {"DisplayName": "DCS Tablette", "DisplayVersion": version,
+            "Publisher": "led5014", "DisplayIcon": f"{exe},0",
+            "InstallLocation": str(dossier), "URLInfoAbout": DEPOT,
+            "UninstallString": f'"{exe}" desinstaller --attendre',
+            "NoModify": 1, "NoRepair": 1}
+
+
+def enregistrer(dossier: Path) -> None:
+    """Inscrit, ou remet à jour, l'entrée de DCS Tablette dans Applications
+    installées. Sous HKEY_CURRENT_USER : pas besoin d'administrateur."""
+    import winreg
+    taille = sum(f.stat().st_size for f in dossier.rglob("*") if f.is_file()) // 1024
+    with winreg.CreateKeyEx(winreg.HKEY_CURRENT_USER, CLE_WINDOWS, 0,
+                            winreg.KEY_SET_VALUE) as cle:
+        for nom, valeur in dict(valeurs_windows(dossier), EstimatedSize=taille).items():
+            winreg.SetValueEx(cle, nom, 0, winreg.REG_DWORD if isinstance(valeur, int)
+                              else winreg.REG_SZ, valeur)
+
+
+def oublier() -> bool:
+    """Retire l'entrée d'Applications installées. True si elle y était."""
+    import winreg
+    try:
+        winreg.DeleteKey(winreg.HKEY_CURRENT_USER, CLE_WINDOWS)
+        return True
+    except OSError:
+        return False
+
+
+def tenir_a_jour(exe: Path) -> List[str]:
+    """À chaque lancement de l'exécutable : l'entrée de Windows à la version
+    qui tourne (celle d'une mise à jour comprise), et le raccourci du menu
+    Démarrer s'il manque (installé avant la 1.9.0). Ne lève jamais."""
+    lignes = []
+    try:
+        enregistrer(exe.parent)
+    except (OSError, ImportError) as e:
+        lignes.append(f"Entrée dans Applications installées non mise à jour ({e}).")
+    if not (dossier_menu() / RACCOURCI).exists():
+        try:
+            creer_raccourci(exe, dossier_menu())
+            lignes.append("Raccourci « DCS Tablette » ajouté au menu Démarrer.")
+        except (OSError, subprocess.SubprocessError):
+            pass
+    return lignes
+
+
+def installer_programme(demander: Callable[[str], Optional[str]],
+                        autres: Callable[[], int]) -> Path:
+    """Le programme à sa place, ses deux raccourcis et son entrée dans
+    Windows. Rend l'exe installé, ou celui qui tourne si la copie a échoué."""
+    source, cible = Path(sys.executable).parent, dossier_programme()
+    exe = cible / EXE
+    if not meme_fichier(source, cible):
+        # Un DCS Tablette ouvert depuis l'installation tient ses fichiers.
+        while autres():
+            reponse = demander("  DCS Tablette est ouvert. Ferme sa fenêtre, puis appuie "
+                               "sur Entrée (ou tape p pour passer) : ")
+            if reponse is None or reponse.strip().lower() == "p":
+                break
+        try:
+            copier_programme(source, cible)
+            print(f"\nProgramme installé dans {cible}.")
+            print("Le dossier extrait du zip ne sert plus : il peut être supprimé.")
+        except OSError as e:
+            print(f"\nProgramme non copié dans {cible} ({e}) : il reste ici, {source}.")
+            exe = Path(sys.executable)
+    for dossier, ou in ((dossier_bureau(), "le bureau"), (dossier_menu(), "le menu Démarrer")):
+        try:
+            creer_raccourci(exe, dossier)
+        except (OSError, subprocess.SubprocessError) as e:
+            print(f"Raccourci sur {ou} non créé ({e}).")
+    try:
+        enregistrer(exe.parent)
+    except OSError as e:
+        print(f"Entrée dans Applications installées non créée ({e}).")
+    return exe
+
+
+def effacer_programme_apres(dossier: Path) -> None:
+    """Efface les fichiers du programme (LIVRES, rien d'autre) une fois DCS
+    Tablette fermé, puis le dossier s'il est alors vide."""
+    from .mise_a_jour import commande
+    script = Path(tempfile.gettempdir()) / "dcs-tablette-desinstallation.bat"
+    script.write_text(EFFACER.replace("\n", "\r\n"), encoding="ascii")
+    subprocess.Popen(commande(script), close_fds=True,
+                     env=dict(os.environ, DT_PID=str(os.getpid()), DT_DOSSIER=str(dossier)),
+                     creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+
+
 def demander(question: str) -> Optional[str]:
     """La réponse tapée dans la console, None si personne ne peut répondre."""
     try:
@@ -429,9 +613,12 @@ def installer(saved_games: Path, essai: bool = False,
               demander: Callable[[str], Optional[str]] = demander,
               ouvert: Callable[[], bool] = dcs_ouvert,
               lister_ecrans: Optional[Callable[[], list]] = None,
-              chemin_choix: Optional[Path] = None) -> int:
+              chemin_choix: Optional[Path] = None,
+              demarrer: bool = False) -> int:
     """`DCS-Tablette.exe installer` : écran virtuel, scripts, écrans de DCS,
-    raccourci. Fait tout ce qu'il peut, et dit à la main ce qu'il n'a pas pu.
+    programme à sa place et raccourcis, puis, si `demarrer` et que tout est
+    prêt, DCS Tablette lui-même. Fait tout ce qu'il peut, et dit à la main
+    ce qu'il n'a pas pu.
 
     Part de ce que le pilote a déjà : ses écrans (un écran réel n'est jamais
     pris sans son accord, l'écran virtuel va à droite ou dessous selon la
@@ -520,16 +707,18 @@ def installer(saved_games: Path, essai: bool = False,
                                             ouvert, physique=choix["physique"])
         for ligne in lignes:
             print("  " + ligne)
-    lancer = "DCS-Tablette.exe"
-    # Depuis le code source, pas de raccourci : il pointerait vers Python.
+    a_lancer, exe = "DCS-Tablette.exe", None
+    # Depuis le code source, ni copie ni raccourci : ils pointeraient vers Python.
     if getattr(sys, "frozen", False):
-        try:
-            creer_raccourci(Path(sys.executable))
-            lancer = "« DCS Tablette » (raccourci posé sur le bureau)"
-        except (OSError, subprocess.SubprocessError) as e:
-            print(f"\nRaccourci sur le bureau non créé ({e}).")
-    if complet:
-        print(f"\nInstallation terminée. Lance {lancer} et ouvre sur la tablette "
+        exe = installer_programme(demander, autres_instances)
+        a_lancer = "« DCS Tablette » (bureau ou menu Démarrer)"
+    if complet and demarrer and exe and not autres_instances():
+        lancer(exe)
+        print("\nInstallation terminée. DCS Tablette démarre dans sa fenêtre : ouvre sur "
+              "la tablette l'adresse qu'il affiche. Les fois suivantes, lance "
+              f"{a_lancer}.")
+    elif complet:
+        print(f"\nInstallation terminée. Lance {a_lancer} et ouvre sur la tablette "
               "l'adresse qu'il affiche.")
     else:
         print("\nScripts installés ; les écrans restent à régler (voir ci-dessus, et "
@@ -551,23 +740,33 @@ def autres_instances() -> int:
 
 
 def desinstaller(saved_games: Path, demander: Callable[[str], Optional[str]] = demander,
-                 autres: Callable[[], int] = autres_instances) -> int:
-    """`DCS-Tablette.exe desinstaller` : l'inverse d'`installer`."""
+                 autres: Callable[[], int] = autres_instances, attendre: bool = False) -> int:
+    """`DCS-Tablette.exe desinstaller` : l'inverse d'`installer`, programme
+    compris. `attendre` : lancé par Paramètres → Applications installées, la
+    fenêtre se fermerait avant qu'on ait pu la lire."""
     while autres():
         reponse = demander("  DCS Tablette est encore ouvert. Ferme sa fenêtre, puis appuie "
                            "sur Entrée (ou tape p pour passer) : ")
         if reponse is None or reponse.strip().lower() == "p":
             break
     lignes = desinstaller_scripts(saved_games) + retirer_ecrans(saved_games)
-    lien = dossier_bureau() / RACCOURCI
-    for chemin in (lien, fichier_choix()):
+    for chemin in (dossier_bureau() / RACCOURCI, dossier_menu() / RACCOURCI, fichier_choix()):
         if chemin.exists():
             chemin.unlink()
             lignes.append(f"Supprimé : {chemin}")
+    fige = getattr(sys, "frozen", False)
+    if fige and oublier():
+        lignes.append("Retiré de Paramètres → Applications installées.")
     for ligne in lignes or ["Rien à retirer : la tablette n'était pas installée."]:
         print("  " + ligne)
-    print("\nOn peut maintenant supprimer le dossier de DCS Tablette.")
+    if fige:
+        effacer_programme_apres(Path(sys.executable).parent)
+        print("\nLe programme s'efface dès que cette fenêtre se ferme.")
+    else:
+        print("\nOn peut maintenant supprimer le dossier de DCS Tablette.")
     print("L'écran virtuel reste installé : il peut servir à autre chose. Pour le retirer :")
     print("Gestionnaire de périphériques → Cartes graphiques → Virtual Display Driver,")
     print("clic droit → Désinstaller l'appareil.")
+    if attendre:
+        demander("\nAppuie sur Entrée pour fermer cette fenêtre. ")
     return 0

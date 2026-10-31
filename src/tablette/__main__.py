@@ -31,14 +31,16 @@ class SansConnexionCoupee(logging.Filter):
         return not (record.exc_info and isinstance(record.exc_info[1], ConnectionResetError))
 
 
-def servir(local: bool, miroir: bool, mise_a_jour: bool = True) -> int:
+def servir(local: bool, miroir: bool, mise_a_jour: bool = True, captures: bool = True) -> int:
     import uvicorn
 
     from .app import create_app
+    from .captures import Captures, vue_a_rogner
     from .config import Config
     from .dcs import PontDCS
     from .diagnostic import Diagnostic
-    from .installation import installer, premiere_fois
+    from .installation import (demander, exe_installe, installer, lancer, premiere_fois,
+                               tenir_a_jour)
     from .miroir import AffichageKneeboard, Miroir
     from .video import Video
 
@@ -46,22 +48,40 @@ def servir(local: bool, miroir: bool, mise_a_jour: bool = True) -> int:
     logging.getLogger("tablette").setLevel(logging.INFO)
     logging.getLogger("asyncio").addFilter(SansConnexionCoupee())
     cfg = Config()
+    fige = getattr(sys, "frozen", False)
     print(f"DCS Tablette {VERSION}\n")
-    # Une version plus récente ? Proposée avant tout le reste : elle corrige
-    # peut-être ce qui suit. Acceptée, elle remplace l'exe : on se ferme. La
-    # question n'attend que quelques secondes : relancé en plein vol, sans
-    # personne au clavier, DCS Tablette démarre quand même.
+    # Lancé depuis le dossier extrait du zip alors qu'il est installé :
+    # c'est l'installé qui démarre, celui que les mises à jour tiennent à jour.
+    installe = exe_installe() if fige else None
+    if installe:
+        print(f"DCS Tablette est installé dans {installe.parent} : c'est lui qui démarre.")
+        lancer(installe, sys.argv[1:])
+        return 0
+    # Une version plus récente ? Installée avant tout le reste, sans rien
+    # demander : elle corrige peut-être ce qui suit. Elle remplace l'exe :
+    # on se ferme, le script de mise à jour relance la nouvelle.
     publiee = None
-    if mise_a_jour and getattr(sys, "frozen", False):
-        from .mise_a_jour import demander_un_temps, derniere_version, proposer
+    if mise_a_jour and fige:
+        from .mise_a_jour import appliquer, derniere_version
         publiee = derniere_version()
-        if proposer(print, demander_un_temps, publiee):
+        if appliquer(print, publiee):
             return 0
     # Lancé sans être passé par Installer.bat : on installe d'abord.
     if premiere_fois(cfg.saved_games):
         print("Première utilisation : installation.\n")
         installer(cfg.saved_games)
         print()
+        installe = exe_installe() if fige else None
+        if installe:
+            # Copié à sa place : c'est lui qui sert. Cette fenêtre-ci attend
+            # qu'on ait lu ce que l'installation a dit, comme Installer.bat.
+            lancer(installe, sys.argv[1:])
+            demander("DCS Tablette démarre dans sa propre fenêtre. Appuie sur Entrée pour "
+                     "fermer celle-ci. ")
+            return 0
+    if fige:
+        for ligne in tenir_a_jour(Path(sys.executable)):
+            print(ligne)
     pont = PontDCS(cfg.port_ordres, cfg.port_etat)
     pont.demarrer()
     video = Video(cfg.saved_games)
@@ -70,6 +90,14 @@ def servir(local: bool, miroir: bool, mise_a_jour: bool = True) -> int:
     diagnostic.demarrer()
     if miroir:
         Miroir(video, cfg.saved_games, affichage).start()
+    if captures:
+        Captures(cfg.saved_games).start()
+    if vue_a_rogner(cfg.saved_games):
+        # La fenêtre de DCS couvre aussi l'écran virtuel : partagée telle
+        # quelle, elle montre les deux. Les captures, elles, sont recadrées.
+        print("Stream (Discord, OBS) : partager l'écran principal, pas la fenêtre de DCS, "
+              "qui comprend l'écran virtuel." + (" Les captures sont recadrées d'elles-"
+                                                  "mêmes." if captures else "") + "\n")
     if local:
         print(f"Essai local : http://127.0.0.1:{cfg.port_web}")
     else:
@@ -100,12 +128,16 @@ def main(arguments: Optional[List[str]] = None) -> int:
                          help="ne pas recopier le kneeboard sur l'écran du PC")
     options.add_argument("--sans-mise-a-jour", action="store_true",
                          help="ne pas demander à GitHub s'il existe une version plus récente")
+    options.add_argument("--captures-entieres", action="store_true",
+                         help="ne pas recadrer les captures de DCS sur l'écran principal")
     commandes = options.add_subparsers(dest="commande", metavar="{installer,desinstaller}")
     installer = commandes.add_parser("installer",
                                      help="écran virtuel, scripts dans DCS, écrans de DCS")
     installer.add_argument("--essai", action="store_true",
                            help="sans second écran : les écrans en bas de la vue")
-    commandes.add_parser("desinstaller", help="retirer la tablette de DCS")
+    desinstaller = commandes.add_parser("desinstaller", help="retirer la tablette de DCS")
+    desinstaller.add_argument("--attendre", action="store_true",
+                              help="attendre Entrée avant de fermer la fenêtre")
     # Lancée par `installer`, en administrateur : le pilote de l'écran virtuel.
     pilote = commandes.add_parser("pilote-ecran-virtuel")
     pilote.add_argument("--mode", required=True, help="largeurxhauteur@fréquence")
@@ -125,9 +157,10 @@ def main(arguments: Optional[List[str]] = None) -> int:
         from . import installation
         from .config import dossier_saved_games
         if choix.commande == "installer":
-            return installation.installer(dossier_saved_games(), choix.essai)
-        return installation.desinstaller(dossier_saved_games())
-    return servir(choix.local, not choix.sans_miroir, not choix.sans_mise_a_jour)
+            return installation.installer(dossier_saved_games(), choix.essai, demarrer=True)
+        return installation.desinstaller(dossier_saved_games(), attendre=choix.attendre)
+    return servir(choix.local, not choix.sans_miroir, not choix.sans_mise_a_jour,
+                  not choix.captures_entieres)
 
 
 if __name__ == "__main__":
