@@ -288,5 +288,8 @@ Fonctionnement détaillé, choix et pistes écartées : [docs/tablette.md](docs/
 
 ---
 
+Gratuit et open source, sous [licence MIT](LICENSE) : libre d'utiliser, de
+modifier et de redistribuer, en gardant la mention de licence.
+
 Outil communautaire, sans lien avec Eagle Dynamics. DCS World est une marque
 d'Eagle Dynamics SA.
