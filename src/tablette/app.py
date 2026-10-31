@@ -16,7 +16,7 @@ from urllib.parse import quote
 from fastapi import Body, Cookie, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, Response
 
-from . import VERSION, appareils, instruments, planche
+from . import VERSION, appareils, filtres, instruments, planche
 from .appareils import Profil
 from .config import Config
 from .dcs import PontDCS
@@ -234,12 +234,18 @@ def create_app(cfg: Optional[Config] = None, pont: Optional[PontDCS] = None,
         return {"envoye": envoye}
 
     @app.get("/api/video/{ecran_id}")
-    def image_ecran(ecran_id: str, lum: int = 0,
+    def image_ecran(ecran_id: str, lum: int = 0, contraste: int = 0, nettete: int = 0,
+                    definition: int = filtres.DEFINITION_NORMALE, filtre: str = "",
                     choix: Optional[str] = Cookie(None, alias=CHOIX)) -> Response:
         """Dernière image de l'écran. La page en redemande une dès qu'elle a
         affiché la précédente : le débit suit ce que l'iPad absorbe, sans
-        file d'images en retard. `lum` : crans de luminosité réglés sur la
-        tablette pour cet écran (-2 à +5)."""
+        file d'images en retard. Les autres paramètres : réglages de la
+        tablette pour cet écran (filtres.py), bornés. L'en-tête
+        X-Taille-Source donne la taille de l'image que DCS dessine."""
+        try:
+            reglages = filtres.reglages(lum, contraste, nettete, definition, filtre)
+        except ValueError as e:
+            raise HTTPException(status_code=422, detail=str(e))
         if ecran_id == "kneeboard":
             nom = KNEEBOARD
         else:
@@ -248,11 +254,14 @@ def create_app(cfg: Optional[Config] = None, pont: Optional[PontDCS] = None,
                 raise HTTPException(status_code=404, detail="écran inconnu")
             nom = ecran.viewport
         try:
-            contenu = video.image(nom, lum)
+            contenu = video.image(nom, reglages)
         except PasDImage as e:
             raise HTTPException(status_code=503, detail=str(e))
-        return Response(contenu, media_type="image/jpeg",
-                        headers={"Cache-Control": "no-store"})
+        entetes = {"Cache-Control": "no-store"}
+        taille = getattr(video, "tailles", {}).get(nom)
+        if taille:
+            entetes["X-Taille-Source"] = f"{taille[0]}x{taille[1]}"
+        return Response(contenu, media_type="image/jpeg", headers=entetes)
 
     @app.get("/api/planche")
     def lecture_planche(choix: Optional[str] = Cookie(None, alias=CHOIX)) -> Dict:

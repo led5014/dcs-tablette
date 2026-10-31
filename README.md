@@ -7,9 +7,12 @@ l'affiche : iPad, tablette Android, téléphone, navigateur d'un autre PC.
 - **Écrans en direct** : DDI, MFD, MPD… recopiés depuis DCS, sans scintillement.
 - **Boutons tactiles** : chaque appui est joué dans le cockpit, tant que le
   doigt est posé.
-- **Luminosité écran par écran** : une molette dans le coin bas gauche de
-  chaque cadre, pour un TGP trop sombre ou un écran trop pâle ; retenue par
-  appareil.
+- **Réglages écran par écran**, au-delà de ce que propose DCS : la molette
+  du coin bas gauche de chaque cadre règle la luminosité ; touchée, elle
+  ouvre le panneau de l'écran — luminosité, contraste, netteté, définition
+  (agrandie et affinée par le PC, ou allégée pour un Wi-Fi faible) et
+  filtres : niveaux auto pour un TGP ou un FLIR sombre, noir et blanc,
+  inversé, vert, ambre, rouge de nuit. Retenus par appareil.
 - **Instruments de base pour tout appareil** — warbirds, hélicoptères, jets :
   badin, horizon, altimètre, virage et bille, cap, vario, G, régime, et en
   chiffres carburant, train, volets… dans les unités du cockpit (mph et

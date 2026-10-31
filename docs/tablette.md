@@ -119,10 +119,32 @@ droite était supposée) ; une configuration du pilote qui exporte déjà les
 écrans est gardée si il le veut ; le choix est retenu dans
 `%LOCALAPPDATA%\DCS-Tablette\installation.json` pour le diagnostic.
 
-Luminosité : molette dans le coin bas gauche de chaque cadre (`app.js`,
-`moletteLuminosite`), crans de -2 à +5, courbe gamma appliquée par le PC
-avant le JPEG (`video.table_luminosite`), retenue par appareil et par écran
-sur chaque tablette.
+Réglages des écrans (`filtres.py`, 31/10/2026 ; demande : « augmenter le
+grain, un filtre par-dessus qui gère aussi la lum, plus grand panel de
+résolution, lum et grain »). Molette dans le coin bas gauche de chaque cadre
+(`app.js`, `moletteLuminosite`) : tournée, la luminosité ; touchée, le
+panneau de l'écran (`ouvrirReglages`) :
+
+- luminosité -4 à +8 (gamma × 1,25 par cran) et contraste -3 à +5 (écart
+  au gris moyen × 1,2 par cran), en une seule table (`table_tons`) ;
+- netteté 0 à 5 : masque flou (rayon 0,8, 45 % par cran) sur les pixels de
+  DCS, avant l'agrandissement — après, quatre fois plus de calcul ;
+- définition : Économe (× 0,75, JPEG 75), Normale (× 1, JPEG 85, comme
+  avant), Fine (× 1,5, 90), Très fine (× 2, 92), agrandie au Lanczos. Mesuré
+  sur 720 px : 4 ms l'image normale, 46 ms en Très fine avec netteté (170 Ko
+  au lieu de 50). Elle ne crée pas de détail : celui-ci dépend de la taille
+  de la zone d'export (720 px sur un écran virtuel de 1440 de haut, dit dans
+  le panneau d'après l'en-tête `X-Taille-Source`) ;
+- filtres : niveaux auto (`ImageOps.autocontrast`, 0,5 % coupés à chaque
+  bout, tons préservés : pour un TGP ou un FLIR sombre), noir et blanc,
+  inversé (noir chaud / blanc chaud), vert, ambre, rouge de nuit.
+
+Tout s'applique sur le PC AVANT le JPEG (après, les détails mangés par la
+compression seraient perdus), hors du verrou de la copie : un écran en Très
+fine ne retarde pas les autres. Seuls les réglages qui s'écartent du défaut
+partent dans l'adresse ; retenus par appareil et par écran sur chaque
+tablette (`reglages.<appareil>.<écran>`, la luminosité des versions
+précédentes reprise), « Pareil sur les autres écrans » les recopie.
 
 Publier une version : monter `VERSION` dans `src/tablette/__init__.py`,
 lancer `scripts\construire_tablette.py` pour le zip, puis commit, tag et

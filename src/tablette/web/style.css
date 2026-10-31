@@ -364,6 +364,112 @@ body.en-kneeboard #modes { opacity: .45; }
 }
 .molette-lum.tourne { cursor: grabbing; box-shadow: 0 1px 0 #141617, 0 0 0 2px #6b5a2e; }
 .molette-lum:focus-visible { outline: 2px solid var(--ambre); outline-offset: 2px; }
+/* D'autres réglages que la luminosité sont posés sur cet écran. */
+.molette-lum.regle::after {
+  content: "";
+  position: absolute;
+  right: -4%;
+  bottom: -4%;
+  width: 26%;
+  height: 26%;
+  border-radius: 50%;
+  background: var(--ambre);
+  box-shadow: 0 0 0 2px var(--cadre);
+}
+
+/* ---------------------------------------------------------------- réglages d'un écran */
+
+.reglages-voile {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 20;
+  -webkit-tap-highlight-color: transparent;
+}
+.reglages {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: min(400px, calc(100% - 16px));
+  max-height: calc(100% - 16px);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 10px 14px 14px;
+  border: 1px solid #2a2f31;
+  border-radius: 12px;
+  background: rgba(21, 24, 26, .95);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .6);
+}
+.reglages.a-droite { right: max(8px, env(safe-area-inset-right, 0px)); }
+.reglages.a-gauche { left: max(8px, env(safe-area-inset-left, 0px)); }
+/* Téléphone : en bas, toute la largeur. */
+@media (max-width: 560px) {
+  .reglages, .reglages.a-droite, .reglages.a-gauche {
+    top: auto;
+    right: 8px;
+    bottom: max(8px, env(safe-area-inset-bottom, 0px));
+    left: 8px;
+    width: auto;
+    transform: none;
+  }
+}
+.reglages button {
+  min-height: 38px;
+  border: 1px solid #2a2f31;
+  border-radius: 8px;
+  background: #1d2123;
+  font-size: 14px;
+  cursor: pointer;
+}
+.reglages button:disabled { opacity: .3; }
+.reglages button.actif { background: #24433a; border-color: #2f5a4c; color: #dff5ea; }
+.reglages-tete {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+.reglages-tete strong { flex: 1; color: #fff; font-size: 16px; }
+.reglages-tete .reglages-fermer { width: 38px; border: 0; background: transparent; font-size: 18px; }
+.reglages-ligne {
+  display: grid;
+  grid-template-columns: 1fr 48px 52px 48px;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0;
+}
+.reglages-nom { color: var(--discret); font-size: 14px; }
+.reglages-pas { font-size: 22px; line-height: 1; }
+.reglages-valeur {
+  text-align: center;
+  font-size: 17px;
+  font-variant-numeric: tabular-nums;
+  color: #fff;
+}
+.reglages-bloc { padding: 6px 0 2px; }
+.reglages-choix {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+.reglages-choix button { flex: 1 1 auto; padding: 0 10px; }
+.reglages-note {
+  min-height: 1em;
+  margin: 10px 0 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--discret);
+}
+.reglages-pied {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+.reglages-pied button { flex: 1 1 auto; padding: 0 12px; }
 .touches-fixes {
   display: flex;
   gap: 1.5%;

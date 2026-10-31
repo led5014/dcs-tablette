@@ -2098,26 +2098,76 @@ class TestInstrumentsDeVol(unittest.TestCase):
         self.assertIn("vol -", messages)         # serveur qui interdit l'export
 
 
-class TestLuminosite(unittest.TestCase):
-    """Luminosité réglée écran par écran sur la tablette (TGP du F-16 sombre)."""
+class TestReglagesDesEcrans(unittest.TestCase):
+    """Luminosité, contraste, netteté, définition et filtres réglés écran par
+    écran sur la tablette, appliqués par le PC avant la compression."""
+
+    def setUp(self):
+        from PIL import Image, ImageDraw
+        self.Image = Image
+        # Un TGP de nuit : gris sombre, un trait un peu plus clair au milieu.
+        self.tgp = Image.new("RGB", (480, 480), (40, 40, 40))
+        ImageDraw.Draw(self.tgp).rectangle((200, 100, 230, 380), fill=(70, 70, 70))
+
+    def stats(self, image):
+        from PIL import ImageStat
+        return ImageStat.Stat(image.convert("L"))
 
     def test_courbe_eclaircit_les_gris_sans_toucher_noir_ni_blanc(self):
-        from tablette.video import table_luminosite
-        for niveau in range(1, 6):
-            table = table_luminosite(niveau, 1)
+        from tablette.filtres import LUMINOSITE, table_tons
+        for niveau in range(1, LUMINOSITE[1] + 1):
+            table = table_tons(niveau)
             self.assertEqual((table[0], table[255]), (0, 255))
             self.assertGreater(table[60], 60)
-            self.assertEqual(table, sorted(table))           # jamais d'inversion
-        self.assertLess(table_luminosite(-2, 1)[128], 128)
-        self.assertEqual(table_luminosite(0, 1), list(range(256)))
-        self.assertGreater(table_luminosite(4, 1)[40], 2 * 40)   # un TGP sombre ressort
+            self.assertEqual(list(table), sorted(table))     # jamais d'inversion
+        self.assertLess(table_tons(-2)[128], 128)
+        self.assertEqual(table_tons(0), tuple(range(256)))
+        self.assertGreater(table_tons(4)[40], 2 * 40)          # un TGP sombre ressort
+        plus, moins = table_tons(0, 3), table_tons(0, -3)
+        self.assertLess(plus[80], 80)                          # contraste : les tons s'écartent
+        self.assertGreater(plus[180], 180)
+        self.assertGreater(moins[0], 0)                        # ou se rapprochent
+        self.assertEqual(list(plus), sorted(plus))
 
-    def test_image_eclaircie_avant_compression_et_par_reglage(self):
-        from PIL import Image, ImageStat
+    def test_reglages_bornes_et_filtre_connu(self):
+        from tablette.filtres import CONTRASTE, LUMINOSITE, Reglages, reglages
+        self.assertEqual(reglages(99, -99, 99, 99, "vert"),
+                         Reglages(LUMINOSITE[1], CONTRASTE[0], 5, 3, "vert"))
+        self.assertEqual(reglages(), Reglages())
+        with self.assertRaises(ValueError):
+            reglages(filtre="sepia")
 
-        from tablette.ecrans_dcs import NOM_FICHIER, disposition_essai, generer
+    def test_filtres(self):
+        from tablette.filtres import Reglages, traiter
+        original = self.tgp.copy()
+        auto = traiter(self.tgp, Reglages(filtre="auto"))
+        self.assertEqual(self.stats(auto).extrema[0], (0, 255))      # tout l'éventail
+        self.assertEqual(traiter(self.tgp, Reglages(filtre="nb")).mode, "L")
+        inverse = traiter(self.tgp, Reglages(filtre="inverse"))
+        self.assertEqual(inverse.getpixel((0, 0)), (215, 215, 215))
+        vert = traiter(self.tgp, Reglages(filtre="vert", luminosite=4)).getpixel((210, 200))
+        self.assertGreater(vert[1], 2 * vert[0])                     # teinté vert
+        rouge = traiter(self.tgp, Reglages(filtre="rouge")).getpixel((210, 200))
+        self.assertGreater(rouge[0], 3 * rouge[2])
+        self.assertEqual(self.tgp.tobytes(), original.tobytes())    # l'image copiée intacte
+
+    def test_definition_et_nettete(self):
+        from tablette.filtres import COTE_MAX, Reglages, traiter
+        self.assertEqual(traiter(self.tgp, Reglages()).size, (480, 480))
+        self.assertEqual(traiter(self.tgp, Reglages(definition=0)).size, (360, 360))
+        self.assertEqual(traiter(self.tgp, Reglages(definition=2)).size, (720, 720))
+        self.assertEqual(traiter(self.tgp, Reglages(definition=3)).size, (960, 960))
+        grand = self.Image.new("RGB", (1500, 1000))
+        self.assertEqual(traiter(grand, Reglages()).size, (COTE_MAX, 733))   # comme avant
+        self.assertEqual(traiter(grand, Reglages(definition=3)).size, (2 * COTE_MAX, 1467))
+        # Netteté : le bord du trait ressort davantage.
+        bord = lambda im: im.getpixel((199, 240))[0]                 # noqa: E731
+        self.assertLess(bord(traiter(self.tgp, Reglages(nettete=5))), bord(self.tgp))
+
+    def video(self):
         from tablette.copie import Copie
-        from tablette.video import LUMINOSITE_MAX, Video
+        from tablette.ecrans_dcs import NOM_FICHIER, disposition_essai, generer
+        from tablette.video import Video
         tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.addCleanup(tmp.cleanup)
         saved = Path(tmp.name)
@@ -2127,35 +2177,54 @@ class TestLuminosite(unittest.TestCase):
         (saved / "Config" / "options.lua").write_text(
             '["multiMonitorSetup"] = "tablette",\n["width"] = 2560,\n["height"] = 1440,\n',
             encoding="utf-8")
-        gris = Image.new("RGB", (480, 480), (40, 40, 40))     # un TGP de nuit
-        video = Video(saved, capturer=lambda zones: Copie((2560, 1440), {n: gris for n in zones}),
-                      lancement=lambda: None)
+        self.heure = [0.0]
+        return Video(saved, capturer=lambda zones: Copie((2560, 1440),
+                                                         {n: self.tgp for n in zones}),
+                     lancement=lambda: None, horloge=lambda: self.heure[0])
 
-        def moyenne(donnees):
-            return ImageStat.Stat(Image.open(io.BytesIO(donnees)).convert("L")).mean[0]
-        normal, clair = video.image("LEFT_MFCD"), video.image("LEFT_MFCD", 3)
-        self.assertAlmostEqual(moyenne(normal), 40, delta=3)
-        self.assertGreater(moyenne(clair), 90)
+    def test_image_reglee_avant_compression_et_par_reglage(self):
+        from tablette.filtres import Reglages
+        video = self.video()
+
+        def ouvrir(donnees):
+            return self.Image.open(io.BytesIO(donnees))
+        normal, clair = video.image("LEFT_MFCD"), video.image("LEFT_MFCD", Reglages(luminosite=3))
+        self.assertAlmostEqual(self.stats(ouvrir(normal)).mean[0], 44, delta=4)
+        self.assertGreater(self.stats(ouvrir(clair)).mean[0], 90)
         self.assertNotEqual(video.image("LEFT_MFCD"), clair)    # chaque réglage son image
-        self.assertEqual(video.image("LEFT_MFCD", 99), video.image("LEFT_MFCD", LUMINOSITE_MAX))
+        self.assertEqual(ouvrir(normal).size, (480, 480))
+        self.assertEqual(ouvrir(video.image("LEFT_MFCD", Reglages(definition=3))).size,
+                         (960, 960))
+        self.assertEqual(video.tailles["LEFT_MFCD"], (480, 480))
+        # Un réglage quitté n'encombre pas la mémoire.
+        self.heure[0] = 10.0
+        video.image("LEFT_MFCD")
+        self.assertEqual(list(video._jpeg), [("LEFT_MFCD", Reglages())])
 
-    def test_api_transmet_le_reglage(self):
+    def test_api_transmet_les_reglages(self):
         from fastapi.testclient import TestClient
 
         from tablette.app import create_app
         from tablette.config import Config
+        from tablette.filtres import Reglages
         demandes = []
 
         class FausseVideo:
-            def image(self, viewport, luminosite=0):
-                demandes.append((viewport, luminosite))
+            tailles = {"LEFT_MFCD": (720, 720)}
+
+            def image(self, viewport, reglages):
+                demandes.append(reglages)
                 return b"\xff\xd8\xff"
         client = TestClient(create_app(Config(saved_games=Path(".")), FauxPont(),
                                        FausseVideo(), dossier_dcs=lambda: None))
         client.cookies.set("tablette_appareil", "fa18c")
-        client.get("/api/video/ddi_gauche?lum=3")
+        r = client.get("/api/video/ddi_gauche?lum=3&contraste=-1&nettete=2&definition=3"
+                       "&filtre=auto")
+        self.assertEqual(r.headers["X-Taille-Source"], "720x720")
         client.get("/api/video/ddi_gauche")
-        self.assertEqual([l for _, l in demandes], [3, 0])
+        client.get("/api/video/ddi_gauche?lum=99")
+        self.assertEqual(demandes, [Reglages(3, -1, 2, 3, "auto"), Reglages(), Reglages(8)])
+        self.assertEqual(client.get("/api/video/ddi_gauche?filtre=sepia").status_code, 422)
 
 
 class FauxPont:

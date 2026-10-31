@@ -110,8 +110,14 @@ EN VOL
      pilote, la pastille passe à l'orange et les boutons sont coupés.
   4. Un écran trop sombre (le TGP du F-16, par exemple) ou trop pâle :
      tourner la molette ronde du coin bas gauche de son cadre — glisser
-     le doigt vers le haut ou la droite éclaircit. Réglée écran par écran
-     et appareil par appareil, retenue sur la tablette.
+     le doigt vers le haut ou la droite éclaircit. TOUCHER la molette sans
+     la tourner ouvre tous les réglages de l'écran : luminosité,
+     contraste, netteté, définition (Fine et Très fine : plus net, plus
+     lourd pour le Wi-Fi ; Économe pour un Wi-Fi faible) et filtres —
+     « Niveaux auto » fait ressortir un TGP ou un FLIR sombre, « Inversé »
+     passe en noir chaud, « Rouge nuit » ménage la vision de nuit. Réglés
+     écran par écran et appareil par appareil, retenus sur la tablette ;
+     un point ambre sur la molette dit qu'un réglage est posé.
   5. « Instruments » (en haut) : badin, horizon, altimètre, virage et
      bille, cap, vario, G et régime, disposés en T comme au tableau de
      bord, avec carburant, train et volets en chiffres. Pour TOUT appareil,

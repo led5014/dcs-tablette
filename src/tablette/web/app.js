@@ -380,15 +380,16 @@ async function decoder(blob) {
 
 async function demanderImage(id) {
   let r;
-  const lum = luminosites.get(id) || 0;
   try {
-    r = await fetch(`/api/video/${id}${lum ? `?lum=${lum}` : ''}`, { cache: 'no-store' });
+    r = await fetch(`/api/video/${id}${parametresImage(id)}`, { cache: 'no-store' });
   } catch { return { raison: 'Serveur injoignable' }; }
   if (!r.ok) {
     let raison = null;
     try { raison = (await r.json()).detail; } catch { /* corps illisible */ }
     return { raison: raison || "Pas d'image" };
   }
+  const source = r.headers.get('X-Taille-Source');
+  if (source) taillesSource.set(id, source.replace('x', ' × '));
   try {
     return { image: await decoder(await r.blob()) };
   } catch { return { raison: 'Image illisible' }; }
@@ -430,18 +431,60 @@ async function boucleImage(id, conteneur, toile, msg, gen) {
   }
 }
 
-// --------------------------------------------------------------- luminosité
-// Réglée écran par écran, par appareil, et retenue sur chaque tablette : le
-// TGP du F-16 est sombre, un DDI en plein soleil trop pâle. Le PC éclaircit
-// l'image avant de la compresser (crans de -2 à +5, 0 : comme dans DCS).
+// --------------------------------------------------------------- réglages des écrans
+// Réglés écran par écran, par appareil, et retenus sur chaque tablette : le
+// TGP du F-16 est sombre, un DDI en plein soleil trop pâle, des traits fins
+// qu'on voudrait plus nets. Le PC les applique avant de compresser l'image
+// (filtres.py) : luminosité, contraste, netteté, définition, filtre. La
+// molette du coin bas gauche règle la luminosité au doigt ; touchée sans la
+// tourner, elle ouvre tous les réglages de l'écran.
 
-const LUMINOSITE_MIN = -2;
-const LUMINOSITE_MAX = 5;
+// Mêmes noms que les paramètres de /api/video, mêmes bornes que filtres.py.
+const REGLAGES_DEFAUT = { lum: 0, contraste: 0, nettete: 0, definition: 1, filtre: '' };
+const CRANS = [
+  { cle: 'lum', titre: 'Luminosité', min: -4, max: 8, signe: true },
+  { cle: 'contraste', titre: 'Contraste', min: -3, max: 5, signe: true },
+  { cle: 'nettete', titre: 'Netteté', min: 0, max: 5, signe: false },
+];
+const DEFINITIONS = ['Économe', 'Normale', 'Fine', 'Très fine'];
+const FILTRES = [['', 'Aucun'], ['auto', 'Niveaux auto'], ['nb', 'Noir et blanc'],
+  ['inverse', 'Inversé'], ['vert', 'Vert'], ['ambre', 'Ambre'], ['rouge', 'Rouge nuit']];
 const PAS_MOLETTE_PX = 26;          // glissement du doigt pour un cran
 const ANGLE_CRAN = 30;              // la molette tourne de 30° par cran
-const luminosites = new Map();
+const DEPLACEMENT_TOUCHER_PX = 8;   // en deçà, la molette a été touchée, pas tournée
+const reglagesEcrans = new Map();
+const taillesSource = new Map();    // taille de l'image que DCS dessine, par écran
+const molettes = new Map();         // écran → redessiner sa molette
 
-function cleLuminosite(id) { return `luminosite.${profil ? profil.id : ''}.${id}`; }
+function cleReglages(id) { return `reglages.${profil ? profil.id : ''}.${id}`; }
+
+function chargerReglages(id) {
+  let r = null;
+  try { r = JSON.parse(lire(cleReglages(id), 'null')); } catch { /* illisible : par défaut */ }
+  // Jusqu'à la 1.6, seule la luminosité était retenue.
+  if (!r) r = { lum: Number(lire(`luminosite.${profil ? profil.id : ''}.${id}`, 0)) || 0 };
+  return { ...REGLAGES_DEFAUT, ...r };
+}
+
+function changerReglages(id, modif) {
+  const r = { ...(reglagesEcrans.get(id) || REGLAGES_DEFAUT), ...modif };
+  reglagesEcrans.set(id, r);
+  retenir(cleReglages(id), JSON.stringify(r));
+  if (molettes.has(id)) molettes.get(id)();
+  return r;
+}
+
+// Seuls les réglages qui s'écartent du défaut partent : une image normale
+// reste la même pour toutes les tablettes, et le PC ne la compresse qu'une fois.
+function parametresImage(id) {
+  const r = reglagesEcrans.get(id);
+  if (!r) return '';
+  const p = Object.keys(REGLAGES_DEFAUT).filter((k) => r[k] !== REGLAGES_DEFAUT[k])
+    .map((k) => `${k}=${encodeURIComponent(r[k])}`);
+  return p.length ? `?${p.join('&')}` : '';
+}
+
+const signe = (v) => (v > 0 ? `+${v}` : String(v));
 
 // Un mot en bas de l'écran (refus d'un appui, cran de luminosité), effacé
 // après DUREE_RETOUR_MS : rien ne doit rester sur l'image.
@@ -456,60 +499,179 @@ function dire(retour, texte, erreur) {
 // Une molette ronde dans le coin bas gauche du cadre, là où un vrai MFD a sa
 // commande BRT. On la tourne du doigt : glisser vers le haut ou la droite
 // éclaircit, cran par cran ; la molette de la souris et les flèches aussi.
-function moletteLuminosite(cadre, id, ligneDuBas, retour) {
-  luminosites.set(id, Number(lire(cleLuminosite(id), 0)) || 0);
+// Touchée sans la tourner (ou Entrée), elle ouvre tous les réglages.
+function moletteLuminosite(cadre, e, ligneDuBas, retour) {
+  const id = e.id;
+  const lum = CRANS[0];
+  reglagesEcrans.set(id, chargerReglages(id));
   const m = element('div', 'molette-lum');
   m.append(element('span', 'repere'));
   m.style.gridColumn = '1';
   m.style.gridRow = String(ligneDuBas);
   m.tabIndex = 0;
   m.setAttribute('role', 'slider');
-  m.setAttribute('aria-label', 'Luminosité');
-  m.setAttribute('aria-valuemin', String(LUMINOSITE_MIN));
-  m.setAttribute('aria-valuemax', String(LUMINOSITE_MAX));
+  m.setAttribute('aria-label', `${e.libelle} : luminosité (toucher pour tous les réglages)`);
+  m.setAttribute('aria-valuemin', String(lum.min));
+  m.setAttribute('aria-valuemax', String(lum.max));
 
-  const dessiner = (afficher) => {
-    const v = luminosites.get(id) || 0;
-    m.style.setProperty('--angle', `${v * ANGLE_CRAN}deg`);
-    m.setAttribute('aria-valuenow', String(v));
-    if (afficher) dire(retour, `Luminosité ${v > 0 ? '+' : ''}${v}`, false);
+  const dessiner = () => {
+    const r = reglagesEcrans.get(id);
+    m.style.setProperty('--angle', `${r.lum * ANGLE_CRAN}deg`);
+    m.setAttribute('aria-valuenow', String(r.lum));
+    // Un point ambre : d'autres réglages que la luminosité sont posés.
+    m.classList.toggle('regle', Object.keys(REGLAGES_DEFAUT)
+      .some((k) => k !== 'lum' && r[k] !== REGLAGES_DEFAUT[k]));
   };
+  molettes.set(id, dessiner);
   const fixer = (niveau) => {
-    niveau = Math.max(LUMINOSITE_MIN, Math.min(LUMINOSITE_MAX, niveau));
-    if (niveau !== (luminosites.get(id) || 0)) {
-      luminosites.set(id, niveau);
-      retenir(cleLuminosite(id), niveau);
-    }
-    dessiner(true);
+    niveau = Math.max(lum.min, Math.min(lum.max, niveau));
+    if (niveau !== reglagesEcrans.get(id).lum) changerReglages(id, { lum: niveau });
+    dire(retour, `Luminosité ${signe(niveau)}`, false);
   };
 
   let depart = null;
-  m.addEventListener('pointerdown', (e) => {
-    e.preventDefault();
-    if (m.setPointerCapture) m.setPointerCapture(e.pointerId);
-    depart = { x: e.clientX, y: e.clientY, niveau: luminosites.get(id) || 0 };
+  m.addEventListener('pointerdown', (ev) => {
+    ev.preventDefault();
+    if (m.setPointerCapture) m.setPointerCapture(ev.pointerId);
+    depart = { x: ev.clientX, y: ev.clientY, niveau: reglagesEcrans.get(id).lum, tourne: false };
     m.classList.add('tourne');
-    dessiner(true);
   });
-  m.addEventListener('pointermove', (e) => {
+  m.addEventListener('pointermove', (ev) => {
     if (!depart) return;
-    const glisse = (e.clientX - depart.x) - (e.clientY - depart.y);
-    fixer(depart.niveau + Math.round(glisse / PAS_MOLETTE_PX));
+    const dx = ev.clientX - depart.x;
+    const dy = ev.clientY - depart.y;
+    if (!depart.tourne && Math.abs(dx) + Math.abs(dy) < DEPLACEMENT_TOUCHER_PX) return;
+    depart.tourne = true;
+    fixer(depart.niveau + Math.round((dx - dy) / PAS_MOLETTE_PX));
   });
-  for (const fin of ['pointerup', 'pointercancel']) {
-    m.addEventListener(fin, () => { depart = null; m.classList.remove('tourne'); });
-  }
-  m.addEventListener('wheel', (e) => {
-    e.preventDefault();
-    fixer((luminosites.get(id) || 0) + (e.deltaY < 0 ? 1 : -1));
+  m.addEventListener('pointerup', () => {
+    const touchee = depart && !depart.tourne;
+    depart = null;
+    m.classList.remove('tourne');
+    if (touchee) ouvrirReglages(e, cadre);
+  });
+  m.addEventListener('pointercancel', () => { depart = null; m.classList.remove('tourne'); });
+  m.addEventListener('wheel', (ev) => {
+    ev.preventDefault();
+    fixer(reglagesEcrans.get(id).lum + (ev.deltaY < 0 ? 1 : -1));
   }, { passive: false });
-  m.addEventListener('keydown', (e) => {
-    const sens = { ArrowUp: 1, ArrowRight: 1, ArrowDown: -1, ArrowLeft: -1 }[e.key];
-    if (sens) { e.preventDefault(); fixer((luminosites.get(id) || 0) + sens); }
+  m.addEventListener('keydown', (ev) => {
+    const sens = { ArrowUp: 1, ArrowRight: 1, ArrowDown: -1, ArrowLeft: -1 }[ev.key];
+    if (sens) { ev.preventDefault(); fixer(reglagesEcrans.get(id).lum + sens); }
+    if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); ouvrirReglages(e, cadre); }
   });
-  m.addEventListener('contextmenu', (e) => e.preventDefault());
-  dessiner(false);
+  m.addEventListener('contextmenu', (ev) => ev.preventDefault());
+  dessiner();
   cadre.append(m);
+}
+
+let reglagesOuverts = null;         // le voile du panneau de réglages, s'il est affiché
+
+function fermerReglages() {
+  if (!reglagesOuverts) return;
+  reglagesOuverts.remove();
+  reglagesOuverts = null;
+}
+document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') fermerReglages(); });
+
+// Tous les réglages d'un écran, dans un panneau posé du côté opposé au cadre :
+// on voit l'effet en réglant. Le voile transparent autour garde les doigts
+// loin des boutons du cockpit : le toucher ferme le panneau, sans rien appuyer.
+function ouvrirReglages(e, cadre) {
+  fermerReglages();
+  const id = e.id;
+  const voile = element('div', 'reglages-voile');
+  const p = element('div', 'reglages');
+  p.setAttribute('role', 'dialog');
+  p.setAttribute('aria-label', `Réglages de ${e.libelle}`);
+  const fermer = element('button', 'reglages-fermer', '✕');
+  fermer.setAttribute('aria-label', 'Fermer');
+  fermer.addEventListener('click', fermerReglages);
+  const tete = element('div', 'reglages-tete');
+  tete.append(element('strong', '', e.libelle), fermer);
+  p.append(tete);
+
+  const majs = [];
+  const maj = () => {
+    const r = reglagesEcrans.get(id);
+    for (const f of majs) f(r);
+  };
+  for (const c of CRANS) {
+    const valeur = element('span', 'reglages-valeur');
+    const moins = element('button', 'reglages-pas', '−');
+    const plus = element('button', 'reglages-pas', '+');
+    moins.setAttribute('aria-label', `${c.titre} : moins`);
+    plus.setAttribute('aria-label', `${c.titre} : plus`);
+    const pas = (s) => {
+      const v = Math.max(c.min, Math.min(c.max, reglagesEcrans.get(id)[c.cle] + s));
+      changerReglages(id, { [c.cle]: v });
+      maj();
+    };
+    moins.addEventListener('click', () => pas(-1));
+    plus.addEventListener('click', () => pas(1));
+    const ligne = element('div', 'reglages-ligne');
+    ligne.append(element('span', 'reglages-nom', c.titre), moins, valeur, plus);
+    p.append(ligne);
+    majs.push((r) => {
+      valeur.textContent = c.signe ? signe(r[c.cle]) : String(r[c.cle]);
+      moins.disabled = r[c.cle] <= c.min;
+      plus.disabled = r[c.cle] >= c.max;
+    });
+  }
+  const choix = (titre, options, cle) => {
+    const groupe = element('div', 'reglages-choix');
+    const boutons = options.map(([v, libelle]) => {
+      const b = element('button', '', libelle);
+      b.addEventListener('click', () => { changerReglages(id, { [cle]: v }); maj(); });
+      groupe.append(b);
+      return [v, b];
+    });
+    const bloc = element('div', 'reglages-bloc');
+    bloc.append(element('span', 'reglages-nom', titre), groupe);
+    p.append(bloc);
+    majs.push((r) => { for (const [v, b] of boutons) b.classList.toggle('actif', r[cle] === v); });
+  };
+  choix('Définition', DEFINITIONS.map((d, i) => [i, d]), 'definition');
+  choix('Filtre', FILTRES, 'filtre');
+
+  const note = element('p', 'reglages-note');
+  p.append(note);
+  majs.push((r) => {
+    const t = taillesSource.get(id);
+    const phrases = [t ? `DCS dessine cet écran en ${t} px.` : ''];
+    if (r.definition >= 2) phrases.push('Agrandi et affiné par le PC : plus net, plus lourd pour le Wi-Fi.');
+    if (r.definition === 0) phrases.push('Image allégée, pour un Wi-Fi faible.');
+    if (r.filtre === 'auto') phrases.push('Niveaux auto : le plus sombre au noir, le plus clair au blanc, image par image — pour un TGP ou un FLIR.');
+    if (r.filtre === 'inverse') phrases.push('Inversé : noir chaud ↔ blanc chaud.');
+    note.textContent = phrases.filter(Boolean).join(' ');
+  });
+
+  const pied = element('div', 'reglages-pied');
+  const defaut = element('button', '', 'Par défaut');
+  defaut.addEventListener('click', () => { changerReglages(id, { ...REGLAGES_DEFAUT }); maj(); });
+  pied.append(defaut);
+  const autres = profil.ecrans.filter((x) => x.id !== id);
+  if (autres.length) {
+    const tous = element('button', '', 'Pareil sur les autres écrans');
+    tous.addEventListener('click', () => {
+      const r = reglagesEcrans.get(id);
+      for (const x of autres) changerReglages(x.id, r);
+      tous.textContent = `Copié sur ${autres.map((x) => x.libelle).join(', ')}`;
+    });
+    pied.append(tous);
+  }
+  p.append(pied);
+  maj();
+
+  voile.append(p);
+  voile.addEventListener('pointerdown', (ev) => {
+    if (ev.target === voile) { ev.preventDefault(); fermerReglages(); }
+  });
+  const c = cadre.getBoundingClientRect();
+  p.classList.add(c.left + c.width / 2 < window.innerWidth / 2 ? 'a-droite' : 'a-gauche');
+  document.body.append(voile);
+  reglagesOuverts = voile;
+  fermer.focus();
 }
 
 // --------------------------------------------------------------- cadres
@@ -593,7 +755,7 @@ function construireCadre(e) {
       if (ok !== true) dire(retour, `${b.id} : ${typeof ok === 'string' ? ok : 'non transmis'}`, true);
     }));
   }
-  moletteLuminosite(cadre, e.id, lig.fin, retour);
+  moletteLuminosite(cadre, e, lig.fin, retour);
   boucleImage(e.id, ecran, toile, msg, generation);
   return cadre;
 }
@@ -1037,6 +1199,8 @@ async function chargerProfil() {
   }
   generation += 1;
   toutRelacher();
+  fermerReglages();
+  molettes.clear();
   profil = p;
   dispositions = calculerDispositions(p);
   disposition = lire(`disposition.${p.id}`, dispositions.length ? dispositions[0].id : null);
