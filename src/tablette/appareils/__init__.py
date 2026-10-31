@@ -32,6 +32,10 @@ class Bouton:
     commande: int
     cote: str                # un des COTES, ou "rangee" : sous le cadre
     rang: int                # de gauche à droite, ou de haut en bas
+    # Interrupteur à deux positions plutôt que bouton : l'argument du cockpit
+    # qui dit où il est (0 ou 1). Un appui le pose sur l'autre position, le
+    # relâchement ne fait rien — enfoncé puis relâché, il reviendrait.
+    bascule: Optional[int] = None
 
 
 @dataclass(frozen=True)
@@ -98,6 +102,12 @@ class Profil:
     def ecran(self, id_: str) -> Optional[Ecran]:
         return next((e for e in self.ecrans if e.id == id_), None)
 
+    def arguments_lus(self) -> Tuple[int, ...]:
+        """Les arguments que le script Lua envoie : ceux du profil, plus la
+        position de chaque interrupteur des cadres."""
+        bascules = [b.bascule for e in self.ecrans for b in e.boutons if b.bascule is not None]
+        return tuple(dict.fromkeys(self.arguments + tuple(bascules)))
+
     def instruments_selon(self, options: str) -> Instruments:
         """Les instruments d'après les options de DCS (texte d'options.lua)."""
         if self.imperial and re.search(self.imperial[0], options):
@@ -117,7 +127,8 @@ class Profil:
                         "arrondi": e.arrondi,
                         "reperes_x": list(e.reperes_x) if e.reperes_x else None,
                         "reperes_y": list(e.reperes_y) if e.reperes_y else None,
-                        "boutons": [{"id": b.id, "cote": b.cote, "rang": b.rang}
+                        "boutons": [{"id": b.id, "cote": b.cote, "rang": b.rang,
+                                     "bascule": b.bascule is not None}
                                     for b in e.boutons]}
                        for e in self.ecrans],
         }
@@ -210,15 +221,25 @@ def lua_appareils() -> str:
     ]
     for profil in PROFILS:
         boutons: Dict[int, set] = {}
+        positions: Dict[int, set] = {}
         for ecran in profil.ecrans:
             for appareil in ecran.appareils.values():
-                boutons.setdefault(appareil, set()).update(b.commande for b in ecran.boutons)
+                boutons.setdefault(appareil, set()).update(
+                    b.commande for b in ecran.boutons if b.bascule is None)
+                positions.setdefault(appareil, set()).update(
+                    b.commande for b in ecran.boutons if b.bascule is not None)
         for appareil, commandes in profil.touches.items():
             boutons.setdefault(appareil, set()).update(commandes)
         boutons = {a: c for a, c in boutons.items() if c}
+        positions = {a: c for a, c in positions.items() if c}
         corps = [
             "    boutons = {" + "".join(f"\n      [{a}] = {_ensemble(c)},"
                                         for a, c in sorted(boutons.items())) + "\n    },",
+            # Interrupteurs : posés sur 0 ou 1, jamais tenus ni relâchés.
+            "    positions = {" + "".join(
+                f"\n      [{a}] = {{ " + ", ".join(f"[{c}] = {_ensemble((0, 1))}" for c in sorted(cs))
+                + " },"
+                for a, cs in sorted(positions.items())) + "\n    },",
             "    molettes = {" + "".join(
                 f"\n      [{a}] = {{ " + ", ".join(f"[{c}] = {v:g}" for c, v in sorted(m.items()))
                 + " },"
@@ -226,7 +247,7 @@ def lua_appareils() -> str:
             "    pages = {" + (f" [{profil.kneeboard}] = {_ensemble((3001, 3002))} "
                                if profil.kneeboard is not None else " ") + "},",
             "    textes = { " + ", ".join(map(str, profil.textes)) + " },",
-            "    arguments = { " + ", ".join(map(str, profil.arguments)) + " },",
+            "    arguments = { " + ", ".join(map(str, profil.arguments_lus())) + " },",
         ]
         for nom in profil.noms_dcs:
             lignes.append(f'  ["{nom}"] = {{')

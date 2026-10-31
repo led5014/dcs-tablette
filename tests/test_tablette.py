@@ -2098,6 +2098,81 @@ class TestInstrumentsDeVol(unittest.TestCase):
         self.assertIn("vol -", messages)         # serveur qui interdit l'export
 
 
+class TestHddDuMig29(unittest.TestCase):
+    """L'HDD du MiG-29A, qui recopie son HUD, et son interrupteur SOURCE."""
+
+    def setUp(self):
+        self.mig29 = appareils.profil_pour("MiG-29 Fulcrum")
+        self.hdd = self.mig29.ecran("hdd")
+
+    def test_contre_les_scripts_du_module(self):
+        s = scripts_du_module("MiG-29-Fulcrum")
+        if s is None:
+            self.skipTest("module MiG-29-Fulcrum absent")
+        self.assertEqual(identifiants(s, "HDD")["HDD"], self.hdd.appareil(""))
+        source = self.hdd.boutons[0]
+        self.assertEqual(commandes(s, "hdd_commands")["SOURCE_KNOB"], source.commande)
+        self.assertRegex(lire(s / "clickabledata.lua"),
+                         rf"HDD SOURCE Switch.*devices\.HDD,\s*hdd_commands\.SOURCE_KNOB,"
+                         rf"\s*{source.bascule}\)")
+        # L'HDD va de lui-même dans RIGHT_MFCD, faute de zone « HDD ».
+        init = lire(s / "Displays" / "HDD" / "indicator" / "BAKE" / "HDD_init.lua")
+        self.assertRegex(init, r'find_viewport\("HDD"\)\s*or\s*find_viewport\("RIGHT_MFCD"\)')
+        self.assertEqual(self.hdd.viewport, "RIGHT_MFCD")
+
+    def test_liste_blanche_interrupteur_pose_jamais_tenu(self):
+        lua = appareils.lua_appareils().split('["MiG-29 Fulcrum"]')[1].split('\n  },')[0]
+        self.assertIn("[50] = { [3002] = { [0] = true, [1] = true } }", lua)
+        self.assertNotIn("[50] = { [3002] = true", lua)      # pas parmi les boutons tenus
+        self.assertIn("arguments = { 869 }", lua)              # sa position revient
+
+    def test_api_bascule_d_apres_la_position_lue(self):
+        from fastapi.testclient import TestClient
+
+        from tablette.app import create_app
+        from tablette.config import Config
+        pont = FauxPont(connecte=True, appareil="MiG-29 Fulcrum")
+        poses, args = [], {}
+        pont.arguments = lambda: dict(args)
+        pont.poser = lambda a, c, p: poses.append((a, c, p)) or True
+        pont.appuyer = lambda *_: self.fail("un interrupteur ne s'enfonce pas")
+        client = TestClient(create_app(Config(saved_games=Path(".")), pont,
+                                       dossier_dcs=lambda: None))
+        appui = {"ecran": "hdd", "bouton": "TACT / DUBL", "enfonce": True}
+        self.assertEqual(client.post("/api/bouton", json=appui).status_code, 409)  # inconnue
+        args[869] = 1.0
+        client.post("/api/bouton", json=appui)
+        client.post("/api/bouton", json={**appui, "enfonce": False})   # relâché : rien
+        args[869] = 0.0
+        client.post("/api/bouton", json=appui)
+        self.assertEqual(poses, [(50, 3002, 0), (50, 3002, 1)])
+        d = client.get("/api/profil").json()["ecrans"][0]
+        self.assertEqual((d["id"], d["boutons"][0]["bascule"]), ("hdd", True))
+
+    @unittest.skipUnless(LUA_DCS.exists(), "moteur Lua de DCS absent")
+    def test_le_script_lua_pose_l_interrupteur_sans_le_relacher(self):
+        prelude = FAUX_DCS.replace('Name = "Christen Eagle II"', 'Name = "MiG-29 Fulcrum"') + r'''
+RECUS = { "50 3002 1", "50 3002 0.5", "50 3001 1", "50 3002 0" }
+JOUES = {}
+package.preload["socket"] = function()
+  return { gettime = function() return HORLOGE end, udp = function()
+    return { settimeout = function() end, setsockname = function() return 1 end,
+             receive = function() return table.remove(RECUS, 1) end, close = function() end,
+             sendto = function(_, m) ENVOYES[#ENVOYES + 1] = m end } end }
+end
+function GetDevice(n)
+  return { performClickableAction = function(_, c, v) JOUES[#JOUES + 1] = n .. " " .. c .. " " .. v end,
+           get_argument_value = function() return 0 end }
+end
+''' + appareils.lua_appareils()
+        resultat = executer_lua(prelude, SCRIPT_LUA,
+                                "LuaExportStart(); LuaExportBeforeNextFrame(); "
+                                "HORLOGE = 10; LuaExportBeforeNextFrame(); "
+                                "RESULTAT = table.concat(JOUES, ' | ')")
+        # 0.5 et la commande hors liste refusés ; rien de relâché 10 s après.
+        self.assertEqual(resultat, "50 3002 1 | 50 3002 0")
+
+
 class TestReglagesDesEcrans(unittest.TestCase):
     """Luminosité, contraste, netteté, définition et filtres réglés écran par
     écran sur la tablette, appliqués par le PC avant la compression."""

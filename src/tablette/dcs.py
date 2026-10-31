@@ -164,6 +164,10 @@ class PontDCS:
         """Un cran de molette, dans le sens du signe de `cran`."""
         return self._envoyer(f"{appareil} {commande} {cran:g}")
 
+    def poser(self, appareil: int, commande: int, position: int) -> bool:
+        """Un interrupteur posé sur `position` (0 ou 1), où il reste."""
+        return self._envoyer(f"{appareil} {commande} {int(position)}")
+
     def _envoyer(self, message: str) -> bool:
         try:
             self._envoi.sendto(message.encode("ascii"), (self.hote, self.port_ordres))

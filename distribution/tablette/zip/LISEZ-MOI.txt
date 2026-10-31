@@ -129,6 +129,11 @@ EN VOL
      pannes, ni son calage altimétrique). En multijoueur, certains serveurs
      interdisent l'export de son propre appareil : la tablette l'indique,
      les instruments restent vides.
+  6. MiG-29A : « HDD » montre le petit écran tête basse du MiG, qui
+     recopie le HUD — de quoi chercher les cibles sur la tablette. Le
+     bouton TACT / DUBL dessous bascule l'interrupteur SOURCE (situation
+     tactique ou recopie du HUD). « HDD + instr. » le met à côté des
+     instruments.
 
 DIAGNOSTIC
 ----------

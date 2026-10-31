@@ -163,6 +163,12 @@ function calculerDispositions(p) {
   for (const e of p.ecrans) {
     liste.push({ id: e.id, libelle: abrege(e.libelle), ids: [e.id], toujours: true });
   }
+  // Un seul écran (l'HDD du MiG-29) : à côté des instruments, la tête reste
+  // dehors pour tout le reste.
+  if (ids.length === 1) {
+    liste.push({ id: 'avec-instruments', libelle: `${abrege(p.ecrans[0].libelle)} + instr.`,
+      ids: [ids[0], 'instruments'] });
+  }
   if (p.panneaux.includes('ufc')) {
     liste.push({ id: 'ufc', libelle: 'UFC', ids: ['ufc', 'ifei'], toujours: true });
   }

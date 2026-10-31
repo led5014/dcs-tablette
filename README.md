@@ -65,14 +65,21 @@ l'ancien dossier.
 | F-15E Strike Eagle | MPD G, MPD D, MPCD (place avant) | — |
 | JF-17 Thunder | MFCD G, centre, D (en portrait, 26 boutons) | — |
 | Ka-50 Black Shark II / III | Shkval en image, ABRIS et ses 5 boutons | — |
+| MiG-29A Fulcrum | HDD, la recopie du HUD (interrupteur TACT / DUBL) | HDD + instruments côte à côte, kneeboard |
 | Warbirds : P-51D, TF-51D, P-47D, F4U-1D, Spitfire IX, Mosquito, Bf 109 K-4, Fw 190 A-8 / D-9, I-16, Yak-52 | — (cockpits à cadrans) | instruments dans leurs unités, kneeboard |
 | Corée : F-86F, MiG-15bis | — | instruments, kneeboard |
-| F-14, F-4E, Mirage 2000C, Mirage F1, F-5E, MiG-21bis, MiG-19P, AJS-37, MiG-29A, L-39, C-101, MB-339, FC3 | — | instruments, kneeboard |
+| F-14, F-4E, Mirage 2000C, Mirage F1, F-5E, MiG-21bis, MiG-19P, AJS-37, L-39, C-101, MB-339, FC3 | — | instruments, kneeboard |
 | CH-47F, Mi-8MTV2, Mi-24P, UH-1H, SA342 | — | instruments d'hélicoptère, kneeboard |
 
 Tout autre appareil a les instruments de base et le kneeboard. Les unités du
 MiG-29A et du L-39 suivent les options de DCS (« Avionics Units » du MiG-29,
 langue des avioniques du L-39) : la tablette relit `options.lua`.
+
+Le HUD lui-même n'est exportable dans aucun module : DCS ne propose pas de
+zone d'export pour lui. Le MiG-29A fait exception par son HDD, le petit écran
+tête basse qui recopie le HUD (position DUBL) ou montre la situation tactique
+(TACT) : le module l'envoie de lui-même dans la zone RIGHT_MFCD de « Tablette
+DCS », rien à régler.
 
 Les numéros des boutons du F-16C, de l'OH-58D, de l'AV-8B, du F-15E, du
 JF-17 et du Ka-50 viennent de

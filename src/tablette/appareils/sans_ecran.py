@@ -1,10 +1,11 @@
-"""Appareils sans écran exportable : la tablette leur sert le kneeboard et
-les instruments de base redessinés (instruments.py).
+"""Appareils à cadrans : la tablette leur sert le kneeboard et les
+instruments de base redessinés (instruments.py), et l'HDD du MiG-29.
 
 Leurs cockpits sont à cadrans, ou leurs écrans n'ont pas de zone d'export
-connue : rien à exporter en image. Le kneeboard de DCS s'y capture comme
-ailleurs, et ses pages se tournent depuis l'iPad avec l'appareil KNEEBOARD
-du module, là où il a été relu :
+connue : rien à exporter en image, sauf l'HDD du MiG-29A, qui recopie son
+HUD. Le kneeboard de DCS s'y capture comme ailleurs, et ses pages se
+tournent depuis l'iPad avec l'appareil KNEEBOARD du module, là où il a été
+relu :
 
 - MiG-29A Fulcrum (module complet, Mods/aircraft/MiG-29-Fulcrum) :
   devices.lua, KNEEBOARD = 59 ; nom dans DCS « MiG-29 Fulcrum », relevé dans
@@ -22,12 +23,29 @@ DCS-ExportScripts ; celles du Mirage F1 et du C-101 sont déduites.
 from dataclasses import replace
 
 from ..instruments import HELICO_KT, HELICO_METRIQUE, METRIQUE, OTAN
-from . import Profil
+from . import Bouton, Ecran, Profil
 
-# Option du module, « Avionics Units » : Metric (Native) ou Imperial (1).
-MIG29 = Profil(id="mig29", libelle="MiG-29A Fulcrum", noms_dcs=("MiG-29 Fulcrum",),
-               kneeboard=59, instruments=replace(METRIQUE, moteurs=2),
-               imperial=(r'\["MiG29AvionicsUnits"\]\s*=\s*1\b', replace(OTAN, moteurs=2)))
+# MiG-29A Fulcrum : pas de MFD, mais l'HDD, le petit écran tête basse qui
+# recopie le HUD (ou montre la situation tactique). Le module l'exporte de
+# lui-même : Displays/HDD/indicator/BAKE/HDD_init.lua cherche une zone
+# « HDD », sinon RIGHT_MFCD — celle de « Tablette DCS ». devices.lua : HDD = 50 ;
+# command_defs.lua : hdd_commands.SOURCE_KNOB = 3002, l'interrupteur « HDD
+# SOURCE, TACTICAL/DUBLICATION » (clickabledata.lua, argument 869). Lequel
+# des deux vaut 1 n'est pas écrit : la tablette lit la position et bascule.
+HDD_MIG29 = 50
+MIG29 = Profil(
+    id="mig29",
+    libelle="MiG-29A Fulcrum",
+    noms_dcs=("MiG-29 Fulcrum",),
+    ecrans=(
+        Ecran("hdd", "HDD", "RIGHT_MFCD", {"": HDD_MIG29},
+              (Bouton("TACT / DUBL", 3002, "rangee", 0, bascule=869),)),
+    ),
+    kneeboard=59,
+    instruments=replace(METRIQUE, moteurs=2),
+    # Option du module, « Avionics Units » : Metric (Native) ou Imperial (1).
+    imperial=(r'\["MiG29AvionicsUnits"\]\s*=\s*1\b', replace(OTAN, moteurs=2)),
+)
 
 # Hélicoptères à cadrans.
 MI24P = Profil(id="mi24p", libelle="Mi-24P Hind", noms_dcs=("Mi-24P",),

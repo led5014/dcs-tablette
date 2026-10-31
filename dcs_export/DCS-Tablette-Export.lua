@@ -288,6 +288,13 @@ local function traiter(message, maintenant)
     if math.abs(math.abs(v) - molettes[c]) < 1e-6 then jouer(d, c, v) end
     return
   end
+  local positions = profil.positions and profil.positions[d]
+  if positions and positions[c] then
+    -- Un interrupteur posé sur une de ses positions : il y reste, rien à
+    -- relâcher.
+    if positions[c][v] then jouer(d, c, v) end
+    return
+  end
   local boutons = profil.boutons and profil.boutons[d]
   if not (boutons and boutons[c]) or (v ~= 0 and v ~= 1) then return end
   local cle = d .. ":" .. c

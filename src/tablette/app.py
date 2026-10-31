@@ -222,15 +222,28 @@ def create_app(cfg: Optional[Config] = None, pont: Optional[PontDCS] = None,
             raise HTTPException(status_code=422, detail="bouton inconnu sur cet écran")
         garde_fou(profil)
         enfonce = bool(corps.get("enfonce"))
-        envoye = pont.appuyer(appareil, bouton_.commande, enfonce)
+        if bouton_.bascule is not None:
+            # Interrupteur : l'appui le pose sur l'autre position, lue dans le
+            # cockpit ; le relâchement ne fait rien.
+            if not enfonce:
+                return {"envoye": True}
+            position = pont.arguments().get(bouton_.bascule)
+            if position is None:
+                raise HTTPException(status_code=409, detail=(
+                    "position inconnue : DCS ne l'a pas encore envoyée"))
+            vers = 0 if position >= 0.5 else 1
+            envoye = pont.poser(appareil, bouton_.commande, vers)
+            action = f"basculé ({vers})"
+        else:
+            envoye = pont.appuyer(appareil, bouton_.commande, enfonce)
+            action = "enfoncé" if enfonce else "relâché"
         if not envoye:
             suite = " — envoi impossible"
         elif not pont.etat()["connecte"]:
             suite = " — DCS ne répond pas, ordre perdu"
         else:
             suite = ""
-        journal.info("%s %s %s%s", ecran.libelle, bouton_.id,
-                     "enfoncé" if enfonce else "relâché", suite)
+        journal.info("%s %s %s%s", ecran.libelle, bouton_.id, action, suite)
         return {"envoye": envoye}
 
     @app.get("/api/video/{ecran_id}")

@@ -19,7 +19,8 @@ l'appareil piloté dans DCS.
 | JF-17 Thunder | MFCD G, centre, D en portrait (U1–5, L1–8, R1–8, D1–5) | — | oui |
 | Ka-50 Black Shark II / III | Shkval (image), ABRIS (5 boutons dessous) | — | oui |
 | CH-47F Chinook | — (écrans pas encore relevés) | instruments, kneeboard | oui |
-| MiG-29A, TF-51D, Fw 190 D-9, appareils FC3 | — (cockpits à cadrans) | instruments, kneeboard | oui |
+| MiG-29A Fulcrum | HDD, recopie du HUD (interrupteur SOURCE TACT / DUBL) | instruments, disposition « HDD + instr. », kneeboard | oui |
+| TF-51D, Fw 190 D-9, appareils FC3 | — (cockpits à cadrans) | instruments, kneeboard | oui |
 | Autres warbirds, Corée, jets et hélicoptères à cadrans (`warbirds.py`, `sans_ecran.py`) | — | instruments, kneeboard | non (touches [ et ]) |
 | Tout autre appareil | — | instruments (OTAN), kneeboard (affichage) | non |
 
@@ -28,6 +29,18 @@ D'où viennent les numéros, et ce qui reste à confirmer :
 - Hornet, Apache, A-10C, MiG-29A, TF-51D, Fw 190 D-9 : relus dans les scripts
   des modules installés ; `tests/test_tablette.py` les recoupe à chaque
   lancement.
+- MiG-29A, HDD (31/10/2026, demande : « afficher le HUD, déjà dans un petit
+  écran sur le MiG, pour chercher les cibles ») : de tous les modules
+  installés, le seul indicateur exportable (`find_viewport`) hors des MFD.
+  `Displays/HDD/indicator/BAKE/HDD_init.lua` cherche une zone « HDD », sinon
+  RIGHT_MFCD : celle de « Tablette DCS », donc rien à régler. Dans une zone
+  carrée, le module recentre l'HDD sur une bande à ses proportions : bandes
+  noires possibles, à voir au premier vol. L'interrupteur SOURCE
+  (`hdd_commands.SOURCE_KNOB` = 3002, appareil 50, argument 869) est un
+  `Bouton(bascule=869)` : le serveur lit sa position et pose l'autre ; le
+  script Lua l'accepte dans `positions` (0 ou 1, jamais relâché), pas dans
+  `boutons` (relâchés après 5 s). Quelle position est DUBL n'est pas écrit
+  dans les scripts, d'où la bascule plutôt que deux boutons.
 - F-16C, OH-58D, Mi-24P, SA342, AV-8B, F-15E, JF-17, Ka-50, CH-47F : modules
   absents du poste de développement, numéros tirés de
   [DCS-BIOS](https://github.com/DCS-Skunkworks/dcs-bios)
