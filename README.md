@@ -1,5 +1,12 @@
 # DCS Tablette
 
+[![Discord : L'atelier DCS OS](https://img.shields.io/badge/Discord-L%27atelier%20DCS%20OS-5865F2?logo=discord&logoColor=white)](https://discord.gg/4KJYjt7pbc)
+[![Dernière version](https://img.shields.io/github/v/release/led5014/dcs-tablette?label=version)](../../releases/latest)
+
+**Aide, idées, communauté** : rejoins le Discord **[L'atelier DCS OS](https://discord.gg/4KJYjt7pbc)**,
+gratuit, en français — questions dans #aide, appareils et fonctions à
+demander dans #idées, nouvelles versions dans #annonces.
+
 Les écrans du cockpit de DCS World sur une tablette, avec leurs boutons sous
 le doigt. La page s'adapte toute seule à l'appareil piloté et à l'écran qui
 l'affiche : iPad, tablette Android, téléphone, navigateur d'un autre PC.
@@ -35,10 +42,6 @@ l'affiche : iPad, tablette Android, téléphone, navigateur d'un autre PC.
 
 Pas de Python à installer, rien sur internet en vol : le serveur tourne sur
 le PC, l'iPad s'y connecte par le Wi-Fi de la maison.
-
-**Aide, idées, communauté** : le Discord **[L'atelier DCS OS](https://discord.gg/4KJYjt7pbc)**,
-gratuit, en français — questions dans #aide, appareils et fonctions à
-demander dans #idées, nouvelles versions dans #annonces.
 
 ## Télécharger
 
