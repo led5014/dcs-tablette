@@ -37,6 +37,7 @@ local PORT_ETAT = 7791        -- écouté par le serveur : on y annonce l'appare
 local PERIODE_ETAT_S = 1.0
 local PERIODE_TEXTE_S = 0.1       -- l'UFC suit la frappe sans retard sensible
 local PERIODE_AIGUILLES_S = 0.05  -- 20 fois par seconde : aiguilles fluides
+local PERIODE_VOL_S = 0.05        -- données de vol : même cadence, instruments fluides
 -- Les textes ne partent qu'à chaque changement ; on les renvoie quand même
 -- de temps en temps, pour un serveur qui vient de (re)démarrer.
 local PERIODE_RAPPEL_TEXTE_S = 2.0
@@ -64,6 +65,7 @@ local prochainEtat = 0
 local prochainTexte = 0
 local prochainRappel = 0
 local prochainesAiguilles = 0
+local prochainVol = 0
 local derniersTextes = {}
 local enfonces = {}           -- "35:3011" -> { appareil, commande, depuis }
 
@@ -198,6 +200,64 @@ local function envoyerAiguilles()
   envoyer("arg " .. table.concat(morceaux, " "))
 end
 
+--- Les données de vol, communes à tous les appareils, avec ou sans profil :
+--- de quoi redessiner sur la tablette les instruments de base (warbirds sans
+--- écran compris) et garder la tête dehors. En unités de DCS (m/s, mètres,
+--- radians, %, °C, kg ; voir Scripts/Export.lua) : la tablette convertit.
+--- Un serveur multijoueur peut interdire l'export de son propre appareil :
+--- « vol - », pour que la tablette le dise au lieu d'afficher des zéros.
+local function envoyerVol()
+  if sur(LoIsOwnshipExportAllowed) == false then
+    envoyer("vol -")
+    return
+  end
+  local m = {}
+  local function mettre(cle, v)
+    if type(v) == "number" and v == v then
+      m[#m + 1] = string.format("%s=%.4f", cle, v)
+    end
+  end
+  mettre("vi", sur(LoGetIndicatedAirSpeed))
+  mettre("vv", sur(LoGetTrueAirSpeed))
+  mettre("alt", sur(LoGetAltitudeAboveSeaLevel))
+  mettre("sol", sur(LoGetAltitudeAboveGroundLevel))
+  mettre("vz", sur(LoGetVerticalVelocity))
+  local ok, tangage, roulis = pcall(LoGetADIPitchBankYaw)
+  if ok then
+    mettre("tang", tangage)
+    mettre("roul", roulis)
+  end
+  mettre("cap", sur(LoGetMagneticYaw))
+  mettre("inc", sur(LoGetAngleOfAttack))
+  mettre("mach", sur(LoGetMachNumber))
+  mettre("bille", sur(LoGetSlipBallPosition))
+  local acc = sur(LoGetAccelerationUnits)
+  if type(acc) == "table" then mettre("g", acc.y) end
+  local rotation = sur(LoGetAngularVelocity)
+  if type(rotation) == "table" then mettre("lacet", rotation.y) end
+  local moteur = sur(LoGetEngineInfo)
+  if type(moteur) == "table" then
+    if type(moteur.RPM) == "table" then
+      mettre("rpm1", moteur.RPM.left)
+      mettre("rpm2", moteur.RPM.right)
+    end
+    if type(moteur.Temperature) == "table" then
+      mettre("t1", moteur.Temperature.left)
+      mettre("t2", moteur.Temperature.right)
+    end
+    if moteur.fuel_internal or moteur.fuel_external then
+      mettre("carb", (moteur.fuel_internal or 0) + (moteur.fuel_external or 0))
+    end
+  end
+  local meca = sur(LoGetMechInfo)
+  if type(meca) == "table" then
+    if type(meca.gear) == "table" then mettre("train", meca.gear.value) end
+    if type(meca.flaps) == "table" then mettre("volets", meca.flaps.value) end
+    if type(meca.speedbrakes) == "table" then mettre("aerofreins", meca.speedbrakes.value) end
+  end
+  envoyer("vol " .. table.concat(m, " "))
+end
+
 --- Un ordre reçu : vérifié entièrement contre le profil avant de toucher au
 --- cockpit.
 -- Afficher ou cacher le kneeboard de DCS, pour le montrer sur la tablette
@@ -314,6 +374,11 @@ function DCSTablette.frame()
       enfonces[cle] = nil
       jouer(e[1], e[2], 0)
     end
+  end
+  -- Avant le test du profil : les instruments valent pour tous les appareils.
+  if appareil and maintenant >= prochainVol then
+    prochainVol = maintenant + PERIODE_VOL_S
+    envoyerVol()
   end
   if not profil then return end
   if maintenant >= prochainRappel then

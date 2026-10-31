@@ -10,6 +10,13 @@ l'affiche : iPad, tablette Android, téléphone, navigateur d'un autre PC.
 - **Luminosité écran par écran** : une molette dans le coin bas gauche de
   chaque cadre, pour un TGP trop sombre ou un écran trop pâle ; retenue par
   appareil.
+- **Instruments de base pour tout appareil** — warbirds, hélicoptères, jets :
+  badin, horizon, altimètre, virage et bille, cap, vario, G, régime, et en
+  chiffres carburant, train, volets… dans les unités du cockpit (mph et
+  pieds pour un P-51, km/h et mètres pour un Bf 109, nœuds pour un jet de
+  l'OTAN). De quoi garder la tête dehors. Tirés des données de vol de DCS,
+  pas des aiguilles du module : en multijoueur, un serveur qui interdit
+  l'export de son propre appareil les coupe, la tablette le dit.
 - **Planche avant du Hornet** redessinée : UFC tactile, IFEI, instruments de
   secours, voyants.
 - **Kneeboard** : les pages de l'avion piloté lues directement dans les
@@ -51,12 +58,24 @@ l'ancien dossier.
 | AH-64D Apache | MPD G, MPD D (+ FCR, WPN, TSD…), TEDAC en image | siège Pilote / CPG |
 | OH-58D Kiowa | MFD G, MFD D | — |
 | A-10C / A-10C II | MFCD G, MFCD D | — |
-| Mi-24P, SA342, MiG-29A, TF-51D, FC3 | — (cockpits à cadrans) | kneeboard |
+| AV-8B Harrier | MPCD G, MPCD D | — |
+| F-15E Strike Eagle | MPD G, MPD D, MPCD (place avant) | — |
+| JF-17 Thunder | MFCD G, centre, D (en portrait, 26 boutons) | — |
+| Ka-50 Black Shark II / III | Shkval en image, ABRIS et ses 5 boutons | — |
+| Warbirds : P-51D, TF-51D, P-47D, F4U-1D, Spitfire IX, Mosquito, Bf 109 K-4, Fw 190 A-8 / D-9, I-16, Yak-52 | — (cockpits à cadrans) | instruments dans leurs unités, kneeboard |
+| Corée : F-86F, MiG-15bis | — | instruments, kneeboard |
+| F-14, F-4E, Mirage 2000C, Mirage F1, F-5E, MiG-21bis, MiG-19P, AJS-37, MiG-29A, L-39, C-101, MB-339, FC3 | — | instruments, kneeboard |
+| CH-47F, Mi-8MTV2, Mi-24P, UH-1H, SA342 | — | instruments d'hélicoptère, kneeboard |
 
-Tout autre appareil a au moins le kneeboard. Les numéros des boutons du F-16C,
-de l'OH-58D, du Mi-24P et de la Gazelle viennent de
+Tout autre appareil a les instruments de base et le kneeboard. Les unités du
+MiG-29A et du L-39 suivent les options de DCS (« Avionics Units » du MiG-29,
+langue des avioniques du L-39) : la tablette relit `options.lua`.
+
+Les numéros des boutons du F-16C, de l'OH-58D, de l'AV-8B, du F-15E, du
+JF-17 et du Ka-50 viennent de
 [DCS-BIOS](https://github.com/DCS-Skunkworks/dcs-bios) et restent à confirmer
-en vol : un retour est bienvenu.
+en vol (surtout la place des boutons autour des écrans du JF-17 et du
+F-15E) : un retour est bienvenu.
 
 Sur le Hornet, l'Apache et l'A-10C, chaque bouton est en face du libellé que
 le module écrit sur l'écran (positions lues dans les scripts du module). Sur

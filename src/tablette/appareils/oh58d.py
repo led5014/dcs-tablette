@@ -11,6 +11,7 @@ Scripts/DCS-BIOS/lib/modules/aircraft_modules/OH-58D.lua) :
 Zones d'export : LEFT_MFCD et RIGHT_MFCD, d'après une configuration publiée
 sur le forum DCS — pas confirmé par ED, à vérifier au premier vol.
 """
+from ..instruments import HELICO_KT
 from . import Bouton, Ecran, Profil
 
 
@@ -36,4 +37,5 @@ PROFIL = Profil(
         Ecran("mfd_droit", "MFD droit", "RIGHT_MFCD", {"": 11}, _CADRE),
     ),
     kneeboard=51,
+    instruments=HELICO_KT,
 )

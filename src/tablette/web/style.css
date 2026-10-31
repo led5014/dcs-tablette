@@ -158,7 +158,10 @@ body.en-kneeboard #modes { opacity: .45; }
   #modes button, #sieges button, .bascule { padding: 0 8px; font-size: 13px; }
 }
 /* Téléphone tenu droit : les dispositions passent sur une seconde ligne, en
-   pleine largeur ; la scène, mesurée sous la barre, suit d'elle-même. */
+   pleine largeur ; la scène, mesurée sous la barre, suit d'elle-même.
+   Le saut caché AVANT la règle du téléphone : écrit après, il l'emportait
+   toujours, et les dispositions restaient coincées au bout de la ligne. */
+.saut { display: none; }
 @media (max-width: 560px) {
   #barre {
     height: auto;
@@ -172,7 +175,6 @@ body.en-kneeboard #modes { opacity: .45; }
   #modes { order: 10; flex: 1 1 0; margin-left: 0; }
   #sieges { order: 11; }
 }
-.saut { display: none; }
 /* Téléphone en paysage : chaque pixel de hauteur compte. */
 @media (max-height: 500px) {
   :root { --barre: 38px; --bouton-barre: 28px; --marge: 6px; }
@@ -562,6 +564,95 @@ body.en-kneeboard #modes { opacity: .45; }
 .voyant.rouge.allume { background: var(--rouge); color: #fff; box-shadow: 0 0 8px rgba(239, 90, 79, .7); }
 .voyant.vert.allume { background: var(--vert); color: #032; box-shadow: 0 0 8px rgba(61, 220, 106, .6); }
 .sans-donnees { opacity: .45; }
+
+/* ------------------------------------------------------------- instruments
+   Tout appareil (app.js, construireInstruments) : en T comme au tableau de
+   bord — badin, horizon, altimètre en haut ; virage, cap, vario dessous ;
+   G et régime au bout ; les chiffres dans le bandeau. Trois formes selon la
+   place : carrée (3 × 3), large (4 × 2, bandeau dessous), étroite (2 × 4). */
+.instruments {
+  position: relative;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: 1fr 1fr 1fr;
+  grid-template-areas: "badin sai alti" "virage cap vario" "g regime bandeau";
+  gap: 2%;
+  padding: 2%;
+  background: #1a1d1f;
+  border: 1px solid var(--cadre-bord);
+  border-radius: 2.5%;
+}
+.instruments.large {
+  grid-template-columns: repeat(4, 1fr);
+  grid-template-rows: 1fr 1fr 0.4fr;
+  grid-template-areas: "badin sai alti g" "virage cap vario regime" "bandeau bandeau bandeau bandeau";
+}
+.instruments.etroit {
+  grid-template-columns: repeat(2, 1fr);
+  grid-template-rows: 1fr 1fr 1fr 1fr 0.5fr;
+  grid-template-areas: "badin sai" "alti cap" "virage vario" "g regime" "bandeau bandeau";
+}
+.instruments .badin { grid-area: badin; }
+.instruments .sai { grid-area: sai; }
+.instruments .alti { grid-area: alti; }
+.instruments .g { grid-area: g; }
+.instruments .virage { grid-area: virage; }
+.instruments .cap { grid-area: cap; }
+.instruments .vario { grid-area: vario; }
+.instruments .regime { grid-area: regime; }
+/* Le titre sous le cadran, pas dessus : il masquait les chiffres du bas. */
+.instruments .instrument svg { flex: 1; min-height: 0; }
+.instruments .instrument .titre {
+  position: static;
+  flex: none;
+  font-size: max(8px, calc(var(--taille) * .022));
+}
+.instruments.large .instrument .titre { font-size: max(8px, calc(var(--taille) * .016)); }
+.instruments.etroit .instrument .titre { font-size: max(8px, calc(var(--taille) * .032)); }
+.bandeau {
+  grid-area: bandeau;
+  display: flex;
+  flex-wrap: wrap;
+  align-content: center;
+  justify-content: center;
+  gap: 4px 6px;
+  min-height: 0;
+  overflow: hidden;
+}
+.lecture {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: #121516;
+  border: 1px solid #262b2d;
+}
+.lecture .titre { font-size: max(7px, calc(var(--taille) * .016)); color: var(--discret); letter-spacing: .06em; }
+.lecture .valeur {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: max(10px, calc(var(--taille) * .028));
+  color: var(--vert-lcd);
+  white-space: nowrap;
+}
+.lecture.vert .valeur { color: var(--vert); }
+.lecture.ambre .valeur { color: var(--ambre); }
+.message-vol {
+  position: absolute;
+  left: 8%;
+  right: 8%;
+  bottom: 40%;
+  margin: 0;
+  padding: .6em 1em;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, .75);
+  color: var(--texte);
+  text-align: center;
+  font-size: max(11px, calc(var(--taille) * .028));
+}
+.message-vol[hidden] { display: none; }
+/* Message lisible même quand le panneau est grisé faute de données. */
+.instruments.sans-donnees { opacity: 1; }
+.instruments.sans-donnees .instrument, .instruments.sans-donnees .bandeau { opacity: .45; }
 
 /* ------------------------------------------------------------- kneeboard */
 

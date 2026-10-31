@@ -112,6 +112,17 @@ EN VOL
      tourner la molette ronde du coin bas gauche de son cadre — glisser
      le doigt vers le haut ou la droite éclaircit. Réglée écran par écran
      et appareil par appareil, retenue sur la tablette.
+  5. « Instruments » (en haut) : badin, horizon, altimètre, virage et
+     bille, cap, vario, G et régime, disposés en T comme au tableau de
+     bord, avec carburant, train et volets en chiffres. Pour TOUT appareil,
+     warbirds et hélicoptères compris, dans les unités de son cockpit —
+     c'est l'affichage par défaut des appareils sans écran. De quoi garder
+     la tête dehors : un coup d'œil sur la tablette suffit. Le MiG-29A et
+     le L-39 suivent les unités choisies dans les options de DCS.
+     Ce sont les données de vol de DCS, pas les aiguilles du module (ni ses
+     pannes, ni son calage altimétrique). En multijoueur, certains serveurs
+     interdisent l'export de son propre appareil : la tablette l'indique,
+     les instruments restent vides.
 
 DIAGNOSTIC
 ----------

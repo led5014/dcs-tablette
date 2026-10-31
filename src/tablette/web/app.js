@@ -24,7 +24,8 @@ const BORD = 0.62;                  // épaisseur de la couronne de boutons, en 
 // ou à l'œil (boutons d'un cadre sous ~28 px de haut, touches de l'UFC sous
 // ~40 px, voyants illisibles). Une disposition à plusieurs panneaux n'est
 // proposée que si chacun l'atteint sur l'écran où la page est ouverte.
-const CONFORT = { cadre: 280, ufc: 290, ifei: 200, secours: 520, secoursEtroit: 330 };
+const CONFORT = { cadre: 280, ufc: 290, ifei: 200, secours: 520, secoursEtroit: 330,
+  instruments: 450 };
 
 function element(balise, classe, texte) {
   const el = document.createElement(balise);
@@ -172,6 +173,9 @@ function calculerDispositions(p) {
   if (ids.length >= 2 && p.panneaux.length) {
     liste.push({ id: 'planche', libelle: 'Planche', ids: [...ids, ...p.panneaux] });
   }
+  // Les instruments de base valent pour tout appareil : la disposition par
+  // défaut de ceux qui n'ont pas d'écran (warbirds, hélicoptères à cadrans).
+  liste.push({ id: 'instruments', libelle: 'Instruments', ids: ['instruments'], toujours: true });
   return liste;
 }
 
@@ -536,14 +540,19 @@ function pistes(n, reperes) {
 
 function construireCadre(e) {
   const n = e.par_cote;
+  const ny = e.par_cote_y || n;     // écran en portrait : plus de boutons sur les côtés
   const rangee = e.boutons.filter((b) => b.cote === 'rangee');
   const col = pistes(n, e.reperes_x);
-  const lig = pistes(n, e.reperes_y);
+  const lig = pistes(ny, e.reperes_y);
   const cadre = element('div', 'panneau cadre' + (e.reperes_x || e.reperes_y ? ' sur-reperes' : ''));
   cadre.style.gridTemplateColumns = col.gabarit;
   cadre.style.gridTemplateRows = lig.gabarit + (rangee.length ? ` ${BORD}fr` : '');
-  const lignes = n + 2 * BORD + (rangee.length ? BORD : 0);
-  cadre.formes = [{ ratio: (n + 2 * BORD) / lignes, classe: '', confort: CONFORT.cadre }];
+  // La forme du cadre donne au verre sa forme : n cases de large, ny de haut,
+  // étirées pour que largeur / hauteur du verre vaille `aspect` (carré sinon).
+  const aspect = e.aspect || n / ny;
+  const lignes = ny + 2 * BORD + (rangee.length ? BORD : 0);
+  const ratio = aspect * (ny / n) * (n + 2 * BORD) / lignes;
+  cadre.formes = [{ ratio, classe: '', confort: CONFORT.cadre * Math.min(1, ratio) }];
 
   const ecran = element('div', 'ecran');
   ecran.style.gridColumn = `2 / ${col.fin}`;
@@ -704,6 +713,8 @@ const angleDe = (type, position) => cadrans.angles[type][0] + position * cadrans
 
 // Un cadran rond : graduations placées par le serveur avec les mêmes tables
 // que les aiguilles, une ou deux aiguilles, et une valeur lisible au centre.
+// Une aiguille : sa couleur, ou { couleur, longueur } (petite aiguille de
+// l'altimètre : longueur 0.6).
 function cadran(def, aiguilles = ['#e8ecee']) {
   const s = svg('svg', { viewBox: '-100 -100 200 200' });
   svg('circle', { r: 96, fill: '#0c0e0f', stroke: '#3a4043', 'stroke-width': 3 }, s);
@@ -717,9 +728,12 @@ function cadran(def, aiguilles = ['#e8ecee']) {
   }
   const valeur = svg('text', { y: 44, fill: '#7cff9a', 'font-size': 18, 'text-anchor': 'middle',
     'font-family': 'monospace' }, s);
-  const traits = aiguilles.map((couleur) => {
+  const traits = aiguilles.map((a) => {
+    const { couleur, longueur } = typeof a === 'string' ? { couleur: a, longueur: 1 } : a;
     const g = svg('g', {}, s);
-    svg('path', { d: 'M -4 12 L 0 -84 L 4 12 Z', fill: couleur }, g);
+    const l = Math.round(84 * longueur);
+    svg('path', { d: `M -${longueur < 1 ? 6 : 4} 12 L 0 -${l} L ${longueur < 1 ? 6 : 4} 12 Z`,
+      fill: couleur }, g);
     return g;
   });
   svg('circle', { r: 7, fill: '#3a4043' }, s);
@@ -825,6 +839,167 @@ function construireSecours() {
   return p;
 }
 
+// --------------------------------------------------------------- instruments
+// Les instruments de base, pour tout appareil (warbird, hélicoptère, jet) :
+// redessinés d'après les données de vol de DCS (instruments.py), dans les
+// unités du cockpit. Disposés en T, comme au tableau de bord : badin,
+// horizon, altimètre en haut ; virage, cap, vario dessous ; G et régime au
+// bout ; les valeurs en chiffres dans un bandeau.
+
+// La rose du conservateur de cap : elle tourne, le repère reste en haut.
+function compas() {
+  const s = svg('svg', { viewBox: '-100 -100 200 200' });
+  svg('circle', { r: 96, fill: '#0c0e0f', stroke: '#3a4043', 'stroke-width': 3 }, s);
+  const rose = svg('g', {}, s);
+  for (let d = 0; d < 360; d += 5) {
+    const a = (d - 90) * Math.PI / 180;
+    const long = d % 30 === 0 ? 14 : d % 10 === 0 ? 9 : 5;
+    svg('line', { x1: 90 * Math.cos(a), y1: 90 * Math.sin(a), x2: (90 - long) * Math.cos(a),
+      y2: (90 - long) * Math.sin(a), stroke: '#c9d1d3', 'stroke-width': d % 30 === 0 ? 3 : 1.5 }, rose);
+    if (d % 30 === 0) {
+      const t = svg('text', { x: 0, y: -62, fill: d % 90 === 0 ? '#f0b43c' : '#c9d1d3',
+        'font-size': d % 90 === 0 ? 20 : 16, 'text-anchor': 'middle', 'font-family': 'sans-serif',
+        transform: `rotate(${d})` }, rose);
+      t.textContent = { 0: 'N', 90: 'E', 180: 'S', 270: 'W' }[d] || String(d / 10);
+    }
+  }
+  // L'avion au centre et le repère de cap, fixes.
+  svg('path', { d: 'M 0 -26 L 5 -8 L 22 2 L 22 7 L 5 2 L 3 18 L 9 23 L 9 27 L 0 24 L -9 27 '
+    + 'L -9 23 L -3 18 L -5 2 L -22 7 L -22 2 L -5 -8 Z', fill: '#f0b43c' }, s);
+  svg('path', { d: 'M -7 -98 L 7 -98 L 0 -84 Z', fill: '#f0b43c' }, s);
+  const valeur = svg('text', { y: 52, fill: '#7cff9a', 'font-size': 18, 'text-anchor': 'middle',
+    'font-family': 'monospace' }, s);
+  return {
+    el: s,
+    poser: (cap, texte) => { rose.setAttribute('transform', `rotate(${-cap})`); valeur.textContent = texte; },
+  };
+}
+
+// L'indicateur de virage et la bille : l'aiguille penche au taux de virage
+// (repères au taux standard, 3°/s), la bille glisse dans son tube.
+function indicateurVirage() {
+  const s = svg('svg', { viewBox: '-100 -100 200 200' });
+  svg('circle', { r: 96, fill: '#0c0e0f', stroke: '#3a4043', 'stroke-width': 3 }, s);
+  for (const a of [-20, 0, 20]) {
+    const r = (a - 90) * Math.PI / 180;
+    svg('line', { x1: 74 * Math.cos(r), y1: 74 * Math.sin(r), x2: 90 * Math.cos(r),
+      y2: 90 * Math.sin(r), stroke: a ? '#7cff9a' : '#c9d1d3', 'stroke-width': 5 }, s);
+  }
+  for (const [x, t] of [[-58, 'G'], [58, 'D']]) {
+    svg('text', { x, y: -54, fill: '#7d878b', 'font-size': 15, 'text-anchor': 'middle',
+      'font-family': 'sans-serif' }, s).textContent = t;
+  }
+  const aiguille = svg('g', {}, s);
+  svg('path', { d: 'M -4 8 L 0 -72 L 4 8 Z', fill: '#e8ecee' }, aiguille);
+  svg('circle', { r: 7, fill: '#3a4043' }, s);
+  // Le tube de la bille, et ses deux repères.
+  svg('rect', { x: -48, y: 34, width: 96, height: 22, rx: 11, fill: '#1d2224', stroke: '#565c60',
+    'stroke-width': 2 }, s);
+  for (const x of [-13, 13]) svg('line', { x1: x, x2: x, y1: 34, y2: 56, stroke: '#c9d1d3', 'stroke-width': 2 }, s);
+  const bille = svg('circle', { cx: 0, cy: 45, r: 9, fill: '#e8ecee' }, s);
+  const valeur = svg('text', { y: 80, fill: '#7cff9a', 'font-size': 15, 'text-anchor': 'middle',
+    'font-family': 'monospace' }, s);
+  return {
+    el: s,
+    poser: (angle, position, texte) => {
+      aiguille.setAttribute('transform', `rotate(${angle})`);
+      bille.setAttribute('cx', String(position * 37));
+      valeur.textContent = texte;
+    },
+  };
+}
+
+function construireInstruments(c) {
+  const p = element('div', 'panneau instruments');
+  // En largeur (4 cadrans par rangée), carré (3) ou en hauteur (2) : la page
+  // prend celle qui laisse les cadrans les plus grands sur cet écran.
+  p.formes = [{ ratio: 4 / 2.4, classe: 'large', confort: CONFORT.instruments * 4 / 3 },
+    { ratio: 3 / 3.1, classe: '', confort: CONFORT.instruments },
+    { ratio: 2 / 4.5, classe: 'etroit', confort: CONFORT.instruments * 2 / 3 }];
+  const u = c.unites;
+  const case_ = (titre, contenu, classe = '') => {
+    const k = element('div', `instrument ${classe}`);
+    k.append(contenu, element('span', 'titre', titre));
+    p.append(k);
+  };
+  const badin = cadran({ graduations: c.badin });
+  const sai = horizon();
+  const alti = cadran({ graduations: c.altimetre },
+    ['#e8ecee', { couleur: '#f0b43c', longueur: 0.6 }]);
+  const virage = indicateurVirage();
+  const cap = compas();
+  const vario = cadran({ graduations: c.vario });
+  const g = cadran({ graduations: c.g });
+  const regime = cadran({ graduations: c.regime }, c.moteurs > 1 ? ['#7cc7ff', '#ffb36b'] : ['#e8ecee']);
+  case_(`VITESSE ${u.vitesse}`, badin.el, 'badin');
+  case_('HORIZON', sai.el, 'sai');
+  case_(`ALTITUDE ${u.altitude}`, alti.el, 'alti');
+  case_('G', g.el, 'g');
+  case_('VIRAGE', virage.el, 'virage');
+  case_('CAP', cap.el, 'cap');
+  case_(`VARIO ${u.vario}`, vario.el, 'vario');
+  case_(c.moteurs > 1 ? 'RÉGIME % G / D' : 'RÉGIME %', regime.el, 'regime');
+  const bandeau = element('div', 'bandeau');
+  const message = element('p', 'message-vol', 'En attente des données de vol (DCS en mission).');
+  p.append(bandeau, message);
+  p.cle = c.cle;
+
+  p.maj = (d) => {
+    const v = d && d.instruments;
+    p.classList.toggle('sans-donnees', !v);
+    message.hidden = !!v;
+    message.textContent = d && d.interdit
+      ? 'Données de vol coupées par le serveur multijoueur : il interdit l\'export de son appareil.'
+      : 'En attente des données de vol (DCS en mission).';
+    if (!v) return;
+    if (v.badin) { badin.tourner(0, v.badin.angle); badin.texte(v.badin.texte); }
+    if (v.horizon) sai.poser(v.horizon.assiette, v.horizon.inclinaison);
+    if (v.altimetre) {
+      alti.tourner(0, v.altimetre.angles[0]);
+      alti.tourner(1, v.altimetre.angles[1]);
+      alti.texte(v.altimetre.texte);
+    }
+    if (v.virage) virage.poser(v.virage.angle, v.virage.bille, v.virage.texte);
+    if (v.cap) cap.poser(v.cap.cap, v.cap.texte);
+    if (v.vario) { vario.tourner(0, v.vario.angle); vario.texte(v.vario.texte); }
+    if (v.g) { g.tourner(0, v.g.angle); g.texte(v.g.texte); }
+    if (v.regime) {
+      v.regime.angles.forEach((a, i) => regime.tourner(i, a));
+      regime.texte(v.regime.texte);
+    }
+    bandeau.textContent = '';
+    for (const b of v.bandeau) {
+      const item = element('div', `lecture ${b.etat || ''}`);
+      item.append(element('span', 'titre', b.titre), element('span', 'valeur', b.texte));
+      bandeau.append(item);
+    }
+  };
+  return p;
+}
+
+async function boucleInstruments(gen) {
+  while (gen === generation) {
+    if (!ecranAffiche('instruments')) {
+      await attendre(300);
+      continue;
+    }
+    let d = null;
+    try {
+      const r = await fetch('/api/instruments', { cache: 'no-store' });
+      if (r.ok) d = await r.json();
+    } catch { /* serveur injoignable : instruments grisés */ }
+    if (gen !== generation) return;
+    const p = panneaux.get('instruments');
+    // Unités changées dans les options de DCS (MiG-29, L-39) : autres cadrans.
+    if (p && d && d.cle !== p.cle) {
+      chargerProfil();
+      return;
+    }
+    if (p) p.maj(d);
+    await attendre(PERIODE_PLANCHE_MS);
+  }
+}
+
 async function bouclePlanche(gen) {
   while (gen === generation) {
     if (!['ufc', 'ifei', 'secours'].some((id) => ecranAffiche(id))) {
@@ -848,11 +1023,14 @@ async function bouclePlanche(gen) {
 
 async function chargerProfil() {
   let p;
+  let cadransVol;
   try {
     p = await (await fetch('/api/profil', { cache: 'no-store' })).json();
     if (p.panneaux.includes('secours') && !cadrans) {
       cadrans = await (await fetch('/api/planche/cadrans', { cache: 'no-store' })).json();
     }
+    // Ceux de cet appareil : unités et échelles changent d'un avion à l'autre.
+    cadransVol = await (await fetch('/api/instruments/cadrans', { cache: 'no-store' })).json();
   } catch {
     setTimeout(chargerProfil, 2000);
     return;
@@ -872,6 +1050,8 @@ async function chargerProfil() {
   if (p.panneaux.includes('ifei')) panneaux.set('ifei', construireIfei());
   if (p.panneaux.includes('secours')) panneaux.set('secours', construireSecours());
   if (p.panneaux.length) bouclePlanche(generation);
+  panneaux.set('instruments', construireInstruments(cadransVol));
+  boucleInstruments(generation);
 
   // Appareil sans écran repris : le kneeboard est tout ce qu'on peut offrir.
   if (!dispositions.length && !enKneeboard) {

@@ -9,13 +9,18 @@
   pas savoir ce qui se passe dans un cockpit qu'on n'entend plus. Dans un
   Hornet, il envoie aussi le texte de l'UFC et de l'IFEI (« ind ») et la
   position des aiguilles et des voyants (« arg ») : périmés au même délai.
+  Et pour tout appareil, 20 fois par seconde, les données de vol (« vol ») :
+  vitesse, altitude, assiette, cap, moteur… pour les instruments analogiques.
 """
 from __future__ import annotations
 
+import math
 import socket
 import threading
 import time
 from typing import Dict, Optional, Tuple
+
+from .instruments import TauxDeVirage
 
 SILENCE_S = 3.0
 TAILLE_MAX = 65536             # un texte d'IFEI tient en quelques Ko
@@ -34,6 +39,8 @@ class PontDCS:
         self._dernier: Optional[tuple] = None      # (appareil ou None, instant)
         self._textes: Dict[int, Tuple[str, float]] = {}
         self._arguments: Tuple[Dict[int, float], float] = ({}, 0.0)
+        self._vol: Tuple[Dict[str, float], bool, float] = ({}, False, -1e9)
+        self._virage = TauxDeVirage()
 
     def demarrer(self) -> None:
         """Ouvre l'écoute des annonces. Un port déjà pris n'empêche pas de
@@ -101,6 +108,24 @@ class PontDCS:
                     continue
             with self._verrou:
                 self._arguments = (valeurs, maintenant)
+        elif texte.startswith("vol "):
+            # Données de vol de tout appareil (instruments.py) ; « vol - » :
+            # le serveur multijoueur interdit d'exporter son propre appareil.
+            donnees: Dict[str, float] = {}
+            if texte[4:].strip() != "-":
+                for morceau in texte[4:].split():
+                    cle, _, v = morceau.partition("=")
+                    try:
+                        donnees[cle] = float(v)
+                    except ValueError:
+                        continue
+            if "cap" in donnees:
+                # Taux de virage tiré du cap, à chaque message : le calculer à
+                # chaque demande de la page le fausserait (deux tablettes, ou
+                # une demande sans nouveau message entre-temps).
+                donnees["taux"] = self._virage.mesurer(math.degrees(donnees["cap"]) % 360.0)
+            with self._verrou:
+                self._vol = (donnees, texte[4:].strip() == "-", maintenant)
 
     def texte(self, numero: int) -> Optional[str]:
         """Dernier texte reçu de l'indicateur `numero`, s'il est frais."""
@@ -109,6 +134,15 @@ class PontDCS:
         if recu is None or time.monotonic() - recu[1] > SILENCE_S:
             return None
         return recu[0]
+
+    def vol(self) -> Tuple[Optional[Dict[str, float]], bool]:
+        """Dernières données de vol (None si rien de frais), et si le serveur
+        multijoueur interdit de les exporter."""
+        with self._verrou:
+            donnees, interdit, instant = self._vol
+        if time.monotonic() - instant > SILENCE_S:
+            return None, False
+        return (None if interdit else dict(donnees)), interdit
 
     def arguments(self) -> Dict[int, float]:
         """Dernières positions d'aiguilles et de voyants, si fraîches."""

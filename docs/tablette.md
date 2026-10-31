@@ -14,21 +14,42 @@ l'appareil piloté dans DCS.
 | AH-64D Apache | MPD G, MPD D (T/R/B/L + FCR, WPN, TSD, VID, COM, A/C, *), TEDAC (image) | siège Pilote / CPG à choisir | oui |
 | OH-58D Kiowa | MFD G (copilote), MFD D (pilote) : L1–L5, R1–R5, B1–B4, INIT | — | oui |
 | A-10C / A-10C II | MFCD G, MFCD D (20 OSB) | — | oui |
-| Mi-24P Hind, SA342 Gazelle | — (cockpits à cadrans) | kneeboard | non |
-| MiG-29A, TF-51D, appareils FC3 | — | kneeboard | oui |
-| Tout autre appareil | — | kneeboard (affichage) | non |
+| AV-8B Harrier | MPCD G, MPCD D (20 boutons) | — | oui |
+| F-15E Strike Eagle | MPD G, MPD D, MPCD (place avant, 20 PB) | — | oui |
+| JF-17 Thunder | MFCD G, centre, D en portrait (U1–5, L1–8, R1–8, D1–5) | — | oui |
+| Ka-50 Black Shark II / III | Shkval (image), ABRIS (5 boutons dessous) | — | oui |
+| CH-47F Chinook | — (écrans pas encore relevés) | instruments, kneeboard | oui |
+| MiG-29A, TF-51D, Fw 190 D-9, appareils FC3 | — (cockpits à cadrans) | instruments, kneeboard | oui |
+| Autres warbirds, Corée, jets et hélicoptères à cadrans (`warbirds.py`, `sans_ecran.py`) | — | instruments, kneeboard | non (touches [ et ]) |
+| Tout autre appareil | — | instruments (OTAN), kneeboard (affichage) | non |
 
 D'où viennent les numéros, et ce qui reste à confirmer :
 
-- Hornet, Apache, A-10C, MiG-29A, TF-51D : relus dans les scripts des modules
-  installés ; `tests/test_tablette.py` les recoupe à chaque lancement.
-- F-16C, OH-58D, Mi-24P, SA342 : modules absents du poste de développement,
-  numéros tirés de [DCS-BIOS](https://github.com/DCS-Skunkworks/dcs-bios)
-  (`aircraft_modules/*.lua`). À confirmer au premier vol de chacun :
+- Hornet, Apache, A-10C, MiG-29A, TF-51D, Fw 190 D-9 : relus dans les scripts
+  des modules installés ; `tests/test_tablette.py` les recoupe à chaque
+  lancement.
+- F-16C, OH-58D, Mi-24P, SA342, AV-8B, F-15E, JF-17, Ka-50, CH-47F : modules
+  absents du poste de développement, numéros tirés de
+  [DCS-BIOS](https://github.com/DCS-Skunkworks/dcs-bios)
+  (`aircraft_modules/*.lua`), recoupés avec les extractions des `devices.lua`
+  et `clickabledata.lua` des modules (DCSAutoMate). À confirmer au premier vol
+  de chacun :
   - zones d'export de l'OH-58D (`LEFT_MFCD` / `RIGHT_MFCD` d'après le forum
     DCS, sans confirmation d'ED) ;
   - position B1 (menu) en bas à gauche des MPD de l'Apache, déduite de l'ordre
-    des arguments 3D.
+    des arguments 3D ;
+  - place des boutons autour des MPD du F-15E (sens antihoraire depuis le
+    haut à gauche, jauge Helios) et des MFCD du JF-17 (ordre des L/R et U/D
+    déduit des noms), et comment DCS dessine les MFCD en portrait du JF-17
+    dans la zone d'export ;
+  - kneeboard des modules sans `KNEEBOARD` dans `devices.lua` (AV-8B, F-15E,
+    JF-17, Ka-50) : appareil 100, comme les FC3 ;
+  - F-15E : seulement la place avant (la place arrière partage les zones
+    d'export sans qu'on sache ce qui s'y dessine) ; CH-47F : pas d'écran tant
+    qu'on ne sait pas lequel des cinq MFD sort dans `RIGHT_MFCD`.
+- Noms des appareils dans DCS (`LoGetSelfData().Name`) : liste de DCS-BIOS
+  (`AircraftList.lua`) recoupée avec les définitions de CoreMods du jeu ;
+  casse et espaces comptent (« F-86F Sabre », « MiG-21Bis », « FW-190A8 »).
 - Pas de commande de page de kneeboard tant que l'appareil KNEEBOARD du module
   n'est pas relevé : une commande au mauvais appareil actionnerait autre chose.
 
@@ -140,6 +161,35 @@ Depuis le code :
 
 Sans second écran, `configurer_ecrans_dcs.py` sans option pose les écrans en
 bas de la vue : pour essayer, pas pour voler.
+
+## Instruments de base, pour tout appareil
+
+`instruments.py` (31/10/2026, demande : des warbirds sans écran, garder la
+tête dehors). Le script Lua envoie pour TOUT appareil, avec ou sans profil,
+20 fois par seconde, un message « vol » : `LoGetIndicatedAirSpeed`,
+`LoGetAltitudeAboveSeaLevel`, `LoGetADIPitchBankYaw`, `LoGetMagneticYaw`,
+`LoGetVerticalVelocity`, `LoGetAccelerationUnits`, `LoGetSlipBallPosition`,
+`LoGetEngineInfo`, `LoGetMechInfo`… en unités de DCS (m/s, m, rad ; voir
+Scripts/Export.lua). « vol - » quand `LoIsOwnshipExportAllowed()` est faux
+(serveur multijoueur). `dcs.py` en tire le taux de virage (dérivée du cap,
+lissée : le signe de `LoGetAngularVelocity` n'est pas sûr d'un module à
+l'autre), `instruments.lecture` convertit dans les unités du profil
+(`Profil.instruments` : OTAN, WARBIRD_US, WARBIRD_METRIQUE, METRIQUE,
+HELICO_KT, HELICO_METRIQUE) et calcule les angles des aiguilles ; la page
+dessine (`construireInstruments`, `compas`, `indicateurVirage`). Ce sont les
+grandeurs de vol de DCS, pas les aiguilles du module : ni ses pannes, ni
+son calage. Le script tourne dans les tests, dans le moteur Lua de DCS
+(son `bin/lua.dll`), avec un faux DCS.
+
+Unités par appareil : manuels ED quand ils ont pu être lus (P-51D : badin
+0–700 mph, vario ±6000 ft/min ; Fw 190 D-9 : jusqu'à 900 km/h ; Mosquito :
+mph, ±4000 ft/min), DCS-BIOS et DCS-ExportScripts sinon. Les moins sûres :
+F4U (nœuds), I-16 et Yak-52 (métriques), Mirage F1 et C-101 (nœuds
+supposés). Deux cockpits changent d'unités selon les options de DCS
+(`Profil.imperial`) : le MiG-29A (`MiG29AvionicsUnits = 1`, « Imperial ») et
+le L-39 (`avionicsLanguage = "english"`). Le serveur relit
+`Config/options.lua` quand DCS l'a réécrit ; la lecture porte une `cle` des
+cadrans, et la page redemande les siens quand elle change.
 
 ## Sur l'iPad
 

@@ -17,6 +17,9 @@ Le siège n'est publié nulle part dans les données d'export : la tablette le
 demande au pilote (Pilote / CPG). DCS montre les MPD du siège occupé ; les
 boutons, eux, appartiennent à un siège précis.
 """
+from dataclasses import replace
+
+from ..instruments import HELICO_KT
 from . import Bouton, Ecran, Profil, reperes
 
 DOSSIER_KNEEBOARD = "AH-64D_BLK_II"
@@ -60,4 +63,5 @@ PROFIL = Profil(
     ),
     sieges=("pilote", "cpg"),
     kneeboard=84,
+    instruments=replace(HELICO_KT, moteurs=2),
 )

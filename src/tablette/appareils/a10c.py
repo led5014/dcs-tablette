@@ -12,6 +12,9 @@ Mods/aircraft/A-10C_2/Cockpit/Scripts (A-10C identique) :
 
 Les bascules ADJ, DSP, BRT, CON et SYM ne sont pas reprises.
 """
+from dataclasses import replace
+
+from ..instruments import OTAN
 from . import Ecran, Profil, couronne_horaire, reperes
 
 _OSB = tuple((str(n), 3000 + n) for n in range(1, 21))
@@ -37,4 +40,5 @@ PROFIL = Profil(
               reperes_x=REPERES_X, reperes_y=REPERES_Y),
     ),
     kneeboard=100,
+    instruments=replace(OTAN, vitesse_max=500.0, moteurs=2),
 )

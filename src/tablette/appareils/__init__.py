@@ -17,8 +17,11 @@ vaut pas pour un autre — le même numéro y désigne autre chose.
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from typing import Dict, FrozenSet, Iterable, List, Optional, Sequence, Tuple
+
+from ..instruments import OTAN, Instruments
 
 COTES = ("gauche", "haut", "droite", "bas")
 
@@ -54,6 +57,11 @@ class Ecran:
     # (module absent du poste de développement).
     reperes_x: Optional[Tuple[float, ...]] = None
     reperes_y: Optional[Tuple[float, ...]] = None
+    # Écran en portrait (JF-17 : 5 boutons en haut et en bas, 8 sur les
+    # côtés) : nombre de boutons des côtés, et largeur / hauteur du verre.
+    # None : autant que `par_cote`, écran carré.
+    par_cote_y: Optional[int] = None
+    aspect: Optional[float] = None
 
     def appareil(self, siege: str) -> Optional[int]:
         if siege in self.appareils:
@@ -79,9 +87,22 @@ class Profil:
     molettes: Dict[int, Dict[int, float]] = field(default_factory=dict)
     textes: Tuple[int, ...] = ()       # indicateurs envoyés en texte (list_indication)
     arguments: Tuple[int, ...] = ()    # aiguilles et voyants (get_argument_value)
+    # Instruments analogiques redessinés (instruments.py), pour tout appareil :
+    # unités de son cockpit et échelles des cadrans.
+    instruments: Instruments = OTAN
+    # Cockpit qu'une option de DCS passe en nœuds et pieds (MiG-29, L-39) :
+    # ce qui le dit dans Config/options.lua (expression régulière), et ses
+    # instruments alors.
+    imperial: Optional[Tuple[str, Instruments]] = None
 
     def ecran(self, id_: str) -> Optional[Ecran]:
         return next((e for e in self.ecrans if e.id == id_), None)
+
+    def instruments_selon(self, options: str) -> Instruments:
+        """Les instruments d'après les options de DCS (texte d'options.lua)."""
+        if self.imperial and re.search(self.imperial[0], options):
+            return self.imperial[1]
+        return self.instruments
 
     def description(self) -> Dict:
         """Ce que la page doit construire pour cet appareil."""
@@ -92,6 +113,7 @@ class Profil:
             "kneeboard": self.kneeboard is not None,
             "panneaux": list(self.panneaux),
             "ecrans": [{"id": e.id, "libelle": e.libelle, "par_cote": e.par_cote,
+                        "par_cote_y": e.par_cote_y, "aspect": e.aspect,
                         "arrondi": e.arrondi,
                         "reperes_x": list(e.reperes_x) if e.reperes_x else None,
                         "reperes_y": list(e.reperes_y) if e.reperes_y else None,
@@ -135,12 +157,13 @@ def couronne_horaire(par_cote: int, premier_cote: str,
 
 # --------------------------------------------------------------- registre
 
-from . import a10c, ah64d, f16c, fa18c, oh58d, sans_ecran  # noqa: E402  (s'appuient sur ce qui précède)
+from . import (a10c, ah64d, f16c, fa18c, modernes, oh58d, sans_ecran,  # noqa: E402
+               warbirds)  # (s'appuient sur ce qui précède)
 
 PROFILS: Tuple[Profil, ...] = (
     fa18c.PROFIL, f16c.PROFIL, ah64d.PROFIL, oh58d.PROFIL, a10c.PROFIL,
-    sans_ecran.MI24P, sans_ecran.SA342, sans_ecran.MIG29, sans_ecran.TF51D, sans_ecran.FC3,
-)
+    modernes.AV8B, modernes.F15E, modernes.JF17, modernes.KA50, modernes.CH47F,
+) + sans_ecran.PROFILS + warbirds.PROFILS
 
 # Tout autre appareil : pas d'écran connu, pas de commande. La capture du
 # kneeboard marche partout (c'est celui de DCS), pas ses pages : l'appareil

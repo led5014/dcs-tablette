@@ -16,7 +16,7 @@ from urllib.parse import quote
 from fastapi import Body, Cookie, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, Response
 
-from . import VERSION, appareils, planche
+from . import VERSION, appareils, instruments, planche
 from .appareils import Profil
 from .config import Config
 from .dcs import PontDCS
@@ -92,7 +92,22 @@ def create_app(cfg: Optional[Config] = None, pont: Optional[PontDCS] = None,
                                          status_code=400)
             return await suite(requete)
     memoire = {"profil": appareils.PAR_DEFAUT, "nom": appareils.PAR_DEFAUT.noms_dcs[0],
-               "dcs": None}
+               "dcs": None, "options": (None, "")}
+
+    def options_dcs() -> str:
+        """Config/options.lua, relu seulement quand DCS l'a réécrit : les
+        unités de certains cockpits y sont réglées (Profil.imperial)."""
+        chemin = cfg.saved_games / "Config" / "options.lua"
+        try:
+            date = chemin.stat().st_mtime
+            if memoire["options"][0] != date:
+                memoire["options"] = (date, chemin.read_text(encoding="utf-8", errors="replace"))
+        except OSError:
+            memoire["options"] = (None, "")
+        return memoire["options"][1]
+
+    def instruments_actifs(choix: Optional[str]) -> instruments.Instruments:
+        return actif(choix)[0].instruments_selon(options_dcs())
 
     def dcs() -> Optional[Path]:
         """Dossier de DCS, d'après le jeu qui tourne ; le dernier connu sinon."""
@@ -182,8 +197,9 @@ def create_app(cfg: Optional[Config] = None, pont: Optional[PontDCS] = None,
 
     @app.get("/api/profils")
     def profils() -> List[Dict]:
-        """Les appareils du menu de la tablette."""
-        return [{"id": p.id, "libelle": p.libelle} for p in appareils.PROFILS]
+        """Les appareils du menu de la tablette, par ordre alphabétique."""
+        return [{"id": p.id, "libelle": p.libelle}
+                for p in sorted(appareils.PROFILS, key=lambda p: p.libelle.casefold())]
 
     @app.get("/api/profil")
     def description_profil(choix: Optional[str] = Cookie(None, alias=CHOIX)) -> Dict:
@@ -255,6 +271,19 @@ def create_app(cfg: Optional[Config] = None, pont: Optional[PontDCS] = None,
     @app.get("/api/planche/cadrans")
     def cadrans() -> Dict:
         return planche.cadrans()
+
+    @app.get("/api/instruments")
+    def lire_instruments(choix: Optional[str] = Cookie(None, alias=CHOIX)) -> Dict:
+        """Les instruments analogiques, pour tout appareil (instruments.py).
+        `interdit` : le serveur multijoueur coupe l'export de son appareil."""
+        vol, interdit = pont.vol()
+        inst = instruments_actifs(choix)
+        return {"interdit": interdit, "cle": instruments.cle(inst),
+                "instruments": instruments.lecture(vol, inst)}
+
+    @app.get("/api/instruments/cadrans")
+    def cadrans_instruments(choix: Optional[str] = Cookie(None, alias=CHOIX)) -> Dict:
+        return instruments.cadrans(instruments_actifs(choix))
 
     @app.post("/api/ufc")
     def touche_ufc(corps: Optional[Dict] = None,

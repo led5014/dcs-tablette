@@ -8,7 +8,10 @@ Mods/aircraft/FA-18C/Cockpit/Scripts :
 
 L'UFC, l'IFEI, les instruments de secours et les voyants : voir planche.py.
 """
+from dataclasses import replace
+
 from .. import planche
+from ..instruments import OTAN
 from . import Ecran, Profil, couronne_horaire, reperes
 
 DOSSIER_KNEEBOARD = "FA-18C_hornet"
@@ -43,4 +46,5 @@ PROFIL = Profil(
     molettes={planche.UFC: {c: planche.CRAN_MOLETTE for c in planche.MOLETTES_UFC.values()}},
     textes=(planche.IND_IFEI, planche.IND_UFC),
     arguments=tuple(planche.ARGUMENTS),
+    instruments=replace(OTAN, moteurs=2),
 )

@@ -6,6 +6,7 @@ un faux script Lua reçoit les ordres et envoie les annonces, comme le ferait
 scripts des modules installés (ou leur copie dans le dépôt) quand ils sont là.
 """
 import io
+import os
 import re
 import socket
 import sys
@@ -95,17 +96,82 @@ class TestProfils(unittest.TestCase):
                 for b in ecran.boutons:
                     if b.cote != "rangee":
                         self.assertIn(b.cote, appareils.COTES)
-                        self.assertLess(b.rang, ecran.par_cote, (profil.id, b))
+                        cote = (ecran.par_cote_y or ecran.par_cote
+                                if b.cote in ("gauche", "droite") else ecran.par_cote)
+                        self.assertLess(b.rang, cote, (profil.id, b))
+
+    def test_un_appareil_partage_entre_ecrans_sans_numero_commun(self):
+        """JF-17 : un seul appareil MFCD pour les trois écrans ; un numéro
+        commun appuierait sur deux écrans à la fois."""
+        for profil in appareils.PROFILS:
+            vus = {}
+            for ecran in profil.ecrans:
+                for appareil in set(ecran.appareils.values()):
+                    commandes = {b.commande for b in ecran.boutons}
+                    self.assertEqual(len(commandes), len(ecran.boutons), (profil.id, ecran.id))
+                    deja = vus.setdefault(appareil, {})
+                    for c in commandes:
+                        self.assertNotIn(c, deja, (profil.id, ecran.id, c, deja.get(c)))
+                        deja[c] = ecran.id
+            if profil.id == "f15e":       # même numérotation, trois appareils : permis
+                self.assertEqual(len(vus), 3)
+
+    def test_mpd_du_f15e_dans_le_sens_antihoraire_depuis_le_haut_a_gauche(self):
+        mpd = appareils.profil_pour("F-15ESE").ecran("mpd_gauche")
+        attendu = {"1": ("gauche", 0), "5": ("gauche", 4), "6": ("bas", 0), "10": ("bas", 4),
+                   "11": ("droite", 4), "15": ("droite", 0), "16": ("haut", 4),
+                   "20": ("haut", 0)}
+        for id_, place in attendu.items():
+            self.assertEqual((mpd.bouton(id_).cote, mpd.bouton(id_).rang), place, id_)
+        self.assertEqual((mpd.bouton("1").commande, mpd.bouton("20").commande), (3061, 3080))
+
+    def test_mpcd_du_harrier_numerotes_comme_le_hornet(self):
+        av8b = appareils.profil_pour("AV8BNA")
+        gauche, droit = av8b.ecran("mpcd_gauche"), av8b.ecran("mpcd_droit")
+        self.assertEqual((gauche.bouton("1").cote, gauche.bouton("1").rang), ("gauche", 4))
+        self.assertEqual((gauche.bouton("20").cote, gauche.bouton("20").rang), ("bas", 0))
+        self.assertEqual((gauche.bouton("1").commande, droit.bouton("20").commande), (3200, 3243))
+        self.assertEqual((gauche.appareil(""), droit.appareil("")), (26, 27))
+
+    def test_mfcd_du_jf17_en_portrait(self):
+        jf17 = appareils.profil_pour("JF-17")
+        for ecran in jf17.ecrans:
+            self.assertEqual((ecran.par_cote, ecran.par_cote_y), (5, 8))
+            self.assertLess(ecran.aspect, 1)
+            self.assertEqual(len(ecran.boutons), 26)
+            self.assertEqual(ecran.appareil(""), 47)
+        gauche = jf17.ecran("mfcd_gauche")
+        self.assertEqual([gauche.bouton(i).commande for i in ("U1", "L1", "L8", "R1", "D5")],
+                         [3238, 3244, 3251, 3252, 3266])
+        d = jf17.description()["ecrans"][0]
+        self.assertEqual((d["par_cote"], d["par_cote_y"]), (5, 8))
+
+    def test_abris_du_ka50_et_shkval_sans_bouton(self):
+        ka50 = appareils.profil_pour("Ka-50_3")
+        self.assertIs(ka50, appareils.profil_pour("Ka-50"))
+        self.assertEqual(ka50.ecran("shkval").boutons, ())
+        abris = ka50.ecran("abris")
+        self.assertEqual([(b.cote, b.commande) for b in abris.boutons],
+                         [("rangee", 3001 + i) for i in range(5)])
+        lua = appareils.lua_appareils().split('["Ka-50"]')[1].split('\n  },')[0]
+        self.assertIn("[9] = { [3001] = true", lua)
+        self.assertNotIn("[8] = {", lua)                    # le Shkval n'a rien à recevoir
 
     def test_profil_choisi_d_apres_le_nom_annonce_par_dcs(self):
         attendu = {"FA-18C_hornet": "fa18c", "F-16C_50": "f16c", "AH-64D_BLK_II": "ah64d",
                    "OH58D": "oh58d", "Mi-24P": "mi24p", "SA342M": "sa342", "SA342Mistral": "sa342",
                    "A-10C_2": "a10c", "MiG-29 Fulcrum": "mig29", "Su-25T": "fc3",
-                   "Bf-109K-4": "generique", None: "generique"}
+                   "MiG-29G": "fc3_otan", "AV8BNA": "av8b", "F-15ESE": "f15e", "JF-17": "jf17",
+                   "Ka-50_3": "ka50", "CH-47Fbl1": "ch47f", "Bf-109K-4": "bf109",
+                   "P-51D": "p51d", "P-51D-30-NA": "p51d", "F-86F Sabre": "f86",
+                   "MiG-21Bis": "mig21", "Mi-8MT": "mi8", "F-14B": "f14", "L-39ZA": "l39",
+                   "Christen Eagle II": "generique", None: "generique"}
         for nom, id_ in attendu.items():
             self.assertEqual(appareils.profil_pour(nom).id, id_, nom)
         noms = [n for p in appareils.PROFILS for n in p.noms_dcs]
         self.assertEqual(len(noms), len(set(noms)))
+        ids = [p.id for p in appareils.PROFILS]
+        self.assertEqual(len(ids), len(set(ids)))
 
     def test_zones_d_export_toutes_dans_la_configuration(self):
         from tablette.ecrans_dcs import EXPORTS
@@ -238,7 +304,8 @@ class TestContreLesScriptsDesModules(unittest.TestCase):
         self.assertEqual(a10c.PROFIL.kneeboard, 100)
 
     def test_appareils_sans_ecran(self):
-        for dossier, nom in (("MiG-29-Fulcrum", "MiG-29 Fulcrum"), ("TF-51D", "TF-51D")):
+        for dossier, nom in (("MiG-29-Fulcrum", "MiG-29 Fulcrum"), ("TF-51D", "TF-51D"),
+                             ("FW-190D9", "FW-190D9")):
             s = scripts_du_module(dossier)
             if s is None:
                 continue
@@ -1320,7 +1387,7 @@ class TestApiTablette(unittest.TestCase):
         r = self.client.post("/api/kneeboard/dcs/page", json={"sens": 1})
         self.assertEqual(r.status_code, 409)
         self.silence()
-        self.piloter("Bf-109K-4")
+        self.piloter("Christen Eagle II")
         profil = self.client.get("/api/profil").json()
         self.assertEqual((profil["id"], profil["ecrans"]), ("generique", []))
 
@@ -1814,6 +1881,221 @@ class TestDesinstallation(unittest.TestCase):
         self.assertEqual(ouverts, [])
         self.assertEqual(len(questions), 2)
         self.assertIn("encore ouvert", questions[0])
+
+
+LUA_DCS = Path("C:/Program Files (x86)/Steam/steamapps/common/DCSWorld/bin/lua.dll")
+
+
+def executer_lua(prelude: str, script: Path, apres: str) -> str:
+    """Exécute `script` dans le moteur Lua de DCS (son lua.dll), après
+    `prelude` (un faux DCS) ; rend la valeur de RESULTAT laissée par `apres`.
+    Le script de la tablette tourne pour de vrai, rien de DCS n'est appelé."""
+    import ctypes
+    dll = ctypes.CDLL(str(LUA_DCS))
+    dll.luaL_newstate.restype = ctypes.c_void_p
+    for f in ("luaL_openlibs", "lua_close"):
+        getattr(dll, f).argtypes = [ctypes.c_void_p]
+    dll.luaL_loadbuffer.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_size_t,
+                                    ctypes.c_char_p]
+    dll.lua_pcall.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int]
+    dll.lua_tolstring.restype = ctypes.c_char_p
+    dll.lua_tolstring.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p]
+    dll.lua_getfield.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_char_p]
+    etat = dll.luaL_newstate()
+    dll.luaL_openlibs(etat)
+    try:
+        for code, nom in ((prelude.encode(), b"=faux_dcs"), (script.read_bytes(), b"=script"),
+                          (apres.encode(), b"=essai")):
+            if dll.luaL_loadbuffer(etat, code, len(code), nom) or dll.lua_pcall(etat, 0, 0, 0):
+                raise AssertionError(dll.lua_tolstring(etat, -1, None).decode(errors="replace"))
+        dll.lua_getfield(etat, -10002, b"RESULTAT")          # LUA_GLOBALSINDEX (Lua 5.1)
+        return (dll.lua_tolstring(etat, -1, None) or b"").decode()
+    finally:
+        dll.lua_close(etat)
+
+
+FAUX_DCS = r'''
+ENVOYES = {}
+HORLOGE = 0
+log = { INFO = 1, ERROR = 2, write = function() end }
+package.preload["lfs"] = function() return { writedir = function() return "Z:/rien/" end,
+                                             currentdir = function() return "Z:/rien" end } end
+package.preload["socket"] = function()
+  return { gettime = function() return HORLOGE end, udp = function()
+    return { settimeout = function() end, setsockname = function() return 1 end,
+             receive = function() return nil end, close = function() end,
+             sendto = function(_, m) ENVOYES[#ENVOYES + 1] = m end } end }
+end
+EXPORT_PERMIS = true
+function LoIsOwnshipExportAllowed() return EXPORT_PERMIS end
+function LoGetSelfData() return { Name = "Christen Eagle II" } end
+function LoGetIndicatedAirSpeed() return 100 end
+function LoGetAltitudeAboveSeaLevel() return 1500 end
+function LoGetVerticalVelocity() return -5 end
+function LoGetADIPitchBankYaw() return 0.1, -0.2, 1.0 end
+function LoGetMagneticYaw() return 1.5 end
+function LoGetAccelerationUnits() return { x = 0, y = 1.5, z = 0 } end
+function LoGetEngineInfo() return { RPM = { left = 75, right = 0 }, fuel_internal = 300 } end
+function LoGetMechInfo() return { gear = { value = 1 }, flaps = { value = 0.5 } } end
+'''
+
+
+class TestInstrumentsDeVol(unittest.TestCase):
+    """Les instruments de base, pour tout appareil (instruments.py)."""
+
+    VOL = {"vi": 100.0, "alt": 1500.0, "vz": -5.0, "tang": 0.1, "roul": -0.2, "cap": 1.5,
+           "g": 1.5, "rpm1": 75.0, "carb": 300.0, "train": 1.0, "volets": 0.5, "taux": 3.0}
+
+    def test_unites_du_cockpit(self):
+        from tablette.instruments import OTAN, WARBIRD_METRIQUE, WARBIRD_US, lecture
+        self.assertEqual(lecture(self.VOL, OTAN)["badin"]["texte"], "194")            # kt
+        self.assertEqual(lecture(self.VOL, WARBIRD_US)["badin"]["texte"], "224")      # mph
+        self.assertEqual(lecture(self.VOL, WARBIRD_METRIQUE)["badin"]["texte"], "360")  # km/h
+        self.assertEqual(lecture(self.VOL, OTAN)["altimetre"]["texte"], "4\u202f921")  # ft
+        self.assertEqual(lecture(self.VOL, WARBIRD_METRIQUE)["altimetre"]["texte"], "1\u202f500")
+        self.assertEqual(lecture(self.VOL, OTAN)["vario"]["texte"], "-980")          # ft/min
+        self.assertEqual(lecture(self.VOL, WARBIRD_METRIQUE)["vario"]["texte"], "-5.0")
+        bandeau = {b["titre"]: b["texte"] for b in lecture(self.VOL, OTAN)["bandeau"]}
+        self.assertEqual(bandeau["CARBURANT"], "661 lb")
+        self.assertEqual(bandeau["TRAIN"], "SORTI")
+        self.assertIsNone(lecture(None, OTAN))
+        self.assertIsNone(lecture({}, OTAN))
+
+    def test_aiguilles_et_chiffres_d_accord(self):
+        """L'aiguille tombe sur son chiffre : mêmes fonctions des deux côtés."""
+        from tablette.instruments import (OTAN, WARBIRD_US, angle_badin, angle_vario, cadrans,
+                                          lecture)
+        for inst in (OTAN, WARBIRD_US):
+            c = cadrans(inst)
+            for g in c["badin"]:
+                self.assertEqual(g["angle"], round(angle_badin(float(g["texte"]), inst), 1))
+            self.assertIn("0", [g["texte"] for g in c["vario"]])
+            self.assertEqual(next(g for g in c["vario"] if g["texte"] == "0")["angle"], 270.0)
+        self.assertEqual(lecture({"vz": 0.0}, OTAN)["vario"]["angle"], 270.0)
+        self.assertEqual(angle_vario(99999, OTAN), 270.0 + 170.0)               # butée
+        self.assertEqual(lecture({"vi": 999.0}, WARBIRD_US)["badin"]["angle"], 320.0)
+        # Altimètre : 5 241 ft → grande aiguille sur 2,4 ; petite sur 5,2.
+        alti = lecture({"alt": 5241 * 0.3048}, OTAN)["altimetre"]["angles"]
+        self.assertAlmostEqual(alti[0], 0.241 * 360, delta=0.2)
+        self.assertAlmostEqual(alti[1], 0.5241 * 360, delta=0.2)
+        self.assertEqual([g["texte"] for g in c["g"]], ["-4", "-2", "0", "2", "4", "6", "8"])
+
+    def test_taux_de_virage_tire_du_cap(self):
+        from tablette.instruments import TauxDeVirage
+        heure = [0.0]
+        virage = TauxDeVirage(lambda: heure[0])
+        for i in range(100):                    # 3°/s à droite, en passant par le nord
+            heure[0] = i * 0.05
+            taux = virage.mesurer((350 + 3 * heure[0]) % 360)
+        self.assertAlmostEqual(taux, 3.0, places=2)
+        heure[0] += 5                           # plus de nouvelles : on repart de zéro
+        self.assertEqual(virage.mesurer(10.0), 0.0)
+
+    def test_message_vol_recu_et_interdit(self):
+        from tablette.dcs import PontDCS
+        pont = PontDCS(0, 0)
+        self.assertEqual(pont.vol(), (None, False))
+        pont._recevoir("vol vi=100.0000 alt=1500.0000 cap=0.5 inconnu=x")
+        vol, interdit = pont.vol()
+        self.assertEqual((vol["vi"], vol["alt"], interdit), (100.0, 1500.0, False))
+        self.assertIn("taux", vol)
+        pont._recevoir("vol -")
+        self.assertEqual(pont.vol(), (None, True))
+
+    def test_tous_les_profils_ont_des_instruments(self):
+        from tablette.instruments import ALTITUDES, MASSES, VARIOS, VITESSES, cadrans
+        for profil in appareils.PROFILS + (appareils.GENERIQUE,):
+            i = profil.instruments
+            self.assertIn(i.vitesse, VITESSES, profil.id)
+            self.assertIn(i.altitude, ALTITUDES, profil.id)
+            self.assertIn(i.vario, VARIOS, profil.id)
+            self.assertIn(i.carburant, MASSES, profil.id)
+            self.assertLess(i.g_min, 0, profil.id)
+            for nom in ("badin", "vario"):               # pas de chiffre hors du cadran
+                c = cadrans(i)[nom]
+                self.assertLessEqual(max(float(g["texte"]) for g in c),
+                                     i.vitesse_max if nom == "badin" else i.vario_max, profil.id)
+        self.assertEqual(appareils.profil_pour("TF-51D").instruments.vitesse, "mph")
+        self.assertEqual(appareils.profil_pour("F4U-1D").instruments.vitesse, "kt")
+        self.assertEqual(appareils.profil_pour("Bf-109K-4").instruments.altitude, "m")
+        self.assertEqual([g["texte"] for g in cadrans(appareils.profil_pour("Bf-109K-4")
+                                                      .instruments)["badin"]][-1], "700")
+
+    def test_unites_reglees_dans_les_options_de_dcs(self):
+        """MiG-29 « Avionics Units » sur Imperial, L-39 en anglais : nœuds et
+        pieds. Lignes telles que DCS les écrit dans options.lua."""
+        mig29, l39 = appareils.profil_pour("MiG-29 Fulcrum"), appareils.profil_pour("L-39C")
+        imperial = '\t\t["MiG-29-Fulcrum"] = {\n\t\t\t["MiG29AvionicsUnits"] = 1,\n'
+        metrique = '\t\t["MiG-29-Fulcrum"] = {\n\t\t\t["MiG29AvionicsUnits"] = 0,\n'
+        self.assertEqual(mig29.instruments_selon(imperial).vitesse, "kt")
+        self.assertEqual(mig29.instruments_selon(metrique).vitesse, "km/h")
+        self.assertEqual(mig29.instruments_selon("").vitesse, "km/h")
+        self.assertEqual(mig29.instruments_selon(imperial).moteurs, 2)
+        self.assertEqual(l39.instruments_selon('\t\t["avionicsLanguage"] = "english",').altitude,
+                         "ft")
+        self.assertEqual(l39.instruments_selon('\t\t["avionicsLanguage"] = "native",').altitude,
+                         "m")
+        # Une option d'un autre module ne touche pas les autres appareils.
+        self.assertEqual(appareils.profil_pour("Su-27").instruments_selon(imperial).vitesse,
+                         "km/h")
+
+    def test_api(self):
+        from fastapi.testclient import TestClient
+
+        from tablette.app import create_app
+        from tablette.config import Config
+        pont = FauxPont(connecte=True, appareil="TF-51D")
+        pont.vol = lambda: ({"vi": 100.0}, False)
+        client = TestClient(create_app(Config(saved_games=Path(".")), pont,
+                                       dossier_dcs=lambda: None))
+        d = client.get("/api/instruments").json()
+        self.assertEqual((d["interdit"], d["instruments"]["badin"]["texte"]), (False, "224"))
+        c = client.get("/api/instruments/cadrans").json()
+        self.assertEqual(c["unites"]["vitesse"], "mph")
+        self.assertEqual(d["cle"], c["cle"])       # la page garde ses cadrans
+        pont.vol = lambda: (None, True)
+        self.assertEqual(client.get("/api/instruments").json(),
+                         {"interdit": True, "cle": c["cle"], "instruments": None})
+
+    def test_api_suit_les_options_de_dcs(self):
+        """Unités du MiG-29 changées dans DCS : la clé change, la page
+        redemande ses cadrans."""
+        from fastapi.testclient import TestClient
+
+        from tablette.app import create_app
+        from tablette.config import Config
+        with tempfile.TemporaryDirectory() as dossier:
+            options = Path(dossier) / "Config" / "options.lua"
+            options.parent.mkdir()
+            options.write_text('["MiG29AvionicsUnits"] = 0,', encoding="utf-8")
+            pont = FauxPont(connecte=True, appareil="MiG-29 Fulcrum")
+            pont.vol = lambda: ({"vi": 100.0}, False)
+            client = TestClient(create_app(Config(saved_games=Path(dossier)), pont,
+                                           dossier_dcs=lambda: None))
+            avant = client.get("/api/instruments").json()
+            self.assertEqual(avant["instruments"]["badin"]["texte"], "360")       # km/h
+            options.write_text('["MiG29AvionicsUnits"] = 1,', encoding="utf-8")
+            os.utime(options, (time.time() + 10, time.time() + 10))     # DCS l'a réécrit
+            apres = client.get("/api/instruments").json()
+            self.assertEqual(apres["instruments"]["badin"]["texte"], "194")       # kt
+            self.assertNotEqual(apres["cle"], avant["cle"])
+            self.assertEqual(client.get("/api/instruments/cadrans").json()["cle"], apres["cle"])
+
+    @unittest.skipUnless(LUA_DCS.exists(), "moteur Lua de DCS absent")
+    def test_le_script_lua_envoie_les_donnees_de_vol(self):
+        """Le vrai script, dans le moteur Lua de DCS, avec un faux DCS : un
+        Christen Eagle II, sans profil, envoie quand même ses données de vol."""
+        resultat = executer_lua(FAUX_DCS, SCRIPT_LUA,
+                                "LuaExportStart(); LuaExportBeforeNextFrame(); "
+                                "HORLOGE = 1; EXPORT_PERMIS = false; LuaExportBeforeNextFrame(); "
+                                "RESULTAT = table.concat(ENVOYES, ' | ')")
+        messages = resultat.split(" | ")
+        self.assertEqual(messages[0], "etat Christen Eagle II")
+        vol = dict(m.split("=") for m in messages[1].split()[1:])
+        self.assertEqual((vol["vi"], vol["alt"], vol["rpm1"], vol["carb"], vol["train"]),
+                         ("100.0000", "1500.0000", "75.0000", "300.0000", "1.0000"))
+        self.assertNotIn("vv", vol)              # fonction absente : rien plutôt que zéro
+        self.assertIn("vol -", messages)         # serveur qui interdit l'export
 
 
 class TestLuminosite(unittest.TestCase):
