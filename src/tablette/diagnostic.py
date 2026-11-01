@@ -19,6 +19,7 @@ dans la langue du PC, chaque tablette dans la sienne (`langues.dans`).
 """
 from __future__ import annotations
 
+import re
 import subprocess
 import threading
 import time
@@ -75,16 +76,36 @@ def _dans(zone: Tuple[int, int, int, int], ecran: Sequence[int]) -> bool:
     return ex <= x and ey <= y and x + l <= ex + el and y + h <= ey + eh
 
 
-def derniere_ligne_tablette(saved_games: Path) -> Optional[Tuple[bool, str]]:
-    """La dernière chose que le script de la tablette a écrite dans dcs.log,
-    et si c'était une panne. DCS recommence ce fichier à chaque lancement :
+def _fin_du_journal(saved_games: Path) -> Optional[str]:
+    """La fin de dcs.log. DCS recommence ce fichier à chaque lancement :
     c'est la session en cours."""
     try:
         with open(saved_games / "Logs" / "dcs.log", "rb") as f:
             f.seek(0, 2)
             f.seek(max(0, f.tell() - FIN_DU_JOURNAL))
-            texte = f.read().decode("utf-8", errors="replace")
+            return f.read().decode("utf-8", errors="replace")
     except OSError:
+        return None
+
+
+def mission_lancee(saved_games: Path) -> Optional[bool]:
+    """Une mission a-t-elle été chargée depuis le lancement de DCS ? Avant, le
+    script de la tablette ne peut rien dire : DCS ne lit Export.lua qu'au
+    début d'une mission. None si dcs.log est illisible.
+
+    Relevé le 01/11/2026 : « Dispatcher (Main): loadMission <fichier> » à
+    chaque mission, en solo comme en multijoueur (une piste .trk)."""
+    texte = _fin_du_journal(saved_games)
+    if texte is None:
+        return None
+    return re.search(r"\bDispatcher \(\w+\): loadMission\b", texte) is not None
+
+
+def derniere_ligne_tablette(saved_games: Path) -> Optional[Tuple[bool, str]]:
+    """La dernière chose que le script de la tablette a écrite dans dcs.log,
+    et si c'était une panne."""
+    texte = _fin_du_journal(saved_games)
+    if texte is None:
         return None
     for ligne in reversed(texte.splitlines()):
         if "DCS-TABLETTE" in ligne:
@@ -246,8 +267,7 @@ class Diagnostic:
         if lance:
             # Réécrite DCS ouvert, la tablette refuserait toute capture jusqu'au
             # redémarrage de DCS (video.py) : on attend qu'il soit fermé.
-            return Point(titre, A_FAIRE, Texte("« {nom} » ne tombe plus sur les écrans",
-                                               nom=NOM_AFFICHE), (
+            return Point(titre, A_FAIRE, self._ne_tombe_plus(ecran, ecrans), (
                 Texte("Quitter DCS : DCS Tablette la récrit tout seul, puis relancer DCS."),)
             ), None
         complet, lignes = configurer_ecrans(self.saved_games, essai, ecrans, lambda: lance,
@@ -257,6 +277,39 @@ class Diagnostic:
         return Point(titre, REPARE, Texte("« {nom} » écrite à la taille des écrans, "
                                           "écrans du cockpit {ou}", nom=NOM_AFFICHE, ou=ou)
                      ), resolution
+
+    def _ne_tombe_plus(self, support: Tuple[int, int, int, int], ecrans: list) -> Texte:
+        """Pourquoi « Tablette DCS » ne tombe plus sur les écrans : l'écran qui
+        reçoit ceux du cockpit a changé (définition, place). La fenêtre de DCS,
+        toujours à la taille d'avant, recouvre alors parfois un écran du
+        pilote : c'est ce qu'il voit, DCS qui déborde sur cet écran-là."""
+        principal = next(m for m in ecrans if m[4])
+        px, py = principal[:2]
+        places = [((m[0] - px, m[1] - py) + tuple(m[2:4]), m) for m in ecrans]
+        _, _, l, h = support
+        sur = next((m for zone, m in places if zone == tuple(support)), principal)
+        if sur[4]:
+            ecran = Texte("de l'écran principal ({largeur}×{hauteur})", largeur=l, hauteur=h)
+        elif len(sur) > 5 and sur[5]:
+            ecran = Texte("de l'écran virtuel ({largeur}×{hauteur})", largeur=l, hauteur=h)
+        else:
+            ecran = Texte("du second écran ({largeur}×{hauteur})", largeur=l, hauteur=h)
+        try:
+            _, largeur, hauteur = options_affichage(self.saved_games)
+        except PasDExport:
+            largeur = hauteur = 0
+        # Les écrans réels sous la fenêtre de DCS, hors du principal et du support.
+        recouverts = [Texte("votre écran {largeur}×{hauteur}", largeur=m[2], hauteur=m[3])
+                      for (x, y, zl, zh), m in places
+                      if not m[4] and m is not sur and not (len(m) > 5 and m[5])
+                      and x < largeur and 0 < x + zl and y < hauteur and 0 < y + zh]
+        if recouverts:
+            return Texte("« {nom} » ne tombe plus sur les écrans : les écrans du cockpit "
+                         "sortent {ecran}, et la fenêtre de DCS ({largeur}×{hauteur}) "
+                         "recouvre {recouverts}", nom=NOM_AFFICHE, ecran=ecran,
+                         largeur=largeur, hauteur=hauteur, recouverts=recouverts)
+        return Texte("« {nom} » ne tombe plus sur les écrans : les écrans du cockpit "
+                     "sortent {ecran}", nom=NOM_AFFICHE, ecran=ecran)
 
     def _reglages(self, resolution: Tuple[int, int], lance: bool) -> Point:
         titre = Texte("Réglages de DCS")
@@ -322,6 +375,10 @@ class Diagnostic:
         if not lance:
             return Point(titre, ATTENTE, Texte("démarre avec la mission"))
         ligne = derniere_ligne_tablette(self.saved_games)
+        if ligne is None and mission_lancee(self.saved_games) is False:
+            # Au menu de DCS : rien à régler, il n'a pas encore lu Export.lua.
+            return Point(titre, ATTENTE, Texte("pas encore de mission : le script démarre "
+                                               "avec elle"))
         if ligne is None:
             vu = Texte("rien sous DCS-TABLETTE dans dcs.log")
         elif ligne[0]:

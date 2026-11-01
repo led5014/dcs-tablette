@@ -2650,9 +2650,30 @@ class TestDiagnostic(unittest.TestCase):
         self.ecrans = [self.PRINCIPAL, (2560, 0, 1920, 1080, False)]
         point = self.points()["Écrans de DCS"]
         self.assertEqual(point.etat, "a_faire")
+        self.assertEqual(point.detail, "« Tablette DCS » ne tombe plus sur les écrans : les "
+                                       "écrans du cockpit sortent du second écran (1920×1080)")
         self.assertIn("Quitter DCS", point.solution[0])
         self.assertEqual(lire(fichier), avant)
         self.assertEqual(self.reparer, [False])              # écran virtuel : constaté, pas déplacé
+
+    def test_dcs_deborde_sur_un_ecran_du_pilote(self):
+        """Photo d'un pilote, le 01/11/2026 : l'écran virtuel est repassé à une
+        définition plus petite, Windows a rapproché l'écran vertical, et DCS,
+        toujours à la largeur d'avant, déborde dessus. On dit les deux."""
+        from tablette.langues import dans
+        self.lance = True
+        self.ecrans = [(0, 0, 2560, 1440, True, False), (2560, 0, 1920, 1080, False, True),
+                       (4480, 0, 1080, 1920, False, False)]
+        point = self.points()["Écrans de DCS"]
+        self.assertEqual(point.etat, "a_faire")
+        self.assertEqual(point.detail, "« Tablette DCS » ne tombe plus sur les écrans : les "
+                                       "écrans du cockpit sortent de l'écran virtuel (1920×1080), "
+                                       "et la fenêtre de DCS (5120×1440) recouvre votre écran "
+                                       "1080×1920")
+        self.assertEqual(dans(point.detail, "en"),
+                         '"Tablette DCS" no longer fits the displays: the cockpit displays fall '
+                         'outside the virtual display (1920×1080), and the DCS window '
+                         '(5120×1440) covers your 1080×1920 display')
 
     def test_ecran_reel_pris_seulement_s_il_a_ete_donne(self):
         self.choix = {"mode": "second_ecran", "physique": False}
@@ -2767,6 +2788,27 @@ class TestDiagnostic(unittest.TestCase):
         point = self.points(self.diagnostic(pont=FauxPont(connecte=True, appareil="FA-18C_hornet")))[titre]
         self.assertEqual((point.etat, point.detail),
                          ("ok", "DCS parle à la tablette : FA-18C_hornet"))
+
+    def test_au_menu_de_dcs_le_script_n_est_pas_a_regler(self):
+        """Photo d'un pilote, le 01/11/2026 : « à régler » au menu de DCS, où le
+        script ne peut encore rien dire — Export.lua est lu au début d'une
+        mission. Une mission chargée et toujours rien : là, c'est à régler."""
+        titre = "Script de la tablette dans DCS"
+        self.lance = True
+        self.assertEqual(self.points(self.diagnostic(pont=FauxPont()))[titre].etat, "a_faire")
+        (self.saved / "Logs").mkdir()
+        journal = self.saved / "Logs" / "dcs.log"
+        journal.write_text("2026-10-31 21:39:28.347 INFO    Dispatcher (Main): //=== END OF "
+                           "INIT ======================================//\n", encoding="utf-8")
+        point = self.points(self.diagnostic(pont=FauxPont()))[titre]
+        self.assertEqual((point.etat, point.detail),
+                         ("attente", "pas encore de mission : le script démarre avec elle"))
+        with open(journal, "a", encoding="utf-8") as f:
+            f.write("2026-10-31 21:40:37.425 INFO    Dispatcher (Main): loadMission C:\\Users\\"
+                    "pilote\\Saved Games\\DCS\\Tracks\\Multiplayer\\Foothold.trk\n")
+        point = self.points(self.diagnostic(pont=FauxPont()))[titre]
+        self.assertEqual(point.etat, "a_faire")
+        self.assertIn("rien sous DCS-TABLETTE", point.detail)
 
     def test_une_verification_qui_plante_ne_bloque_rien(self):
         def panne():

@@ -200,7 +200,16 @@ SERVEUR = {
     "en bas de la vue": "at the bottom of the view",
     "sur le second écran": "on the second display",
     "« {nom} » : {nombre} écrans {ou}": "\"{nom}\": {nombre} displays {ou}",
-    "« {nom} » ne tombe plus sur les écrans": "\"{nom}\" no longer fits the displays",
+    "« {nom} » ne tombe plus sur les écrans : les écrans du cockpit sortent {ecran}":
+        "\"{nom}\" no longer fits the displays: the cockpit displays fall outside {ecran}",
+    "« {nom} » ne tombe plus sur les écrans : les écrans du cockpit sortent {ecran}, et la "
+    "fenêtre de DCS ({largeur}×{hauteur}) recouvre {recouverts}":
+        "\"{nom}\" no longer fits the displays: the cockpit displays fall outside {ecran}, "
+        "and the DCS window ({largeur}×{hauteur}) covers {recouverts}",
+    "de l'écran principal ({largeur}×{hauteur})": "the main display ({largeur}×{hauteur})",
+    "de l'écran virtuel ({largeur}×{hauteur})": "the virtual display ({largeur}×{hauteur})",
+    "du second écran ({largeur}×{hauteur})": "the second display ({largeur}×{hauteur})",
+    "votre écran {largeur}×{hauteur}": "your {largeur}×{hauteur} display",
     "Quitter DCS : DCS Tablette la récrit tout seul, puis relancer DCS.":
         "Quit DCS: DCS Tablette rewrites it by itself, then restart DCS.",
     "« {nom} » écrite à la taille des écrans, écrans du cockpit {ou}":
@@ -241,6 +250,8 @@ SERVEUR = {
     "DCS parle à la tablette : {appareil}": "DCS is talking to the tablet: {appareil}",
     "pas dans un appareil": "not in an aircraft",
     "démarre avec la mission": "starts with the mission",
+    "pas encore de mission : le script démarre avec elle":
+        "no mission yet: the script starts with it",
     "rien sous DCS-TABLETTE dans dcs.log": "nothing under DCS-TABLETTE in dcs.log",
     "panne dans dcs.log : « {ligne} »": "error in dcs.log: \"{ligne}\"",
     "dernier mot dans dcs.log : « {ligne} »": "last line in dcs.log: \"{ligne}\"",
