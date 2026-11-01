@@ -19,6 +19,7 @@ l'appareil piloté dans DCS.
 | JF-17 Thunder | MFCD G, centre, D en portrait (U1–5, L1–8, R1–8, D1–5) | — | oui |
 | Ka-50 Black Shark II / III | Shkval (image), ABRIS (5 boutons dessous) | — | oui |
 | CH-47F Chinook | — (écrans pas encore relevés) | instruments, kneeboard | oui |
+| C-130J-30 Super Hercules | HDD G, centre, D (image, pas de boutons : pages choisies sur les AMU) | instruments, kneeboard | oui |
 | MiG-29A Fulcrum | HDD, recopie du HUD (interrupteur SOURCE TACT / DUBL) | instruments, disposition « HDD + instr. », kneeboard | oui |
 | TF-51D, Fw 190 D-9, appareils FC3 | — (cockpits à cadrans) | instruments, kneeboard | oui |
 | Autres warbirds, Corée, jets et hélicoptères à cadrans (`warbirds.py`, `sans_ecran.py`) | — | instruments, kneeboard | non (touches [ et ]) |
@@ -60,6 +61,14 @@ D'où viennent les numéros, et ce qui reste à confirmer :
   - F-15E : seulement la place avant (la place arrière partage les zones
     d'export sans qu'on sache ce qui s'y dessine) ; CH-47F : pas d'écran tant
     qu'on ne sait pas lequel des cinq MFD sort dans `RIGHT_MFCD`.
+- C-130J-30 (01/11/2026, d'après la capture d'un pilote en vol, en mode
+  essai) : le module dessine de lui-même dans `LEFT_MFCD` (PFD),
+  `CENTER_MFCD` (SYSTEM STATUS) et `RIGHT_MFCD` (moteurs et ACAWS), rien dans
+  `TEDAC`. Nom, `KNEEBOARD` = 95 et HDD001–004 = 56–59 : DCS-BIOS. Les HDD
+  n'ont pas de boutons (pages choisies sur les AMU, non exportés). À
+  confirmer : lequel des quatre HDD sort dans chaque zone, et si la zone
+  carrée coupe les HDD, plus hauts que larges (PFD débordant à gauche et bas
+  des pages coupé sur la capture).
 - Noms des appareils dans DCS (`LoGetSelfData().Name`) : liste de DCS-BIOS
   (`AircraftList.lua`) recoupée avec les définitions de CoreMods du jeu ;
   casse et espaces comptent (« F-86F Sabre », « MiG-21Bis », « FW-190A8 »).

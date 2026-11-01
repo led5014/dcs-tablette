@@ -74,6 +74,7 @@ older version, extract the zip over the old folder one last time.
 | F-15E Strike Eagle | Left MPD, right MPD, MPCD (front seat) | — |
 | JF-17 Thunder | Left, center and right MFCD (portrait, 26 buttons) | — |
 | Ka-50 Black Shark II / III | Shkval (display only), ABRIS and its 5 buttons | — |
+| C-130J-30 Super Hercules | Left, center and right HDD (display only; pages picked on the cockpit AMUs) | kneeboard |
 | MiG-29A Fulcrum | HDD, the HUD repeater (TACT / DUBL switch) | HDD + instruments side by side, kneeboard |
 | Warbirds: P-51D, TF-51D, P-47D, F4U-1D, Spitfire IX, Mosquito, Bf 109 K-4, Fw 190 A-8 / D-9, I-16, Yak-52 | — (round-gauge cockpits) | instruments in their own units, kneeboard |
 | Korea: F-86F, MiG-15bis | — | instruments, kneeboard |

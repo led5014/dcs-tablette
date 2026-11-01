@@ -74,6 +74,7 @@ le zip à la place de l'ancien dossier.
 | F-15E Strike Eagle | MPD G, MPD D, MPCD (place avant) | — |
 | JF-17 Thunder | MFCD G, centre, D (en portrait, 26 boutons) | — |
 | Ka-50 Black Shark II / III | Shkval en image, ABRIS et ses 5 boutons | — |
+| C-130J-30 Super Hercules | HDD G, centre, D en image (pages choisies sur les AMU du cockpit) | kneeboard |
 | MiG-29A Fulcrum | HDD, la recopie du HUD (interrupteur TACT / DUBL) | HDD + instruments côte à côte, kneeboard |
 | Warbirds : P-51D, TF-51D, P-47D, F4U-1D, Spitfire IX, Mosquito, Bf 109 K-4, Fw 190 A-8 / D-9, I-16, Yak-52 | — (cockpits à cadrans) | instruments dans leurs unités, kneeboard |
 | Corée : F-86F, MiG-15bis | — | instruments, kneeboard |

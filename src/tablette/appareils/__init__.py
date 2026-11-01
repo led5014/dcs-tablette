@@ -170,12 +170,13 @@ def couronne_horaire(par_cote: int, premier_cote: str,
 
 # --------------------------------------------------------------- registre
 
-from . import (a10c, ah64d, f16c, fa18c, modernes, oh58d, sans_ecran,  # noqa: E402
-               warbirds)  # (s'appuient sur ce qui précède)
+from . import (a10c, ah64d, c130j, f16c, fa18c, modernes, oh58d,  # noqa: E402
+               sans_ecran, warbirds)  # (s'appuient sur ce qui précède)
 
 PROFILS: Tuple[Profil, ...] = (
     fa18c.PROFIL, f16c.PROFIL, ah64d.PROFIL, oh58d.PROFIL, a10c.PROFIL,
     modernes.AV8B, modernes.F15E, modernes.JF17, modernes.KA50, modernes.CH47F,
+    c130j.PROFIL,
 ) + sans_ecran.PROFILS + warbirds.PROFILS
 
 # Tout autre appareil : pas d'écran connu, pas de commande. La capture du

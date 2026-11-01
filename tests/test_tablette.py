@@ -157,12 +157,23 @@ class TestProfils(unittest.TestCase):
         self.assertIn("[9] = { [3001] = true", lua)
         self.assertNotIn("[8] = {", lua)                    # le Shkval n'a rien à recevoir
 
+    def test_c130j(self):
+        """Trois HDD en image, sans bouton : seules les pages du kneeboard
+        passent la liste blanche."""
+        c130 = appareils.profil_pour("C-130J-30")
+        self.assertEqual([(e.viewport, e.boutons) for e in c130.ecrans],
+                         [("LEFT_MFCD", ()), ("CENTER_MFCD", ()), ("RIGHT_MFCD", ())])
+        lua = appareils.lua_appareils().split('["C-130J-30"]')[1].split('\n  },')[0]
+        self.assertIn("boutons = {\n    },", lua)
+        self.assertIn("pages = { [95] = { [3001] = true, [3002] = true } },", lua)
+
     def test_profil_choisi_d_apres_le_nom_annonce_par_dcs(self):
         attendu = {"FA-18C_hornet": "fa18c", "F-16C_50": "f16c", "AH-64D_BLK_II": "ah64d",
                    "OH58D": "oh58d", "Mi-24P": "mi24p", "SA342M": "sa342", "SA342Mistral": "sa342",
                    "A-10C_2": "a10c", "MiG-29 Fulcrum": "mig29", "Su-25T": "fc3",
                    "MiG-29G": "fc3_otan", "AV8BNA": "av8b", "F-15ESE": "f15e", "JF-17": "jf17",
-                   "Ka-50_3": "ka50", "CH-47Fbl1": "ch47f", "Bf-109K-4": "bf109",
+                   "Ka-50_3": "ka50", "CH-47Fbl1": "ch47f", "C-130J-30": "c130j",
+                   "Bf-109K-4": "bf109",
                    "P-51D": "p51d", "P-51D-30-NA": "p51d", "F-86F Sabre": "f86",
                    "MiG-21Bis": "mig21", "Mi-8MT": "mi8", "F-14B": "f14", "L-39ZA": "l39",
                    "Christen Eagle II": "generique", None: "generique"}

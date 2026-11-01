@@ -159,6 +159,17 @@ TABLETTE_APPAREILS = {
     textes = {  },
     arguments = {  },
   },
+  ["C-130J-30"] = {
+    boutons = {
+    },
+    positions = {
+    },
+    molettes = {
+    },
+    pages = { [95] = { [3001] = true, [3002] = true } },
+    textes = {  },
+    arguments = {  },
+  },
   ["MiG-29 Fulcrum"] = {
     boutons = {
     },
