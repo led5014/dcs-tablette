@@ -23,6 +23,10 @@ INSTALLATION
      écrans et vos réglages de DCS, puis fait le reste en tenant compte de
      ce que vous avez déjà :
 
+     Plusieurs écrans ? Elle dit sur lequel DCS s'affichera : l'écran
+     principal de Windows. Si ce n'est pas le bon, elle s'arrête et dit
+     comment choisir le principal.
+
      Votre configuration d'écrans de DCS exporte déjà les écrans du
      cockpit (vrais MFD, Helios, écran tactile…) ?
          Elle propose de la garder : la tablette les prend là où ils sont,
@@ -48,6 +52,12 @@ INSTALLATION
            prise HDMI factice que personne ne regarde.
          - Plus aucune place (écrans à droite ET dessous) : elle propose le
            mode essai, ou dit quel écran déplacer.
+         - Un de vos écrans à GAUCHE (ou au-dessus) du principal : DCS ouvre
+           sa fenêtre au coin haut gauche du bureau entier, sa vue partirait
+           de cet écran-là. Elle propose de le ranger sous la fenêtre de DCS
+           (la souris y passe alors par le bas) : répondre O. Seule sa place
+           change, et c'est retenu : si Windows le remet à gauche, DCS
+           Tablette le range de nouveau, DCS fermé.
      2/3 Scripts de la tablette
          Deux scripts copiés dans Saved Games\DCS\Scripts, une ligne ajoutée
          à Export.lua (copie de l'ancien à côté). Tacview, SRS et les autres
@@ -63,6 +73,9 @@ INSTALLATION
      Tablette » sur le bureau et dans le menu Démarrer, l'inscrit dans
      Paramètres → Applications → Applications installées, et le démarre.
      Le dossier extrait du zip ne sert plus : il peut être supprimé.
+
+     Elle pose aussi « DCS Tablette (écrans) » dans le dossier Démarrage de
+     Windows : voir « À chaque ouverture de Windows » plus bas.
   4. Si une étape n'aboutit pas, la fenêtre dit laquelle et quoi faire.
      Voir aussi « À la main » plus bas : chaque étape s'y fait sans
      l'installation.
@@ -157,10 +170,40 @@ risque l'est tout seul, et c'est dit :
   - écran virtuel déplacé par une mise à jour de Windows ou du pilote
     graphique : remis à sa place ;
   - configuration d'écrans qui ne tombe plus sur les écrans : réécrite ;
+  - écran à gauche ou au-dessus du principal : rangé sous la fenêtre de
+    DCS, DCS fermé, si vous l'avez accepté à l'installation (sinon, le
+    diagnostic dit de relancer « Installer.bat ») ;
   - DCS repassé en plein écran, ou sur une autre configuration d'écrans :
     remis, une fois DCS fermé (il réécrit ses réglages en quittant).
 Rien n'est jamais installé sans le demander : l'écran virtuel manquant,
 c'est « Installer.bat ».
+
+À CHAQUE OUVERTURE DE WINDOWS
+-----------------------------
+Une mise à jour du pilote de l'écran virtuel ou de Windows peut, au
+redémarrage, changer l'écran virtuel de définition ou de place. DCS, réglé
+pour l'ancienne disposition, s'étendrait alors sur un de vos écrans, et les
+écrans du cockpit ne tomberaient plus sur l'écran virtuel.
+
+Pour que ça n'arrive pas, « DCS Tablette (écrans) », dans le dossier
+Démarrage de Windows, remet tout en place à chaque ouverture de session,
+avant que vous lanciez DCS : il attend l'écran virtuel, le replace (à
+droite du principal, ou dessous si un de vos écrans occupe la droite),
+range sous la fenêtre de DCS un écran revenu à gauche du principal (si vous
+l'avez accepté à l'installation), puis règle « Tablette DCS » et la
+résolution de DCS. Sans fenêtre, en quelques secondes ; les écrans peuvent
+clignoter une fois s'il y avait quelque chose à remettre. Il ne touche
+jamais à DCS ouvert.
+
+Ce qu'il a vu et fait :
+  %LOCALAPPDATA%\DCS-Tablette\ecrans.log
+(le même texte que la liste « Vérification » de DCS Tablette) : c'est le
+fichier à envoyer si quelque chose coince.
+
+Le faire à la main, à tout moment, DCS fermé : « DCS-Tablette.exe
+ecrans », dans le dossier du programme. Pour ne plus le lancer à
+l'ouverture de Windows : Gestionnaire des tâches → Applications de
+démarrage → « DCS Tablette (écrans) » → Désactiver.
 
 LANGUE
 ------
@@ -252,9 +295,12 @@ B. Placer l'écran virtuel (Paramètres → Système → Écran)
       au même niveau (Windows aimante les bords : lâcher quand ils sont
       alignés), puis « Appliquer ».
    Si un de vos écrans est déjà à droite du principal, mettre l'écran
-   virtuel DESSOUS, les bords de GAUCHE au même niveau. DCS ne dessine ni à
-   gauche ni au-dessus du principal, et sa fenêtre ne doit couvrir aucun de
-   vos écrans.
+   virtuel DESSOUS, les bords de GAUCHE au même niveau. La fenêtre de DCS
+   ne doit couvrir aucun de vos écrans.
+   6. Aucun écran à GAUCHE ni AU-DESSUS du principal : DCS ouvre sa fenêtre
+      au coin haut gauche du bureau entier, il partirait de cet écran-là.
+      En glisser un qui y serait sous le principal (ou à droite de l'écran
+      virtuel).
 
 C. Scripts de la tablette
    « Installer.bat » le fait toujours, même quand le reste échoue.
@@ -287,6 +333,17 @@ pastille de la tablette. Il dit ce qui manque et comment le régler.
   place (une mise à jour de Windows ou de la carte graphique peut le
   déplacer). DCS Tablette le remet tout seul ; quitter DCS et le relancer.
   S'il n'y arrive pas, le diagnostic dit pourquoi.
+- DCS s'affiche sur un autre de vos écrans :
+  - cet écran est à gauche (ou au-dessus) du principal dans Paramètres →
+    Système → Écran (« Identifier » le montre) : DCS part du coin haut
+    gauche du bureau entier. Relancer « Installer.bat », DCS fermé : il
+    propose de le ranger sous la fenêtre de DCS ;
+  - ou l'écran virtuel a changé de définition ou de place, et un de vos
+    écrans a pris la sienne : fermer DCS en laissant DCS Tablette ouvert,
+    attendre que le diagnostic dise RÉPARÉ, puis relancer DCS — ou
+    redémarrer Windows : « DCS Tablette (écrans) » remet tout en place.
+  Sinon, envoyer %LOCALAPPDATA%\DCS-Tablette\ecrans.log et une capture de
+  Paramètres → Système → Écran.
 - La souris part sur la droite (ou vers le bas) et disparaît : elle est sur
   l'écran virtuel. La ramener vers l'écran principal.
 - Un stream ou une capture montre deux écrans côte à côte : voir
@@ -300,8 +357,9 @@ DÉSINSTALLATION
 DCS et DCS Tablette fermés (sinon la fenêtre le demande et attend) :
 Paramètres → Applications → Applications installées → DCS Tablette →
 Désinstaller (ou « Desinstaller.bat », dans le dossier du programme). Il
-retire la ligne d'Export.lua, les scripts, les raccourcis et l'entrée de
-Windows, remet l'affichage de DCS d'avant, puis efface le programme. Seuls
+retire la ligne d'Export.lua, les scripts, les raccourcis (dossier
+Démarrage compris) et l'entrée de Windows, remet l'affichage de DCS
+d'avant, puis efface le programme. Seuls
 les fichiers posés par le zip sont effacés : un dossier où vous avez mis
 autre chose reste, avec vos fichiers.
 

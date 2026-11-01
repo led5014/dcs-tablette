@@ -95,6 +95,32 @@ Installation et mise à jour les plus simples possible (demande du
   exemplaire à tenir à jour. À chaque lancement, `tenir_a_jour` remet la
   version de l'entrée de Windows et pose le raccourci du menu Démarrer s'il
   manque (installations d'avant) ;
+- à chaque ouverture de Windows, `DCS-Tablette-Ecrans.exe` (dossier
+  Démarrage, `installation.ecrans_au_demarrage`) lance `DCS-Tablette.exe
+  ecrans` sans console (`CREATE_NO_WINDOW`) : `diagnostic.remettre_au_
+  demarrage` attend l'écran virtuel, fait les réparations du diagnostic
+  avant que DCS soit lancé, et écrit ce qu'il a vu dans
+  `%LOCALAPPDATA%\DCS-Tablette\ecrans.log`. Né d'une photo de pilote
+  (01/11/2026) : écran virtuel repassé en 1920 × 1080 au redémarrage, son
+  écran réel à sa place, DCS étalé dessus. Un petit exécutable à part
+  (`scripts/dcs_tablette_ecrans.py`, `console=False` dans le .spec), parce
+  qu'un raccourci ne sait pas lancer une console cachée et que le terminal
+  de Windows 11 ignorerait « réduite ». `tenir_a_jour` le pose une fois aux
+  installations d'avant la 1.11.0 (`demarrage` dans installation.json) :
+  retiré à la main, il ne revient pas ;
+- DCS ouvre sa fenêtre au coin haut gauche du bureau ENTIER, pas du
+  principal : relevé sur les photos du même pilote (« Identifier » : son
+  écran 2 à gauche du principal, la vue de DCS partie sur lui ; l'écran
+  virtuel était bien à droite). `installation.genants` repère les écrans
+  réels à gauche ou au-dessus du principal, `rangement` dit où les mettre
+  (sous la fenêtre de DCS, ou à droite si l'écran des écrans du cockpit
+  est dessous ; leur place seulement), `ecran_virtuel.ranger` les y met.
+  Jamais sans accord : l'installation demande, et retient `ranger` dans
+  installation.json ; avec lui, le point « Écrans de Windows » du
+  diagnostic (et l'ouverture de Windows) les range de nouveau, DCS fermé.
+  Sans, il dit de relancer Installer.bat. Avec plusieurs écrans réels,
+  l'installation dit aussi sur lequel DCS s'affichera (le principal de
+  Windows) et s'arrête si ce n'est pas le bon ;
 - la mise à jour se fait sans question (`mise_a_jour.appliquer`) : la
   question O/n de la 1.5.0 à la 1.8.0 (15 s pour répondre) passait le plus
   souvent sans réponse, DCS Tablette lancé puis laissé derrière DCS ;

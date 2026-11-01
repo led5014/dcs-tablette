@@ -16,8 +16,10 @@ Ce qui est touché, et rien d'autre :
   d'écrans, résolution, fenêtré (copie de l'original à côté) ;
 - depuis l'exécutable seulement : le programme copié dans
   %LOCALAPPDATA%\Programs\DCS-Tablette, les raccourcis « DCS Tablette » du
-  bureau et du menu Démarrer, et son entrée dans Paramètres → Applications
-  installées, d'où il se désinstalle.
+  bureau et du menu Démarrer, « DCS Tablette (écrans) » dans le dossier
+  Démarrage (les écrans remis en place à chaque ouverture de Windows), et
+  son entrée dans Paramètres → Applications installées, d'où il se
+  désinstalle.
 Jamais le dossier d'installation de DCS : le contrôle d'intégrité du
 multijoueur ne voit rien.
 """
@@ -52,11 +54,17 @@ ANCIENS = ("tablette_hornet.lua", "tablette_hornet.lua.precedent")
 VDD = "https://github.com/VirtualDrivers/Virtual-Display-Driver"
 PROGRAMME = "DCS-Tablette"
 EXE = f"{PROGRAMME}.exe"
+# Sans fenêtre, lancé à l'ouverture de Windows : il démarre `EXE ecrans`
+# sans console (scripts/dcs_tablette_ecrans.py).
+EXE_ECRANS = f"{PROGRAMME}-Ecrans.exe"
+RACCOURCI_ECRANS = "DCS Tablette (écrans).lnk"
 # Ce que le zip pose dans le dossier du programme : copié à l'installation,
 # et seul effacé à la désinstallation — rien d'autre de ce dossier.
-LIVRES = (EXE, "_internal", "Installer.bat", "Desinstaller.bat", "LISEZ-MOI.txt", "README.txt")
+LIVRES = (EXE, EXE_ECRANS, "_internal", "Installer.bat", "Desinstaller.bat", "LISEZ-MOI.txt",
+          "README.txt")
 CLE_WINDOWS = rf"Software\Microsoft\Windows\CurrentVersion\Uninstall\{PROGRAMME}"
 MENU_DEMARRER = uuid.UUID("A77F5D77-2E2B-44C3-A6A2-ABA601054A51")      # FOLDERID_Programs
+DEMARRAGE = uuid.UUID("B97D20BB-F46A-4C97-BA10-5E3608430854")          # FOLDERID_Startup
 DEPOT = "https://github.com/led5014/dcs-tablette"
 
 Moniteur = Tuple[int, int, int, int, bool]      # x, y, largeur, hauteur, principal
@@ -159,13 +167,16 @@ def desinstaller_scripts(saved_games: Path) -> List[str]:
 
 # ------------------------------------------------------------ où, selon les écrans
 #
-# La fenêtre de DCS part du coin haut gauche de l'écran principal et s'étend
-# vers la droite et vers le bas : DCS ne dessine ni à gauche ni au-dessus du
-# principal. Les écrans exportés vont donc sur un écran collé à DROITE du
-# principal (bords du haut alignés) ou DESSOUS (bords de gauche alignés), et
-# la fenêtre de DCS couvre le principal et cet écran-là. Elle ne doit couvrir
-# AUCUN autre écran : il resterait noir pendant le vol. Un écran réel à
-# droite du principal fait donc passer l'écran virtuel dessous.
+# La fenêtre de DCS part du coin haut gauche du bureau ENTIER et s'étend
+# vers la droite et vers le bas. Elle ne part du principal que si aucun écran
+# n'est à sa gauche ni au-dessus de lui (photo d'un pilote, 01/11/2026 : un
+# écran à gauche du principal, et la vue de DCS partie sur lui) : un tel
+# écran est à ranger ailleurs (`rangement`). Les écrans exportés vont sur un
+# écran collé à DROITE du principal (bords du haut alignés) ou DESSOUS (bords
+# de gauche alignés), et la fenêtre de DCS couvre le principal et cet
+# écran-là. Elle ne doit couvrir AUCUN autre écran : il resterait noir
+# pendant le vol. Un écran réel à droite du principal fait donc passer
+# l'écran virtuel dessous.
 
 COTES = ("droite", "dessous")
 
@@ -210,6 +221,52 @@ def supports(ecrans: Sequence[Sequence], physique: bool = True) -> List[Tuple[
         trouves.append((m, cote, zone, fenetre))
     trouves.sort(key=lambda t: (_virtuel(t[0]) is not True, COTES.index(t[1])))
     return trouves
+
+
+def genants(ecrans: Sequence[Sequence]) -> List[Sequence]:
+    """Les écrans réels à gauche ou au-dessus du principal : DCS ouvrirait sa
+    fenêtre à partir d'eux. Un écran virtuel mal placé n'en est pas :
+    `ecran_virtuel.remettre` s'en charge."""
+    principal = next((m for m in ecrans if m[4]), None)
+    if principal is None:
+        return []
+    return sorted((m for m in ecrans if not m[4] and _virtuel(m) is not True
+                   and (m[0] < principal[0] or m[1] < principal[1])), key=lambda m: m[:2])
+
+
+def rangement(ecrans: Sequence[Sequence]) -> List[Tuple[Sequence, int, int]]:
+    """Où ranger les écrans `genants` : (écran, x, y) sur le bureau.
+
+    Hors de la fenêtre de DCS, en rang de gauche à droite : sous elle si
+    l'écran des écrans du cockpit est à droite du principal (ou s'il n'y en
+    a pas, mode essai), à droite d'elle s'il est dessous. La souris y va
+    alors par le bas, ou par la droite, sans traverser l'écran virtuel.
+    Seule leur place change, jamais leur définition."""
+    principal = next((m for m in ecrans if m[4]), None)
+    a_ranger = genants(ecrans)
+    if principal is None or not a_ranger:
+        return []
+    px, py, pl, ph = principal[:4]
+    restent = [m for m in ecrans if not any(m is g for g in a_ranger)]
+    droite = next((m for m in restent if tuple(m[:2]) == (px + pl, py)), None)
+    dessous = next((m for m in restent if tuple(m[:2]) == (px, py + ph)), None)
+    if droite is None and dessous is not None:
+        x, y = px + max(pl, dessous[2]), py
+    else:
+        y = py + max(ph, droite[3] if droite is not None else 0)
+        x = px
+    occupes = [tuple(m[:4]) for m in restent]
+    places = []
+    for m in a_ranger:
+        while True:
+            gene = next((o for o in occupes if _chevauche((x, y, m[2], m[3]), o)), None)
+            if gene is None:
+                break
+            x = gene[0] + gene[2]
+        places.append((m, x, y))
+        occupes.append((x, y, m[2], m[3]))
+        x += m[2]
+    return places
 
 
 def support_ecrans(ecrans: Sequence[Sequence], essai: bool, physique: bool = True
@@ -421,21 +478,23 @@ def dossier_bureau() -> Path:
     return dossier_windows(BUREAU) or Path.home() / "Desktop"
 
 
-def creer_raccourci(cible: Path, dossier: Optional[Path] = None) -> Path:
+def creer_raccourci(cible: Path, dossier: Optional[Path] = None, nom: str = RACCOURCI,
+                    description: Optional[str] = None) -> Path:
     """Raccourci « DCS Tablette » vers l'exécutable, sur le bureau : un
     double-clic pour lancer la tablette, avec son icône.
 
     Windows ne crée un .lnk que par COM : PowerShell s'en charge. Les chemins
     passent par l'environnement, rien à échapper dans la commande.
     """
-    lien = (dossier or dossier_bureau()) / RACCOURCI
+    lien = (dossier or dossier_bureau()) / nom
     commande = ("$r = (New-Object -ComObject WScript.Shell).CreateShortcut($env:DT_LIEN); "
                 "$r.TargetPath = $env:DT_CIBLE; $r.WorkingDirectory = $env:DT_DOSSIER; "
                 "$r.IconLocation = $env:DT_CIBLE + ',0'; "
                 "$r.Description = $env:DT_DESCRIPTION; $r.Save()")
     environnement = dict(os.environ, DT_LIEN=str(lien), DT_CIBLE=str(cible),
                          DT_DOSSIER=str(cible.parent),
-                         DT_DESCRIPTION=str(Texte("Les écrans du cockpit de DCS sur la tablette")))
+                         DT_DESCRIPTION=str(description or Texte(
+                             "Les écrans du cockpit de DCS sur la tablette")))
     subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", commande],
                    env=environnement, capture_output=True, check=True, timeout=60)
     if not lien.exists():
@@ -481,6 +540,31 @@ def dossier_menu() -> Path:
     return dossier_windows(MENU_DEMARRER) or (
         (Path(racine) if racine else Path.home() / "AppData" / "Roaming")
         / "Microsoft" / "Windows" / "Start Menu" / "Programs")
+
+
+def dossier_demarrage() -> Path:
+    racine = os.environ.get("APPDATA")
+    return dossier_windows(DEMARRAGE) or (
+        (Path(racine) if racine else Path.home() / "AppData" / "Roaming")
+        / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "Startup")
+
+
+def journal_ecrans() -> Path:
+    """Ce que la remise en place à l'ouverture de Windows a vu et fait : elle
+    n'a pas de fenêtre pour le dire."""
+    return fichier_choix().parent / "ecrans.log"
+
+
+def ecrans_au_demarrage(dossier: Path) -> Path:
+    """Le raccourci du dossier Démarrage : à chaque ouverture de Windows,
+    DCS-Tablette-Ecrans.exe remet l'écran virtuel et les réglages de DCS en
+    place, sans fenêtre, avant que DCS soit lancé. Au redémarrage, une mise à
+    jour du pilote de l'écran virtuel ou de Windows peut le changer de
+    définition ou de place, et DCS s'étendrait sur un écran du pilote.
+    Désactivable dans Gestionnaire des tâches → Applications de démarrage."""
+    return creer_raccourci(dossier / EXE_ECRANS, dossier_demarrage(), RACCOURCI_ECRANS,
+                           Texte("Remet l'écran virtuel et les réglages de DCS en place pour "
+                                 "DCS Tablette"))
 
 
 def meme_fichier(a: Path, b: Path) -> bool:
@@ -554,8 +638,10 @@ def oublier() -> bool:
 
 def tenir_a_jour(exe: Path) -> List[str]:
     """À chaque lancement de l'exécutable : l'entrée de Windows à la version
-    qui tourne (celle d'une mise à jour comprise), et le raccourci du menu
-    Démarrer s'il manque (installé avant la 1.9.0). Ne lève jamais."""
+    qui tourne (celle d'une mise à jour comprise), le raccourci du menu
+    Démarrer s'il manque (installé avant la 1.9.0), et la remise en place des
+    écrans à l'ouverture de Windows (avant la 1.11.0) — une fois : retirée à
+    la main, elle ne revient pas. Ne lève jamais."""
     lignes = []
     try:
         enregistrer(exe.parent)
@@ -568,6 +654,16 @@ def tenir_a_jour(exe: Path) -> List[str]:
             lignes.append(Texte("Raccourci « DCS Tablette » ajouté au menu Démarrer."))
         except (OSError, subprocess.SubprocessError):
             pass
+    choix = lire_choix()
+    if (exe.parent / EXE_ECRANS).is_file() and not choix.get("demarrage"):
+        try:
+            if not (dossier_demarrage() / RACCOURCI_ECRANS).exists():
+                ecrans_au_demarrage(exe.parent)
+                lignes.append(Texte("Écrans remis en place à chaque ouverture de Windows "
+                                    "(dossier Démarrage)."))
+            ecrire_choix(dict(choix, demarrage=True))
+        except (OSError, subprocess.SubprocessError):
+            pass                        # au prochain lancement
     return lignes
 
 
@@ -602,6 +698,12 @@ def installer_programme(demander: Callable[[str], Optional[str]],
             creer_raccourci(exe, dossier)
         except (OSError, subprocess.SubprocessError) as e:
             print(echec(e))
+    if (exe.parent / EXE_ECRANS).is_file():
+        try:
+            ecrans_au_demarrage(exe.parent)
+        except (OSError, subprocess.SubprocessError) as e:
+            print(Texte("Remise en place des écrans à l'ouverture de Windows non posée "
+                        "({erreur}).", erreur=e))
     try:
         enregistrer(exe.parent)
     except OSError as e:
@@ -626,6 +728,74 @@ def demander(question: str) -> Optional[str]:
         return input(question)
     except (EOFError, OSError):
         return None
+
+
+A_LA_MAIN_RANGER = (
+    Texte("  À la main : Paramètres → Système → Écran, glisser cet écran sous le principal"),
+    Texte("  (ou à droite de l'écran virtuel) : aucun écran à gauche ni au-dessus du principal."))
+
+
+def ecran_de_dcs(ecrans: Sequence, demander: Callable[[str], Optional[str]]) -> bool:
+    """DCS s'affiche sur l'écran principal de Windows. Plusieurs écrans réels :
+    on le dit et on demande si c'est le bon ; sinon, la marche à suivre, et
+    l'installation s'arrête là — tout le reste en dépend. Sans réponse
+    possible (pas de console), on continue."""
+    from .ecran_virtuel import accepte
+    reels = [e for e in ecrans if e.actif and not e.virtuel]
+    principal = next((e for e in reels if e.principal), None)
+    if principal is None or len(reels) < 2:
+        return True
+    print("\n" + Texte("DCS s'affichera sur l'écran principal de Windows ({largeur}×{hauteur}, "
+                       "{frequence} Hz) :", largeur=principal.largeur,
+                       hauteur=principal.hauteur, frequence=principal.frequence))
+    print(Texte("celui où « En faire mon écran principal » est coché dans Paramètres → Écran."))
+    reponse = demander(Texte("C'est bien l'écran où vous voulez DCS ? [O/n] "))
+    if reponse is None or accepte(reponse):
+        return True
+    print(Texte("Paramètres → Système → Écran : cliquer l'écran voulu pour DCS, cocher"))
+    print(Texte("« En faire mon écran principal », puis relancer Installer.bat."))
+    return False
+
+
+def ranger_avec_accord(lister_ecrans: Callable[[], list],
+                       demander: Callable[[str], Optional[str]]) -> bool:
+    """Un écran réel à gauche ou au-dessus du principal : DCS partirait de lui.
+    On propose de le ranger hors de la fenêtre de DCS (`rangement`). Rend
+    True si le pilote a dit oui : retenu, le diagnostic et l'ouverture de
+    Windows le rangeront de nouveau si Windows le remet à cette place."""
+    from . import ecran_virtuel
+    try:
+        actifs = [e for e in lister_ecrans() if e.actif]
+    except OSError:
+        return False
+    places = rangement([(e.x, e.y, e.largeur, e.hauteur, e.principal, e.virtuel)
+                        for e in actifs])
+    if not places:
+        return False
+    principal = next(e for e in actifs if e.principal)
+    noms = [Texte("votre écran {largeur}×{hauteur}", largeur=m[2], hauteur=m[3])
+            for m, _, _ in places]
+    print("\n" + Texte("À gauche ou au-dessus de l'écran principal : {ecrans}.", ecrans=noms))
+    print(Texte("DCS ouvre sa fenêtre au coin haut gauche du bureau entier : sa vue partirait"))
+    print(Texte("de là, et les écrans du cockpit ne tomberaient plus à leur place."))
+    if places[0][2] >= principal.y + principal.hauteur:
+        print(Texte("DCS Tablette peut ranger {ecrans} sous la fenêtre de DCS (la souris y "
+                    "passera par le bas).", ecrans=noms))
+    else:
+        print(Texte("DCS Tablette peut ranger {ecrans} à droite de la fenêtre de DCS (la "
+                    "souris y passera par la droite).", ecrans=noms))
+    if not ecran_virtuel.accepte(demander(Texte("  Ranger maintenant ? [O/n] "))):
+        for ligne in A_LA_MAIN_RANGER:
+            print(ligne)
+        return False
+    erreur = ecran_virtuel.ranger(lister_ecrans)
+    if erreur:
+        print(Texte("  Écrans non rangés : {erreur}.", erreur=erreur))
+        for ligne in A_LA_MAIN_RANGER:
+            print(ligne)
+    else:
+        print(Texte("  Rangé : {ecrans}.", ecrans=noms))
+    return True
 
 
 def installer(saved_games: Path, essai: bool = False,
@@ -668,6 +838,8 @@ def installer(saved_games: Path, essai: bool = False,
                     mode=Texte("plein écran") if plein_ecran(saved_games) else Texte("fenêtré")))
     except PasDExport as e:
         print(Texte("DCS : {erreur}", erreur=message(e)))
+    if not ecran_de_dcs(ecrans, demander):
+        return 1
 
     choix: Dict = {"mode": "essai" if essai else "second_ecran", "physique": False}
     existante = None if essai else configuration_existante(saved_games)
@@ -697,6 +869,8 @@ def installer(saved_games: Path, essai: bool = False,
                 pret = False
         else:
             choix["physique"] = resultat == "physique"
+    if choix["mode"] != "existante" and pret and ranger_avec_accord(lister_ecrans, demander):
+        choix["ranger"] = True
     ecrire_choix(choix, chemin_choix)
     print("\n" + Texte("{etape}/{etapes}  Scripts de la tablette", etape=etapes - 1,
                        etapes=etapes))
@@ -775,7 +949,8 @@ def desinstaller(saved_games: Path, demander: Callable[[str], Optional[str]] = d
         if reponse is None or reponse.strip().lower() == "p":
             break
     lignes = desinstaller_scripts(saved_games) + retirer_ecrans(saved_games)
-    for chemin in (dossier_bureau() / RACCOURCI, dossier_menu() / RACCOURCI, fichier_choix(),
+    for chemin in (dossier_bureau() / RACCOURCI, dossier_menu() / RACCOURCI,
+                   dossier_demarrage() / RACCOURCI_ECRANS, fichier_choix(), journal_ecrans(),
                    fichier_langue()):
         if chemin.exists():
             chemin.unlink()

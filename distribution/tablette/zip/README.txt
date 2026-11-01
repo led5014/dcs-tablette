@@ -23,6 +23,10 @@ INSTALLATION
      your DCS settings, then does the rest based on what you already
      have:
 
+     Several displays? It says which one DCS will show on: the Windows
+     main display. If that's not the right one, it stops and tells you how
+     to choose the main display.
+
      Your DCS monitor setup already exports the cockpit displays (real
      MFDs, Helios, touchscreen…)?
          It offers to keep it: the tablet picks them up where they are,
@@ -49,6 +53,13 @@ INSTALLATION
            HDMI dummy plug nobody looks at.
          - No room left (monitors on the right AND below): it offers test
            mode, or tells you which monitor to move.
+         - One of your displays to the LEFT of (or above) the main one: DCS
+           opens its window at the top left corner of the whole desktop,
+           its view would start from that display. It offers to move it
+           below the DCS window (the mouse then gets there from the
+           bottom): answer Y. Only its position changes, and the choice is
+           kept: if Windows puts it back on the left, DCS Tablette moves it
+           again, with DCS closed.
      2/3 Tablet scripts
          Two scripts copied to Saved Games\DCS\Scripts, one line added to
          Export.lua (a copy of the old one is kept next to it). Tacview,
@@ -65,6 +76,9 @@ INSTALLATION
      Settings → Apps → Installed apps, and starts it.
      The folder extracted from the zip is no longer needed: you can delete
      it.
+
+     It also adds "DCS Tablette (écrans)" to the Windows Startup folder:
+     see "At every Windows sign-in" below.
   4. If a step fails, the window says which one and what to do.
      See also "Manual setup" below: every step can be done there without
      the installer.
@@ -156,10 +170,38 @@ repaired safely is repaired automatically, and you are told:
   - virtual display moved by a Windows or graphics driver update: put back
     in place;
   - monitor setup no longer matching the displays: rewritten;
+  - display to the left of or above the main one: moved below the DCS
+    window, with DCS closed, if you agreed to it during installation
+    (otherwise, the diagnostics tell you to run "Installer.bat" again);
   - DCS switched back to full screen, or to another monitor setup: set
     back, once DCS is closed (it rewrites its settings on exit).
 Nothing is ever installed without asking: for a missing virtual display,
 run "Installer.bat".
+
+AT EVERY WINDOWS SIGN-IN
+------------------------
+On restart, an update of the virtual display driver or of Windows can
+change the virtual display's resolution or position. DCS, still set for
+the old layout, would then spread over one of your displays, and the
+cockpit displays would no longer land on the virtual display.
+
+To prevent this, "DCS Tablette (écrans)", in the Windows Startup folder,
+puts everything back at every sign-in, before you start DCS: it waits for
+the virtual display, puts it back (right of the main display, or below if
+one of your displays takes the right), moves a display that came back to
+the left of the main one below the DCS window (if you agreed to it during
+installation), then sets "Tablette DCS" and the DCS resolution. No window,
+a few seconds; the displays may flicker once if something had to be put
+back. It never touches DCS while it is running.
+
+What it saw and did:
+  %LOCALAPPDATA%\DCS-Tablette\ecrans.log
+(the same text as the DCS Tablette "Checks" list): that's the file to send
+if something goes wrong.
+
+To do it by hand, at any time, with DCS closed: "DCS-Tablette.exe ecrans",
+in the program folder. To stop running it at sign-in: Task Manager →
+Startup apps → "DCS Tablette (écrans)" → Disable.
 
 LANGUAGE
 --------
@@ -250,9 +292,12 @@ B. Place the virtual display (Settings → System → Display)
       TOP edges level (Windows snaps the edges: let go when they are
       aligned), then "Apply".
    If one of your monitors is already to the right of the main one, put
-   the virtual display BELOW it instead, LEFT edges level. DCS draws
-   neither to the left of nor above the main display, and its window must
-   not cover any of your monitors.
+   the virtual display BELOW it instead, LEFT edges level. The DCS window
+   must not cover any of your monitors.
+   6. No display to the LEFT of or ABOVE the main one: DCS opens its window
+      at the top left corner of the whole desktop, it would start from that
+      display. Drag any such display below the main one (or to the right of
+      the virtual display).
 
 C. Tablet scripts
    "Installer.bat" always does this, even when the rest fails.
@@ -286,6 +331,17 @@ dot on the tablet. They say what is missing and how to fix it.
   should be (a Windows or graphics card update can move it). DCS Tablette
   puts it back by itself; quit DCS and start it again. If it can't, the
   diagnostics say why.
+- DCS shows on another of your displays:
+  - that display is to the left of (or above) the main one in Settings →
+    System → Display ("Identify" shows it): DCS starts from the top left
+    corner of the whole desktop. Run "Installer.bat" again, with DCS
+    closed: it offers to move it below the DCS window;
+  - or the virtual display changed resolution or position, and one of
+    your displays took its place: close DCS with DCS Tablette left open,
+    wait until the diagnostics say FIXED, then start DCS again — or
+    restart Windows: "DCS Tablette (écrans)" puts everything back.
+  Otherwise, send %LOCALAPPDATA%\DCS-Tablette\ecrans.log and a screenshot
+  of Settings → System → Display.
 - The mouse wanders off to the right (or downward) and disappears: it's on
   the virtual display. Bring it back to the main display.
 - A stream or screenshot shows two displays side by side: see
@@ -299,7 +355,8 @@ UNINSTALLING
 With DCS and DCS Tablette closed (otherwise the window asks and waits):
 Settings → Apps → Installed apps → DCS Tablette → Uninstall (or
 "Desinstaller.bat", in the program folder). It removes the Export.lua
-line, the scripts, the shortcuts and the Windows entry, puts the DCS
+line, the scripts, the shortcuts (Startup folder included) and the
+Windows entry, puts the DCS
 display settings back as they were, then deletes the program. Only the
 files the zip put there are deleted: a folder where you put anything else
 stays, with your files.

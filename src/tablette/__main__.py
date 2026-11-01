@@ -161,7 +161,8 @@ def main(arguments: Optional[List[str]] = None) -> int:
     options.add_argument("--langue", choices=("fr", "en", "auto"),
                          help=Texte("langue de la fenêtre, retenue : fr, en, ou auto (celle "
                                     "de Windows)"))
-    commandes = options.add_subparsers(dest="commande", metavar="{installer,desinstaller}")
+    commandes = options.add_subparsers(dest="commande",
+                                       metavar="{installer,desinstaller,ecrans}")
     installer = commandes.add_parser("installer",
                                      help=Texte("écran virtuel, scripts dans DCS, écrans de DCS"))
     installer.add_argument("--essai", action="store_true",
@@ -170,6 +171,8 @@ def main(arguments: Optional[List[str]] = None) -> int:
                                         help=Texte("retirer la tablette de DCS"))
     desinstaller.add_argument("--attendre", action="store_true",
                               help=Texte("attendre Entrée avant de fermer la fenêtre"))
+    commandes.add_parser("ecrans", help=Texte("remettre l'écran virtuel et les réglages de DCS "
+                                              "en place (fait à chaque ouverture de Windows)"))
     # Lancée par `installer`, en administrateur : le pilote de l'écran virtuel.
     pilote = commandes.add_parser("pilote-ecran-virtuel")
     pilote.add_argument("--mode", required=True, help="largeurxhauteur@fréquence")
@@ -190,6 +193,9 @@ def main(arguments: Optional[List[str]] = None) -> int:
         from .config import dossier_saved_games
         if choix.commande == "installer":
             return installation.installer(dossier_saved_games(), choix.essai, demarrer=True)
+        if choix.commande == "ecrans":
+            from .diagnostic import remettre_au_demarrage
+            return remettre_au_demarrage(dossier_saved_games(), installation.journal_ecrans())
         return installation.desinstaller(dossier_saved_games(), attendre=choix.attendre)
     return servir(choix.local, not choix.sans_miroir, not choix.sans_mise_a_jour,
                   not choix.captures_entieres)

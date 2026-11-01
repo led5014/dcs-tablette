@@ -123,7 +123,11 @@ the frame: a screenshot of their MFDs would let us line them up too.
       not cover any of your monitors), at the same resolution and refresh
       rate: nothing to set in Settings → System → Display. One of your own
       monitors is only used if you say it is an HDMI dummy plug; with no
-      free spot left, it offers test mode.
+      free spot left, it offers test mode. One of your monitors to the
+      **left** of (or above) the main one? DCS opens its window at the top
+      left corner of the whole desktop and would start from it: the
+      installer offers to move it below the DCS window, and remembers it if
+      Windows puts it back on the left.
    2. **Tablet scripts** in `Saved Games\DCS\Scripts`.
    3. **DCS displays**: "Tablette DCS" monitor setup, resolution spanning
       both displays, windowed. If DCS is open, the window waits for you to
@@ -134,6 +138,14 @@ the frame: a screenshot of their MFDs would let us line them up too.
    to the desktop and the Start menu, registers it in *Settings → Apps →
    Installed apps* and starts it. The folder extracted from the zip can then
    be deleted.
+
+   It also adds **DCS Tablette (écrans)** to the Startup folder: at every
+   Windows sign-in, with no window, it puts the virtual display and the DCS
+   settings back in place before you start DCS. On restart, an update of the
+   virtual display driver or of Windows can change its resolution or
+   position, and DCS would then spread over one of your displays. What it
+   did: `%LOCALAPPDATA%\DCS-Tablette\ecrans.log`. Can be disabled in *Task
+   Manager → Startup apps*.
 
 If a step fails, the window says which one and what to do. Each step can
 also be done by hand: "Manual setup" section of `README.txt`
@@ -175,6 +187,7 @@ multiplayer integrity check is not affected):
 | `Config\options.lua` | monitor setup, resolution, windowed | `options.lua.avant-tablette` |
 | `%LOCALAPPDATA%\Programs\DCS-Tablette` | the program (what the zip contains) | — |
 | Desktop, Start menu | "DCS Tablette" shortcut | — |
+| Startup folder | "DCS Tablette (écrans)" shortcut: displays put back in place at every Windows sign-in (log in `%LOCALAPPDATA%\DCS-Tablette\ecrans.log`) | — |
 | Registry, `HKCU\…\Uninstall\DCS-Tablette` | the *Installed apps* entry | — |
 
 The Lua script only accepts commands for the buttons shown (an allowlist per

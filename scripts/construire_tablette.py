@@ -4,6 +4,8 @@
 
 Rend dist/DCS-Tablette-<version>.zip, qui contient un dossier DCS-Tablette/ :
     DCS-Tablette.exe     le serveur (double-clic), et `installer` / `desinstaller`
+    DCS-Tablette-Ecrans.exe  sans fenêtre : `DCS-Tablette.exe ecrans` à l'ouverture
+                         de Windows
     Installer.bat        scripts dans DCS + écrans
     Desinstaller.bat
     LISEZ-MOI.txt

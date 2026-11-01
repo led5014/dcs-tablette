@@ -32,7 +32,7 @@ from .config import PORT_WEB, adresses_locales
 from .mise_a_jour import numero
 from .ecrans_dcs import (NOM_AFFICHE, NOM_FICHIER, PasDExport, fichier_actif, lire_zones,
                          options_affichage, plein_ecran, regler_options)
-from .installation import (LIGNE, configuration_existante, configurer_ecrans, dcs_ouvert,
+from .installation import (LIGNE, configuration_existante, configurer_ecrans, dcs_ouvert, genants,
                            dcs_regle, installer_scripts, lire_choix, mode_essai, premiere_fois,
                            scripts_a_jour, support_ecrans)
 from .langues import FRANCAIS, Texte, dans, message, pc
@@ -48,6 +48,10 @@ PERIODE_RESEAU_S = 60
 # les écrans, on ne réessaie pas tout seul avant ce délai.
 PAUSE_APRES_ECHEC_S = 600
 TABLETTE_RECENTE_S = 10
+# Ouverture de Windows : l'écran virtuel arrive quelques secondes après la
+# session. On l'attend, puis on laisse Windows finir de poser les écrans.
+ATTENTE_ECRAN_VIRTUEL_S = 90
+POSE_DES_ECRANS_S = 5
 IMAGE_RECENTE_S = 15
 JOURNAL_MAX = 15
 FIN_DU_JOURNAL = 512 * 1024
@@ -140,7 +144,8 @@ class Diagnostic:
     tourne ?), `ecrans` (moniteurs, virtuels signalés), `virtuel`
     (ecran_virtuel.remettre), `lancement` (heure de lancement de DCS),
     `reseaux` (profils_reseau), `choix` (ce que le pilote a choisi à
-    l'installation, installation.lire_choix).
+    l'installation, installation.lire_choix), `ranger` (ecran_virtuel.ranger,
+    appelé seulement avec l'accord du pilote).
     """
 
     def __init__(self, saved_games: Path, pont=None, video=None, port_web: int = PORT_WEB,
@@ -151,7 +156,8 @@ class Diagnostic:
                  reseaux: Callable[[], Optional[List[Tuple[str, str]]]] = profils_reseau,
                  choix: Callable[[], Dict] = lire_choix,
                  publiee: Optional[Dict] = None,
-                 horloge: Callable[[], float] = time.monotonic):
+                 horloge: Callable[[], float] = time.monotonic,
+                 ranger: Optional[Callable[[], Optional[str]]] = None):
         if ecrans is None or virtuel is None or lancement is None:
             from . import capture, ecran_virtuel    # Windows seulement
             ecrans = ecrans or ecran_virtuel.moniteurs
@@ -162,6 +168,8 @@ class Diagnostic:
         self._ouvert, self._ecrans, self._virtuel = ouvert, ecrans, virtuel
         self._lancement, self._reseaux, self._horloge = lancement, reseaux, horloge
         self._choix = choix
+        self._ranger = ranger
+        self._echec_rangement = -1e9
         self._publiee = publiee          # dernière version sur GitHub, lue au lancement
         self._verrou = threading.Lock()          # une vérification à la fois
         # Le résultat, lu par la page toutes les 750 ms : jamais bloqué par
@@ -218,6 +226,40 @@ class Diagnostic:
         if etat == MANQUE and reparer and not dans(detail, FRANCAIS).startswith("aucun"):
             self._echec_ecran = self._horloge()
         return Point(titre, etat, detail, tuple(solution))
+
+    def _windows(self, ecrans: list, lance: bool, forcer: bool, accord: bool) -> Point:
+        """Aucun écran réel à gauche ni au-dessus du principal : DCS ouvre sa
+        fenêtre au coin haut gauche du bureau entier (installation.genants).
+        Rangés tout seuls DCS fermé si le pilote l'a accepté à l'installation
+        — comme l'écran virtuel, pas en boucle après un échec —, sinon la
+        marche à suivre."""
+        titre = Texte("Écrans de Windows")
+        a_ranger = genants(ecrans)
+        if not a_ranger:
+            return Point(titre, OK, Texte("rien à gauche ni au-dessus de l'écran principal"))
+        noms = [Texte("votre écran {largeur}×{hauteur}", largeur=m[2], hauteur=m[3])
+                for m in a_ranger]
+        a_la_main = Texte("Ou Paramètres → Système → Écran : les glisser sous l'écran principal "
+                          "(ou à droite de l'écran virtuel), puis relancer DCS.")
+        if accord and not lance and (forcer or self._horloge() - self._echec_rangement
+                                     > PAUSE_APRES_ECHEC_S):
+            if self._ranger is None:
+                from .ecran_virtuel import ranger    # Windows seulement
+                self._ranger = ranger
+            erreur = self._ranger()
+            if erreur is None:
+                return Point(titre, REPARE, Texte("rangés hors de la fenêtre de DCS : {ecrans}",
+                                                  ecrans=noms))
+            self._echec_rangement = self._horloge()
+            return Point(titre, MANQUE, Texte("{ecrans} pas rangés : {erreur}", ecrans=noms,
+                                              erreur=erreur), (a_la_main,))
+        return Point(titre, A_FAIRE, Texte(
+            "{ecrans} à gauche ou au-dessus de l'écran principal : DCS ouvre sa fenêtre à "
+            "partir de là", ecrans=noms), (
+            Texte("Quitter DCS : DCS Tablette les range tout seul, puis relancer DCS.")
+            if accord else
+            Texte("Relancer Installer.bat (DCS fermé) : il propose de les ranger hors de la "
+                  "fenêtre de DCS."), a_la_main))
 
     def _existante(self, nom: str) -> List[Point]:
         """Le pilote a gardé sa configuration d'écrans, qui exporte déjà les
@@ -554,6 +596,8 @@ class Diagnostic:
             else:
                 points.append(self._sur(Texte("Écran virtuel"), lambda: self._ecran_virtuel(
                     essai, forcer, physique, lance)))
+                points.append(self._sur(Texte("Écrans de Windows"), lambda: self._windows(
+                    self._ecrans(), lance, forcer, bool(choix.get("ranger")))))
                 config = self._sur(Texte("Écrans de DCS"), lambda: self._configuration(
                     essai, self._ecrans(), lance, physique))
         if config is not None:
@@ -628,3 +672,48 @@ class Diagnostic:
     def arreter(self) -> None:
         self._arret.set()
         self._reveil.set()
+
+
+# ------------------------------------------------------------ ouverture de Windows
+
+ECRANS = ("Écran virtuel", "Écrans de Windows", "Écrans de DCS", "Réglages de DCS")
+
+
+def remettre_au_demarrage(saved_games: Path, journal: Path,
+                          diagnostic: Optional[Diagnostic] = None,
+                          ecrans: Optional[Callable[[], list]] = None,
+                          choix: Callable[[], Dict] = lire_choix,
+                          attendre: Callable[[float], None] = time.sleep,
+                          afficher: Callable[[str], None] = print) -> int:
+    """`DCS-Tablette.exe ecrans`, lancé sans fenêtre à chaque ouverture de
+    Windows (DCS-Tablette-Ecrans.exe, dossier Démarrage) : les réparations du
+    diagnostic, faites avant que DCS soit lancé. Au redémarrage, une mise à
+    jour du pilote de l'écran virtuel ou de Windows peut le changer de
+    définition ou de place ; DCS, réglé pour l'ancienne disposition,
+    s'étendrait alors sur un écran du pilote (photo d'un pilote, 01/11/2026).
+
+    Ce qui a été vu et fait va dans `journal` : pas de fenêtre pour le dire.
+    Rend 0 si les écrans sont en place, 1 sinon."""
+    voulu = choix()
+    physique = bool(voulu.get("physique", not voulu))
+    mode = voulu.get("mode") or ("essai" if mode_essai(saved_games) else "second_ecran")
+    if mode == "second_ecran" and not physique:
+        if ecrans is None:
+            from .ecran_virtuel import moniteurs as ecrans
+        for _ in range(ATTENTE_ECRAN_VIRTUEL_S // 2):
+            if any(len(m) > 5 and m[5] and not m[4] for m in ecrans()):
+                break
+            attendre(2)
+        attendre(POSE_DES_ECRANS_S)
+    points = (diagnostic or Diagnostic(saved_games)).verifier(forcer=True)
+    lignes = [Texte("DCS Tablette {version} : écrans remis en place à l'ouverture de Windows, "
+                    "le {date}", version=VERSION, date=time.strftime("%d/%m/%Y %H:%M:%S"))
+              ] + lignes_console(points)
+    try:
+        journal.parent.mkdir(parents=True, exist_ok=True)
+        journal.write_text("\n".join(str(l) for l in lignes) + "\n", encoding="utf-8")
+    except OSError:
+        pass
+    for ligne in lignes:
+        afficher(ligne)
+    return int(any(p.titre in ECRANS and p.etat in PROBLEMES for p in points))

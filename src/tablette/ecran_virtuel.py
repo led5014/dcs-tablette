@@ -209,7 +209,8 @@ def planifier(ecrans: Sequence[Ecran]) -> Tuple[Optional[Placement], List[str]]:
               ecrans=[e.texte for e in genants]),
         Texte("dessous de l'écran principal : la fenêtre de DCS les couvrirait, ils resteraient "
               "noirs."),
-        Texte("Paramètres → Système → Écran : en glisser un à gauche ou au-dessus du principal,"),
+        # Ni à gauche ni au-dessus du principal : DCS partirait de cet écran.
+        Texte("Paramètres → Système → Écran : glisser celui du dessous à droite de l'autre,"),
         Texte("puis relancer Installer.bat. Ou, pour essayer sans : Installer.bat --essai.")]
 
 
@@ -430,6 +431,49 @@ def appliquer(placement: Placement) -> Optional[str]:
     code = user32.ChangeDisplaySettingsExW(None, None, None, 0, None)
     return None if code == 0 else Texte("Windows n'a pas appliqué le réglage (code {code})",
                                         code=code)
+
+
+def deplacer(places: Sequence[Tuple[Ecran, int, int]]) -> Optional[str]:
+    """Range des écrans réels, avec l'accord du pilote : leur place seulement,
+    jamais leur définition ni leur fréquence ; enregistré (il y restera au
+    redémarrage). Rend la raison d'un refus de Windows, ou None."""
+    user32 = _user32()
+    for ecran, x, y in places:
+        m = DEVMODEW()
+        m.dmSize = ctypes.sizeof(m)
+        m.dmFields = DM_POSITION
+        m.dmPositionX, m.dmPositionY = x, y
+        code = user32.ChangeDisplaySettingsExW(ecran.nom, ctypes.byref(m), None,
+                                               CDS_UPDATEREGISTRY | CDS_NORESET, None)
+        if code != 0:
+            return Texte("Windows refuse ce réglage (code {code})", code=code)
+    code = user32.ChangeDisplaySettingsExW(None, None, None, 0, None)
+    return None if code == 0 else Texte("Windows n'a pas appliqué le réglage (code {code})",
+                                        code=code)
+
+
+def ranger(lister: Callable[[], List[Ecran]] = lister,
+           deplacer: Callable[[Sequence[Tuple[Ecran, int, int]]], Optional[str]] = deplacer,
+           attendre: Callable[[float], None] = time.sleep) -> Optional[str]:
+    """Les écrans réels à gauche ou au-dessus du principal rangés hors de la
+    fenêtre de DCS (installation.rangement), une fois que le pilote a dit
+    oui. Rend la raison d'un échec, ou None (rien à ranger compris)."""
+    from .installation import rangement           # la règle des places, une seule fois
+    actifs = [e for e in lister() if e.actif]
+    places = []
+    for m, x, y in rangement([(e.x, e.y, e.largeur, e.hauteur, e.principal, e.virtuel)
+                              for e in actifs]):
+        ecran = next(e for e in actifs if (e.x, e.y, e.largeur, e.hauteur) == tuple(m[:4]))
+        places.append((ecran, x, y))
+    if not places:
+        return None
+    erreur = deplacer(places)
+    if erreur is None:
+        attendre(1)
+        apres = {e.nom: (e.x, e.y) for e in lister()}
+        if any(apres.get(e.nom) != (x, y) for e, x, y in places):
+            erreur = Texte("Windows n'a pas gardé la position demandée")
+    return erreur
 
 
 # ------------------------------------------------- installation du pilote

@@ -591,9 +591,10 @@ class TestInstallation(unittest.TestCase):
         self.assertEqual(lire(self.saved / "Config" / "options.lua"), avant)
         self.assertIn("5120×1440", "\n".join(lignes))
 
-    def installer(self, reponses, ouvert, pret=True):
+    def installer(self, reponses, ouvert, pret=True, autres=()):
         """`installer` sans console ni écrans réels : réponses et état de DCS
-        joués d'avance. Rend le code de sortie et ce qui s'est affiché."""
+        joués d'avance, `autres` écrans en plus du principal et de l'écran
+        virtuel. Rend le code de sortie et ce qui s'est affiché."""
         import contextlib
         import io
         from unittest import mock
@@ -607,13 +608,17 @@ class TestInstallation(unittest.TestCase):
             print(question)
             return reponses.pop(0)
 
-        ecrans = [ecran("\\\\.\\DISPLAY1", "AMD Radeon", "PCI", 0, 0, principal=True), ecran()]
+        ecrans = [ecran("\\\\.\\DISPLAY1", "AMD Radeon", "PCI", 0, 0, principal=True), ecran(),
+                  *autres]
         with mock.patch("tablette.ecran_virtuel.preparer", return_value=pret) as preparer, \
+                mock.patch("tablette.ecran_virtuel.ranger", return_value=None) as ranger, \
                 contextlib.redirect_stdout(sortie):
             code = installation.installer(self.saved, demander=demander, ouvert=ouvert,
                                           lister_ecrans=lambda: ecrans,
                                           chemin_choix=self.chemin_choix)
         self.preparer_appele = preparer.called
+        self.ranger_appele = ranger.called
+        self.sans_reponse = reponses                       # réponses pas demandées
         return code, sortie.getvalue()
 
     def choix(self):
@@ -679,6 +684,60 @@ class TestInstallation(unittest.TestCase):
     def test_installer_ecran_reel_donne_par_le_pilote(self):
         self.installer([""], lambda: False, pret="physique")
         self.assertEqual(self.choix(), {"mode": "second_ecran", "physique": True})
+
+    # Photo d'un pilote, 01/11/2026 : « Identifier » montrait son écran 2 à
+    # gauche du principal, l'écran virtuel 3 à droite ; DCS partait du 2.
+    PILOTE = ((0, 0, 2560, 1440, True, False), (2560, 0, 2560, 1440, False, True),
+              (-1920, 420, 1920, 1080, False, False))
+
+    def test_un_ecran_a_gauche_du_principal_va_sous_la_fenetre_de_dcs(self):
+        from tablette.installation import genants, rangement
+        principal, virtuel, gauche = self.PILOTE
+        self.assertEqual(rangement(self.PILOTE), [(gauche, 0, 1440)])
+        # Au-dessus aussi : DCS part du coin haut gauche du bureau entier.
+        dessus = (0, -1080, 1920, 1080, False, False)
+        self.assertEqual(genants([principal, virtuel, dessus]), [dessus])
+        # Un écran virtuel mal placé n'est pas à ranger : remettre s'en charge.
+        self.assertEqual(rangement([principal, (-2560, 0, 2560, 1440, False, True)]), [])
+        self.assertEqual(rangement([principal, virtuel]), [])
+
+    def test_ecran_virtuel_dessous_on_range_a_droite_sans_rien_couvrir(self):
+        """Écran réel à droite, écran virtuel dessous : l'écran de gauche va à
+        droite de la fenêtre de DCS, sans chevaucher ceux qui y sont déjà."""
+        from tablette.installation import _chevauche, rangement
+        principal, droite = (0, 0, 2560, 1440, True, False), (2560, 0, 2560, 1440, False, False)
+        dessous, gauche = (0, 1440, 2560, 1440, False, True), (-1920, 0, 1920, 1080, False, False)
+        ((ecran_, x, y),) = rangement([principal, droite, dessous, gauche])
+        self.assertIs(ecran_, gauche)
+        self.assertGreaterEqual(x, 2560)                  # hors de la fenêtre de DCS (2560 × 2880)
+        self.assertFalse(any(_chevauche((x, y, 1920, 1080), o)
+                             for o in (principal, droite, dessous)))
+        # Rien à droite du principal, l'écran virtuel dessous : à droite, collé.
+        self.assertEqual(rangement([principal, dessous, gauche]), [(gauche, 2560, 0)])
+
+    def test_installer_propose_de_ranger_l_ecran_de_gauche(self):
+        gauche = ecran("\\\\.\\DISPLAY3", "NVIDIA", "PCI", -1920, 420, 1920, 1080, 60)
+        # DCS sur le principal ? Entrée (oui) ; ranger maintenant ? Entrée (oui).
+        code, sortie = self.installer(["", ""], lambda: False, autres=[gauche])
+        self.assertIn("l'écran principal de Windows (2560×1440", sortie)
+        self.assertIn("votre écran 1920×1080", sortie)
+        self.assertIn("sous la fenêtre de DCS", sortie)
+        self.assertTrue(self.ranger_appele)
+        self.assertEqual(self.sans_reponse, [])            # les deux questions posées
+        self.assertEqual(self.choix(), {"mode": "second_ecran", "physique": False, "ranger": True})
+        # Non : rien ne bouge, la marche à suivre, et rien de retenu.
+        code, sortie = self.installer(["", "n"], lambda: False, autres=[gauche])
+        self.assertFalse(self.ranger_appele)
+        self.assertIn("À la main", sortie)
+        self.assertNotIn("ranger", self.choix())
+
+    def test_installer_s_arrete_si_dcs_n_est_pas_voulu_sur_le_principal(self):
+        droite = ecran("\\\\.\\DISPLAY3", "NVIDIA", "PCI", 5120, 0, 1920, 1080, 60)
+        code, sortie = self.installer(["n"], lambda: False, autres=[droite])
+        self.assertEqual(code, 1)
+        self.assertIn("En faire mon écran principal", sortie)
+        self.assertFalse(self.preparer_appele)
+        self.assertFalse(self.chemin_choix.exists())
 
 
 def ecran(nom="\\\\.\\DISPLAY2", carte="Virtual Display Driver",
@@ -1855,6 +1914,7 @@ class TestDesinstallation(unittest.TestCase):
         with tempfile.TemporaryDirectory() as dossier, \
                 mock.patch.object(installation, "dossier_bureau", lambda: Path(dossier)), \
                 mock.patch.object(installation, "dossier_menu", lambda: Path(dossier)), \
+                mock.patch.object(installation, "dossier_demarrage", lambda: Path(dossier)), \
                 mock.patch.object(installation, "fichier_choix",
                                   lambda: Path(dossier) / "installation.json"), \
                 mock.patch.object(installation, "fichier_langue",
@@ -1880,11 +1940,14 @@ class TestDesinstallation(unittest.TestCase):
             programme = dossier / "Programs" / "DCS-Tablette"
             programme.mkdir(parents=True)
             (dossier / installation.RACCOURCI).write_bytes(b"L")
+            (dossier / installation.RACCOURCI_ECRANS).write_bytes(b"L")
+            (dossier / "ecrans.log").write_text("ouverture de Windows")
             (dossier / "langue.txt").write_text("en")       # --langue en, retenu
             with mock.patch.object(sys, "frozen", True, create=True), \
                     mock.patch.object(sys, "executable", str(programme / installation.EXE)), \
                     mock.patch.object(installation, "dossier_bureau", lambda: dossier), \
                     mock.patch.object(installation, "dossier_menu", lambda: dossier), \
+                    mock.patch.object(installation, "dossier_demarrage", lambda: dossier), \
                     mock.patch.object(installation, "fichier_choix",
                                       lambda: dossier / "installation.json"), \
                     mock.patch.object(installation, "fichier_langue",
@@ -1895,6 +1958,8 @@ class TestDesinstallation(unittest.TestCase):
                 installation.desinstaller(dossier, demander=questions.append,
                                           autres=lambda: 0, attendre=True)
             self.assertFalse((dossier / installation.RACCOURCI).exists())
+            self.assertFalse((dossier / installation.RACCOURCI_ECRANS).exists())
+            self.assertFalse((dossier / "ecrans.log").exists())
             self.assertFalse((dossier / "langue.txt").exists())
         self.assertEqual(effaces, [programme])
         self.assertIn("Applications installées", sortie.getvalue())
@@ -1914,11 +1979,12 @@ class TestProgramme(unittest.TestCase):
         self.tmp.cleanup()
 
     def zip_extrait(self, dossier: Path) -> Path:
-        from tablette.installation import EXE
+        from tablette.installation import LIVRES
         (dossier / "_internal").mkdir(parents=True)
         (dossier / "_internal" / "python312.dll").write_text("dll")
-        for nom in (EXE, "Installer.bat", "Desinstaller.bat", "LISEZ-MOI.txt", "README.txt"):
-            (dossier / nom).write_text(nom)
+        for nom in LIVRES:
+            if "." in nom:
+                (dossier / nom).write_text(nom)
         return dossier
 
     def test_installe_pour_l_utilisateur_seul(self):
@@ -1960,14 +2026,19 @@ class TestProgramme(unittest.TestCase):
                 mock.patch.object(installation, "dossier_programme", lambda: programme), \
                 mock.patch.object(installation, "dossier_bureau", lambda: self.racine / "Bureau"), \
                 mock.patch.object(installation, "dossier_menu", lambda: self.racine / "Menu"), \
+                mock.patch.object(installation, "dossier_demarrage",
+                                  lambda: self.racine / "Démarrage"), \
                 mock.patch.object(installation, "creer_raccourci",
-                                  lambda cible, dossier: raccourcis.append((cible, dossier))), \
+                                  lambda cible, dossier, *_: raccourcis.append((cible, dossier))), \
                 mock.patch.object(installation, "enregistrer", entrees.append), \
                 contextlib.redirect_stdout(io.StringIO()):
             exe = installation.installer_programme(lambda q: "", lambda: 0)
         self.assertEqual(exe, programme / installation.EXE)
         self.assertTrue(exe.exists())
-        self.assertEqual(raccourcis, [(exe, self.racine / "Bureau"), (exe, self.racine / "Menu")])
+        # Et la remise en place des écrans, sans fenêtre, à chaque ouverture de Windows.
+        self.assertEqual(raccourcis, [(exe, self.racine / "Bureau"), (exe, self.racine / "Menu"),
+                                      (programme / installation.EXE_ECRANS,
+                                       self.racine / "Démarrage")])
         self.assertEqual(entrees, [programme])
 
     def test_entree_des_applications_installees(self):
@@ -2008,18 +2079,27 @@ class TestProgramme(unittest.TestCase):
         from unittest import mock
 
         from tablette import installation
-        menu, poses, entrees = self.racine / "Menu", [], []
+        menu, demarrage, poses, entrees = self.racine / "Menu", self.racine / "Démarrage", [], []
         menu.mkdir()
+        demarrage.mkdir()
         exe = self.zip_extrait(self.racine / "DCS-Tablette") / installation.EXE
         with mock.patch.object(installation, "dossier_menu", lambda: menu), \
+                mock.patch.object(installation, "dossier_demarrage", lambda: demarrage), \
+                mock.patch.object(installation, "fichier_choix",
+                                  lambda: self.racine / "installation.json"), \
                 mock.patch.object(installation, "enregistrer", entrees.append), \
                 mock.patch.object(installation, "creer_raccourci",
-                                  lambda cible, dossier: poses.append(cible)
-                                  or (dossier / installation.RACCOURCI).write_bytes(b"L")):
-            self.assertIn("menu Démarrer", "".join(installation.tenir_a_jour(exe)))
+                                  lambda cible, dossier, nom=installation.RACCOURCI, *_:
+                                  poses.append(cible) or (dossier / nom).write_bytes(b"L")):
+            lignes = "".join(installation.tenir_a_jour(exe))
+            self.assertIn("menu Démarrer", lignes)
+            self.assertIn("ouverture de Windows", lignes)
             self.assertEqual(installation.tenir_a_jour(exe), [])       # déjà là
-        self.assertEqual(poses, [exe])
-        self.assertEqual(entrees, [exe.parent, exe.parent])
+            # Retiré du dossier Démarrage par le pilote : il ne revient pas.
+            (demarrage / installation.RACCOURCI_ECRANS).unlink()
+            self.assertEqual(installation.tenir_a_jour(exe), [])
+        self.assertEqual(poses, [exe, exe.parent / installation.EXE_ECRANS])
+        self.assertEqual(entrees, [exe.parent] * 3)
 
     @unittest.skipUnless(sys.platform == "win32", "cmd")
     def test_le_script_d_effacement_ne_prend_que_le_programme(self):
@@ -2698,6 +2778,77 @@ class TestDiagnostic(unittest.TestCase):
         self.ecrans = [(0, 0, 2560, 1440, True, False), (-2560, 0, 2560, 1440, False, False)]
         self.assertEqual(self.points()["Écrans de DCS"].etat, "attente")
 
+    def test_un_ecran_a_gauche_du_principal_est_signale_puis_range(self):
+        """Photo d'un pilote, 01/11/2026 : son écran 2 à gauche du principal, et
+        DCS parti dessus. Signalé ; rangé tout seul DCS fermé s'il l'a accepté
+        à l'installation, pas en boucle après un refus de Windows."""
+        titre = "Écrans de Windows"
+        self.ecrans = list(TestInstallation.PILOTE)
+        self.lance = True
+        point = self.points()[titre]
+        self.assertEqual((point.etat, point.detail),
+                         ("a_faire", "votre écran 1920×1080 à gauche ou au-dessus de l'écran "
+                                     "principal : DCS ouvre sa fenêtre à partir de là"))
+        self.assertIn("Installer.bat", point.solution[0])
+        self.choix = {"mode": "second_ecran", "physique": False, "ranger": True}
+        rangements = []
+        self.assertIn("Quitter DCS", self.points(self.diagnostic(
+            ranger=lambda: rangements.append(1)))[titre].solution[0])
+        self.assertEqual(rangements, [])                  # DCS ouvert : on ne touche à rien
+        self.lance = False
+        point = self.points(self.diagnostic(ranger=lambda: rangements.append(1)))[titre]
+        self.assertEqual((point.etat, rangements), ("repare", [1]))
+        refus = self.diagnostic(ranger=lambda: rangements.append(2) or "refusé")
+        self.assertEqual(self.points(refus)[titre].etat, "manque")
+        self.assertEqual(self.points(refus)[titre].etat, "a_faire")      # pas tout de suite
+        self.assertEqual(self.points(refus, forcer=True)[titre].etat, "manque")  # « Vérifier »
+        self.assertEqual(rangements, [1, 2, 2])
+        self.ecrans = [self.PRINCIPAL, self.VIRTUEL]
+        self.assertEqual(self.points()[titre].etat, "ok")
+
+    def remettre_au_demarrage(self, choix, ecrans_vus):
+        from tablette.diagnostic import remettre_au_demarrage
+        attentes, affiche = [], []
+        journal = self.saved / "DCS-Tablette" / "ecrans.log"
+        code = remettre_au_demarrage(self.saved, journal, self.diagnostic(),
+                                     ecrans=lambda: ecrans_vus.pop(0) if ecrans_vus
+                                     else self.ecrans, choix=lambda: choix,
+                                     attendre=attentes.append, afficher=affiche.append)
+        return code, attentes, journal.read_text(encoding="utf-8"), affiche
+
+    def test_ouverture_de_windows_attend_l_ecran_virtuel_puis_repare(self):
+        """Lancé sans fenêtre à l'ouverture de Windows : l'écran virtuel arrive
+        après la session, on l'attend ; puis les réparations du diagnostic,
+        forcées, et ce qui a été vu dans un journal."""
+        from tablette.diagnostic import POSE_DES_ECRANS_S
+        self.ecrans = [(0, 0, 2560, 1440, True, False), (2560, 0, 2560, 1440, False, True)]
+        sans_virtuel = [(0, 0, 2560, 1440, True, False)]
+        code, attentes, journal, affiche = self.remettre_au_demarrage(
+            {"mode": "second_ecran", "physique": False}, [sans_virtuel, sans_virtuel])
+        self.assertEqual(code, 0)
+        self.assertEqual(attentes, [2, 2, POSE_DES_ECRANS_S])
+        self.assertEqual(self.reparer, [True])           # forcé : DCS fermé, on remet
+        self.assertIn("ouverture de Windows", journal.splitlines()[0])
+        self.assertIn("Écrans de DCS : « Tablette DCS » : 4 écrans sur le second écran",
+                      journal)
+        self.assertEqual(journal.splitlines(), [str(l) for l in affiche])
+
+    def test_ouverture_de_windows_dit_ce_qui_reste_a_regler(self):
+        """L'écran virtuel parti, un écran du pilote sous la fenêtre de DCS : à
+        régler, et dit dans le journal. Sans écran virtuel voulu (écran réel
+        donné, mode essai), rien à attendre."""
+        self.lance = False
+        self.choix = {"mode": "second_ecran", "physique": False}
+        self.virtuel = ("manque", "non placé : Windows n'a pas gardé la position demandée", [])
+        self.ecrans = [(0, 0, 2560, 1440, True, False), (2560, 0, 2560, 1440, False, False),
+                       (-1920, 420, 1920, 1080, False, True)]
+        code, attentes, journal, _ = self.remettre_au_demarrage(
+            {"mode": "second_ecran", "physique": False}, [])
+        self.assertEqual(code, 1)
+        self.assertIn("recouvre votre écran 2560×1440", journal)
+        for choix in ({"mode": "second_ecran", "physique": True}, {"mode": "essai"}):
+            self.assertNotIn(2, self.remettre_au_demarrage(choix, [])[1])
+
     def test_ecran_reel_pris_seulement_s_il_a_ete_donne(self):
         self.choix = {"mode": "second_ecran", "physique": False}
         self.ecrans = [(0, 0, 2560, 1440, True, False), (2560, 0, 2560, 1440, False, False)]
@@ -2899,6 +3050,31 @@ class TestDiagnostic(unittest.TestCase):
         self.assertTrue({"DCS folder", "Virtual display", "DCS settings", "PC network",
                          "Tablet script in DCS"} <= titres, titres)
         self.assertEqual(d.etat()["points"][0]["titre"], "Dossier de DCS")
+
+
+class TestRangerEcrans(unittest.TestCase):
+    """Les écrans réels à gauche du principal, rangés avec l'accord du pilote :
+    sur des écrans décrits, rien du poste n'est déplacé."""
+
+    def test_l_ecran_de_gauche_va_sous_le_principal_et_c_est_verifie(self):
+        from dataclasses import replace
+
+        from tablette.ecran_virtuel import ranger
+        gauche = ecran("\\\\.\\DISPLAY2", "NVIDIA", "PCI", -1920, 420, 1920, 1080, 60)
+        avant = [PRINCIPAL, ecran("\\\\.\\DISPLAY3"), gauche]
+        apres = [PRINCIPAL, ecran("\\\\.\\DISPLAY3"), replace(gauche, x=0, y=1440)]
+        demandes = []
+        listes = [avant, apres]
+        self.assertIsNone(ranger(lister=lambda: listes.pop(0),
+                                 deplacer=lambda places: demandes.extend(
+                                     (e.nom, x, y) for e, x, y in places),
+                                 attendre=lambda s: None))
+        self.assertEqual(demandes, [("\\\\.\\DISPLAY2", 0, 1440)])
+        # Windows ne garde pas la place : on le dit.
+        self.assertIn("pas gardé", ranger(lister=lambda: avant, deplacer=lambda places: None,
+                                          attendre=lambda s: None))
+        # Rien à gauche : rien à déplacer.
+        self.assertIsNone(ranger(lister=lambda: apres, deplacer=lambda places: 1 / 0))
 
 
 class TestRemettreEcranVirtuel(unittest.TestCase):

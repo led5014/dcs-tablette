@@ -56,10 +56,36 @@ exe = EXE(
     upx=False,
 )
 
+# « DCS-Tablette-Ecrans.exe » : sans console, lancé à l'ouverture de Windows,
+# il démarre « DCS-Tablette.exe ecrans » sans fenêtre (installation.py,
+# ecrans_au_demarrage). Sa propre analyse, d'un script qui n'importe que
+# subprocess : il reste minuscule, et partage _internal avec le principal.
+b = Analysis(
+    [str(PROJECT / "scripts" / "dcs_tablette_ecrans.py")],
+    excludes=["tablette", "tkinter", "unittest", "pydoc", "email", "http", "xml"],
+    noarchive=False,
+)
+
+exe_ecrans = EXE(
+    PYZ(b.pure),
+    b.scripts,
+    [],
+    exclude_binaries=True,
+    name="DCS-Tablette-Ecrans",
+    icon=str(PROJECT / "distribution" / "tablette" / "dcs_tablette.ico"),
+    console=False,
+    debug=False,
+    strip=False,
+    upx=False,
+)
+
 coll = COLLECT(
     exe,
     a.binaries,
     a.datas,
+    exe_ecrans,
+    b.binaries,
+    b.datas,
     name="DCS-Tablette",
     strip=False,
     upx=False,

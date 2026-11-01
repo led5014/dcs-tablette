@@ -125,7 +125,10 @@ une capture d'écran de leurs MFD permettra de les caler aussi.
       aucun de vos écrans), à la même définition et à la même fréquence :
       rien à régler dans Paramètres → Écran. Un de vos écrans n'est utilisé
       que si vous dites que c'est une prise HDMI factice ; sans aucune place
-      libre, elle propose le mode essai.
+      libre, elle propose le mode essai. Un de vos écrans à **gauche** (ou
+      au-dessus) du principal ? DCS ouvre sa fenêtre au coin haut gauche du
+      bureau entier et partirait de lui : elle propose de le ranger sous la
+      fenêtre de DCS, et s'en souvient si Windows le remet à gauche.
    2. **Scripts** de la tablette dans `Saved Games\DCS\Scripts`.
    3. **Écrans de DCS** : configuration « Tablette DCS », résolution des deux
       écrans, fenêtré. Si DCS est ouvert, la fenêtre attend qu'on le ferme.
@@ -135,6 +138,14 @@ une capture d'écran de leurs MFD permettra de les caler aussi.
    **DCS Tablette** sur le bureau et dans le menu Démarrer, l'inscrit dans
    *Paramètres → Applications → Applications installées* et le démarre. Le
    dossier extrait du zip peut ensuite être supprimé.
+
+   Elle pose aussi **DCS Tablette (écrans)** dans le dossier Démarrage : à
+   chaque ouverture de Windows, sans fenêtre, il remet l'écran virtuel et les
+   réglages de DCS en place avant que vous lanciez DCS. Une mise à jour du
+   pilote de l'écran virtuel ou de Windows peut en effet le changer de
+   définition ou de place au redémarrage, et DCS s'étendrait alors sur un de
+   vos écrans. Ce qu'il a fait : `%LOCALAPPDATA%\DCS-Tablette\ecrans.log`.
+   Désactivable dans *Gestionnaire des tâches → Applications de démarrage*.
 
 Si une étape n'aboutit pas, la fenêtre dit laquelle et quoi faire. Chaque
 étape se fait aussi à la main : section « À la main » du `LISEZ-MOI.txt`
@@ -177,6 +188,7 @@ DCS (le contrôle d'intégrité du multijoueur n'est pas concerné) :
 | `Config\options.lua` | configuration d'écrans, résolution, fenêtré | `options.lua.avant-tablette` |
 | `%LOCALAPPDATA%\Programs\DCS-Tablette` | le programme (ce que contient le zip) | — |
 | Bureau, menu Démarrer | raccourci « DCS Tablette » | — |
+| Dossier Démarrage | raccourci « DCS Tablette (écrans) » : écrans remis en place à chaque ouverture de Windows (journal dans `%LOCALAPPDATA%\DCS-Tablette\ecrans.log`) | — |
 | Registre, `HKCU\…\Uninstall\DCS-Tablette` | l'entrée d'*Applications installées* | — |
 
 Le script Lua n'accepte que les commandes des boutons affichés (une liste
