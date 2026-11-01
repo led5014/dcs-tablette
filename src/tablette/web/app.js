@@ -1393,16 +1393,21 @@ async function construireMenuAppareil() {
   if (select.selectedIndex < 0) select.value = 'auto';
 }
 
+// Appelée à chaque état (750 ms) : n'écrit que ce qui change. Le moindre
+// texte réécrit, même identique, fait redessiner la liste ouverte par Chrome
+// sur Android : elle sautait et clignotait sous le doigt.
 function majMenuAppareil(detecte, ailleurs) {
   const select = $('#appareil');
-  select.options[0].textContent = `Auto · ${detecte}`;
+  const ecrire = (opt, texte) => { if (opt.textContent !== texte) opt.textContent = texte; };
+  ecrire(select.options[0], `Auto · ${detecte}`);
   for (const opt of select.options) {
     if (!opt.dataset.libelle) continue;
-    opt.textContent = opt.selected && ailleurs
+    ecrire(opt, opt.selected && ailleurs
       ? tr('{appareil} — DCS : {pilote}', { appareil: opt.dataset.libelle, pilote: ailleurs })
-      : opt.dataset.libelle;
+      : opt.dataset.libelle);
   }
-  select.title = select.selectedOptions.length ? select.selectedOptions[0].textContent : '';
+  const titre = select.selectedOptions.length ? select.selectedOptions[0].textContent : '';
+  if (select.title !== titre) select.title = titre;
 }
 
 $('#appareil').addEventListener('change', (e) => {
