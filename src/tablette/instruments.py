@@ -21,6 +21,8 @@ import time
 from dataclasses import astuple, dataclass
 from typing import Callable, Dict, List, Optional
 
+from .langues import FRANCAIS, traduire
+
 # Facteurs depuis les unités de DCS (Scripts/Export.lua : m/s, mètres, kg).
 VITESSES = {"kt": 3600 / 1852, "mph": 3600 / 1609.344, "km/h": 3.6}
 ALTITUDES = {"ft": 1 / 0.3048, "m": 1.0}
@@ -181,9 +183,11 @@ def _espace(n: float) -> str:
     return f"{n:,.0f}".replace(",", " ")
 
 
-def lecture(vol: Optional[Dict[str, float]], inst: Instruments) -> Optional[Dict]:
+def lecture(vol: Optional[Dict[str, float]], inst: Instruments,
+            langue: str = FRANCAIS) -> Optional[Dict]:
     """Ce que montrent les instruments, aiguilles comprises ; None sans données.
-    `vol["taux"]` : taux de virage en °/s, ajouté par dcs.py (TauxDeVirage)."""
+    `vol["taux"]` : taux de virage en °/s, ajouté par dcs.py (TauxDeVirage).
+    `langue` : celle de la tablette, pour les mots du bandeau."""
     if not vol:
         return None
     d: Dict = {}
@@ -218,34 +222,41 @@ def lecture(vol: Optional[Dict[str, float]], inst: Instruments) -> Optional[Dict
     if regimes:
         d["regime"] = {"angles": [round(angle_regime(r), 1) for r in regimes],
                        "texte": " / ".join(f"{r:.0f}" for r in regimes)}
-    d["bandeau"] = _bandeau(vol, inst)
+    d["bandeau"] = _bandeau(vol, inst, langue)
     return d
 
 
-def _bandeau(vol: Dict[str, float], inst: Instruments) -> List[Dict[str, str]]:
+def _bandeau(vol: Dict[str, float], inst: Instruments,
+             langue: str = FRANCAIS) -> List[Dict[str, str]]:
     """Les valeurs lues en chiffres, sous les cadrans."""
     b: List[Dict[str, str]] = []
+
+    def lu(titre: str, texte: str, etat: Optional[str] = None) -> None:
+        b.append({"titre": titre, "texte": texte,
+                  **({} if etat is None else {"etat": etat})})
     if inst.helicoptere and "sol" in vol:
-        b.append({"titre": "HAUTEUR", "texte": f"{_espace(vol['sol'] * ALTITUDES[inst.altitude])} "
-                                               f"{inst.altitude}"})
+        lu(traduire("HAUTEUR", langue),
+           f"{_espace(vol['sol'] * ALTITUDES[inst.altitude])} {inst.altitude}")
     if "mach" in vol and not inst.helicoptere and inst.vitesse == "kt":
-        b.append({"titre": "MACH", "texte": f"{vol['mach']:.2f}"})
+        lu(traduire("MACH", langue), f"{vol['mach']:.2f}")
     if "inc" in vol:
-        b.append({"titre": "INCIDENCE", "texte": f"{math.degrees(vol['inc']):.1f}°"})
+        lu(traduire("INCIDENCE", langue), f"{math.degrees(vol['inc']):.1f}°")
     temperatures = [vol[c] for c in ("t1", "t2")[:max(1, inst.moteurs)] if c in vol]
     if temperatures:
-        b.append({"titre": "TEMP. MOTEUR", "texte": " / ".join(f"{t:.0f}" for t in temperatures)
-                  + " °C"})
+        lu(traduire("TEMP. MOTEUR", langue), " / ".join(f"{t:.0f}" for t in temperatures) + " °C")
     if "carb" in vol:
-        b.append({"titre": "CARBURANT", "texte": f"{_espace(vol['carb'] * MASSES[inst.carburant])} "
-                                                 f"{inst.carburant}"})
+        lu(traduire("CARBURANT", langue),
+           f"{_espace(vol['carb'] * MASSES[inst.carburant])} {inst.carburant}")
     if "train" in vol:
         t = vol["train"]
-        b.append({"titre": "TRAIN", "texte": "SORTI" if t > 0.99 else "RENTRÉ" if t < 0.01
-                  else "EN MOUVEMENT", "etat": "vert" if t > 0.99 else "" if t < 0.01 else "ambre"})
+        if t > 0.99:
+            lu(traduire("TRAIN", langue), traduire("SORTI", langue), "vert")
+        elif t < 0.01:
+            lu(traduire("TRAIN", langue), traduire("RENTRÉ", langue), "")
+        else:
+            lu(traduire("TRAIN", langue), traduire("EN MOUVEMENT", langue), "ambre")
     if "volets" in vol:
-        b.append({"titre": "VOLETS", "texte": f"{vol['volets'] * 100:.0f} %"})
+        lu(traduire("VOLETS", langue), f"{vol['volets'] * 100:.0f} %")
     if vol.get("aerofreins", 0.0) > 0.01:
-        b.append({"titre": "AÉROFREINS", "texte": f"{vol['aerofreins'] * 100:.0f} %",
-                  "etat": "ambre"})
+        lu(traduire("AÉROFREINS", langue), f"{vol['aerofreins'] * 100:.0f} %", "ambre")
     return b

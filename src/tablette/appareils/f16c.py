@@ -15,6 +15,7 @@ tablette ne tourne pas les pages (une commande au mauvais appareil pourrait
 actionner autre chose) ; le kneeboard reste affiché, pages aux touches [ et ].
 """
 from . import Ecran, Profil, couronne_horaire
+from ..langues import Texte
 
 _OSB = tuple((str(n), 3000 + n) for n in range(1, 21))
 _CADRE = couronne_horaire(5, "haut", _OSB)
@@ -24,7 +25,7 @@ PROFIL = Profil(
     libelle="F-16C Viper",
     noms_dcs=("F-16C_50",),
     ecrans=(
-        Ecran("mfd_gauche", "MFD gauche", "LEFT_MFCD", {"": 24}, _CADRE),
-        Ecran("mfd_droit", "MFD droit", "RIGHT_MFCD", {"": 25}, _CADRE),
+        Ecran("mfd_gauche", Texte("MFD gauche"), "LEFT_MFCD", {"": 24}, _CADRE),
+        Ecran("mfd_droit", Texte("MFD droit"), "RIGHT_MFCD", {"": 25}, _CADRE),
     ),
 )

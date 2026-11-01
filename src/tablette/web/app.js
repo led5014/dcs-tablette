@@ -9,6 +9,10 @@
 //
 // Un bouton reste enfoncé dans le cockpit tant que le doigt est posé : la
 // page envoie l'appui au contact, le relâchement au décollement.
+//
+// Les textes s'écrivent en français, la référence, et passent par tr() :
+// /textes.js, chargé juste avant, donne la langue de cette tablette et la
+// traduction de chaque phrase (src/tablette/anglais.py).
 
 const $ = (sel) => document.querySelector(sel);
 const attendre = (ms) => new Promise((fin) => setTimeout(fin, ms));
@@ -26,6 +30,52 @@ const BORD = 0.62;                  // épaisseur de la couronne de boutons, en 
 // proposée que si chacun l'atteint sur l'écran où la page est ouverte.
 const CONFORT = { cadre: 280, ufc: 290, ifei: 200, secours: 520, secoursEtroit: 330,
   instruments: 450 };
+
+// --------------------------------------------------------------- langue
+// La langue est décidée par le serveur (choix fait sur cette tablette, sinon
+// celle du navigateur) : la page et l'API parlent forcément la même. Une
+// phrase sans traduction reste en français. Les {valeurs} se remplissent
+// après la traduction, qui peut les déplacer.
+
+const LANGUE_PAGE = typeof LANGUE === 'string' ? LANGUE : 'fr';
+const TRADUCTIONS = typeof TEXTES === 'object' && TEXTES ? TEXTES : {};
+
+function tr(francais, valeurs = {}) {
+  const texte = Object.prototype.hasOwnProperty.call(TRADUCTIONS, francais)
+    ? TRADUCTIONS[francais] : francais;
+  return texte.replace(/\{(\w+)\}/g, (tout, nom) => (nom in valeurs ? String(valeurs[nom]) : tout));
+}
+
+// Le HTML de la page : chaque élément marqué data-t (son texte), data-t-aria
+// (son aria-label) ou data-t-alt (son alt) est traduit au chargement.
+function traduirePage() {
+  document.documentElement.lang = LANGUE_PAGE;
+  for (const el of document.querySelectorAll('[data-t]')) {
+    el.textContent = tr(el.textContent.trim().replace(/\s+/g, ' '));
+  }
+  for (const el of document.querySelectorAll('[data-t-aria]')) {
+    el.setAttribute('aria-label', tr(el.getAttribute('aria-label')));
+  }
+  for (const el of document.querySelectorAll('[data-t-alt]')) el.alt = tr(el.alt);
+}
+
+// Le choix FR / EN, dans la barre du diagnostic. Retenu dans un cookie, comme
+// l'appareil : chaque tablette garde le sien, et le serveur le lit. La page se
+// recharge dans la nouvelle langue, le diagnostic rouvert.
+const COOKIE_LANGUE = 'tablette_langue';
+
+function brancherLangues() {
+  for (const b of document.querySelectorAll('#langues button')) {
+    b.classList.toggle('actif', b.dataset.langue === LANGUE_PAGE);
+    b.addEventListener('click', () => {
+      if (b.dataset.langue === LANGUE_PAGE) return;
+      document.cookie = `${COOKIE_LANGUE}=${b.dataset.langue}; path=/; max-age=31536000; SameSite=Lax`;
+      retenir('diagnostic.rouvrir', '1');
+      toutRelacher();
+      location.reload();
+    });
+  }
+}
 
 function element(balise, classe, texte) {
   const el = document.createElement(balise);
@@ -150,14 +200,19 @@ document.body.append(reserve);
 // écrans, le même en portrait les empile, un téléphone en paysage les serre,
 // un grand écran en montre plus. Aucune taille d'appareil n'est écrite ici.
 
-const abrege = (libelle) => libelle.replace(' gauche', ' G').replace(' droit', ' D');
+// Libellés abrégés pour la barre : « DDI G », et en anglais « L DDI ».
+const ABREVIATIONS = LANGUE_PAGE === 'en'
+  ? [[/^Left /, 'L '], [/^Right /, 'R ']] : [[/ gauche$/, ' G'], [/ droit$/, ' D']];
+const abrege = (libelle) => ABREVIATIONS.reduce((l, [motif, court]) => l.replace(motif, court), libelle);
 
 function calculerDispositions(p) {
   const ids = p.ecrans.map((e) => e.id);
   const liste = [];
   const g = p.ecrans.find((e) => e.id.endsWith('gauche'));
   const d = p.ecrans.find((e) => e.id.endsWith('droit'));
-  if (g && d) liste.push({ id: 'deux', libelle: `2 ${g.libelle.split(' ')[0]}`, ids: [g.id, d.id] });
+  // « 2 DDI » : le mot commun aux deux libellés, où qu'il soit dans la langue.
+  const commun = g && d ? g.libelle.split(' ').find((m) => d.libelle.split(' ').includes(m)) : null;
+  if (g && d) liste.push({ id: 'deux', libelle: `2 ${commun || ''}`.trim(), ids: [g.id, d.id] });
   // `toujours` : proposée même à l'étroit (petit téléphone), plutôt que de
   // priver de l'écran ou du panneau ; les autres sont des regroupements.
   for (const e of p.ecrans) {
@@ -166,22 +221,22 @@ function calculerDispositions(p) {
   // Un seul écran (l'HDD du MiG-29) : à côté des instruments, la tête reste
   // dehors pour tout le reste.
   if (ids.length === 1) {
-    liste.push({ id: 'avec-instruments', libelle: `${abrege(p.ecrans[0].libelle)} + instr.`,
+    liste.push({ id: 'avec-instruments', libelle: tr('{ecran} + instr.', { ecran: abrege(p.ecrans[0].libelle) }),
       ids: [ids[0], 'instruments'] });
   }
   if (p.panneaux.includes('ufc')) {
     liste.push({ id: 'ufc', libelle: 'UFC', ids: ['ufc', 'ifei'], toujours: true });
   }
   if (p.panneaux.includes('secours')) {
-    liste.push({ id: 'secours', libelle: 'Secours', ids: ['secours'], toujours: true });
+    liste.push({ id: 'secours', libelle: tr('Secours'), ids: ['secours'], toujours: true });
   }
-  if (ids.length >= 3) liste.push({ id: 'tous', libelle: `${ids.length} écrans`, ids });
+  if (ids.length >= 3) liste.push({ id: 'tous', libelle: tr('{nombre} écrans', { nombre: ids.length }), ids });
   if (ids.length >= 2 && p.panneaux.length) {
-    liste.push({ id: 'planche', libelle: 'Planche', ids: [...ids, ...p.panneaux] });
+    liste.push({ id: 'planche', libelle: tr('Planche'), ids: [...ids, ...p.panneaux] });
   }
   // Les instruments de base valent pour tout appareil : la disposition par
   // défaut de ceux qui n'ont pas d'écran (warbirds, hélicoptères à cadrans).
-  liste.push({ id: 'instruments', libelle: 'Instruments', ids: ['instruments'], toujours: true });
+  liste.push({ id: 'instruments', libelle: tr('Instruments'), ids: ['instruments'], toujours: true });
   return liste;
 }
 
@@ -279,7 +334,7 @@ function appliquer() {
   accorderKneeboardDcs();
   const sansEcrans = dispositions.length === 0;
   $('#bascule').hidden = sansEcrans;
-  $('#bascule').textContent = enKneeboard ? 'Écrans' : 'Kneeboard';
+  $('#bascule').textContent = enKneeboard ? tr('Écrans') : tr('Kneeboard');
 
   const possibles = dispositionsPossibles();
   const courante = possibles.find((x) => x.d.id === disposition) || possibles[0] || null;
@@ -311,8 +366,9 @@ function appliquer() {
   if (enKneeboard) return;
   if (!courante) {
     if (sansEcrans) {
-      scene.append(element('p', 'vide-appareil', `${profil ? profil.libelle : 'Cet appareil'} : `
-        + 'pas d\'écran à reprendre. Le kneeboard reste disponible.'));
+      const appareil = profil ? profil.libelle : tr('Cet appareil');
+      scene.append(element('p', 'vide-appareil',
+        tr("{appareil} : pas d'écran à reprendre. Le kneeboard reste disponible.", { appareil })));
     }
     return;
   }
@@ -335,7 +391,7 @@ function construireSieges() {
   const nav = $('#sieges');
   nav.textContent = '';
   nav.hidden = !profil.sieges.length;
-  const libelles = { pilote: 'Pilote', cpg: 'CPG' };
+  const libelles = { pilote: tr('Pilote'), cpg: 'CPG' };
   for (const s of profil.sieges) {
     const b = element('button', s === siege ? 'actif' : '', libelles[s] || s);
     b.addEventListener('click', () => {
@@ -388,17 +444,17 @@ async function demanderImage(id) {
   let r;
   try {
     r = await fetch(`/api/video/${id}${parametresImage(id)}`, { cache: 'no-store' });
-  } catch { return { raison: 'Serveur injoignable' }; }
+  } catch { return { raison: tr('Serveur injoignable') }; }
   if (!r.ok) {
     let raison = null;
     try { raison = (await r.json()).detail; } catch { /* corps illisible */ }
-    return { raison: raison || "Pas d'image" };
+    return { raison: raison || tr("Pas d'image") };
   }
   const source = r.headers.get('X-Taille-Source');
   if (source) taillesSource.set(id, source.replace('x', ' × '));
   try {
     return { image: await decoder(await r.blob()) };
-  } catch { return { raison: 'Image illisible' }; }
+  } catch { return { raison: tr('Image illisible') }; }
 }
 
 // Une image n'est demandée qu'une fois la précédente affichée : le débit suit
@@ -448,13 +504,13 @@ async function boucleImage(id, conteneur, toile, msg, gen) {
 // Mêmes noms que les paramètres de /api/video, mêmes bornes que filtres.py.
 const REGLAGES_DEFAUT = { lum: 0, contraste: 0, nettete: 0, definition: 1, filtre: '' };
 const CRANS = [
-  { cle: 'lum', titre: 'Luminosité', min: -4, max: 8, signe: true },
-  { cle: 'contraste', titre: 'Contraste', min: -3, max: 5, signe: true },
-  { cle: 'nettete', titre: 'Netteté', min: 0, max: 5, signe: false },
+  { cle: 'lum', titre: tr('Luminosité'), min: -4, max: 8, signe: true },
+  { cle: 'contraste', titre: tr('Contraste'), min: -3, max: 5, signe: true },
+  { cle: 'nettete', titre: tr('Netteté'), min: 0, max: 5, signe: false },
 ];
-const DEFINITIONS = ['Économe', 'Normale', 'Fine', 'Très fine'];
-const FILTRES = [['', 'Aucun'], ['auto', 'Niveaux auto'], ['nb', 'Noir et blanc'],
-  ['inverse', 'Inversé'], ['vert', 'Vert'], ['ambre', 'Ambre'], ['rouge', 'Rouge nuit']];
+const DEFINITIONS = [tr('Économe'), tr('Normale'), tr('Fine'), tr('Très fine')];
+const FILTRES = [['', tr('Aucun')], ['auto', tr('Niveaux auto')], ['nb', tr('Noir et blanc')],
+  ['inverse', tr('Inversé')], ['vert', tr('Vert')], ['ambre', tr('Ambre')], ['rouge', tr('Rouge nuit')]];
 const PAS_MOLETTE_PX = 26;          // glissement du doigt pour un cran
 const ANGLE_CRAN = 30;              // la molette tourne de 30° par cran
 const DEPLACEMENT_TOUCHER_PX = 8;   // en deçà, la molette a été touchée, pas tournée
@@ -516,7 +572,8 @@ function moletteLuminosite(cadre, e, ligneDuBas, retour) {
   m.style.gridRow = String(ligneDuBas);
   m.tabIndex = 0;
   m.setAttribute('role', 'slider');
-  m.setAttribute('aria-label', `${e.libelle} : luminosité (toucher pour tous les réglages)`);
+  m.setAttribute('aria-label', tr('{ecran} : luminosité (toucher pour tous les réglages)',
+    { ecran: e.libelle }));
   m.setAttribute('aria-valuemin', String(lum.min));
   m.setAttribute('aria-valuemax', String(lum.max));
 
@@ -532,7 +589,7 @@ function moletteLuminosite(cadre, e, ligneDuBas, retour) {
   const fixer = (niveau) => {
     niveau = Math.max(lum.min, Math.min(lum.max, niveau));
     if (niveau !== reglagesEcrans.get(id).lum) changerReglages(id, { lum: niveau });
-    dire(retour, `Luminosité ${signe(niveau)}`, false);
+    dire(retour, tr('Luminosité {niveau}', { niveau: signe(niveau) }), false);
   };
 
   let depart = null;
@@ -589,9 +646,9 @@ function ouvrirReglages(e, cadre) {
   const voile = element('div', 'reglages-voile');
   const p = element('div', 'reglages');
   p.setAttribute('role', 'dialog');
-  p.setAttribute('aria-label', `Réglages de ${e.libelle}`);
+  p.setAttribute('aria-label', tr('Réglages de {ecran}', { ecran: e.libelle }));
   const fermer = element('button', 'reglages-fermer', '✕');
-  fermer.setAttribute('aria-label', 'Fermer');
+  fermer.setAttribute('aria-label', tr('Fermer'));
   fermer.addEventListener('click', fermerReglages);
   const tete = element('div', 'reglages-tete');
   tete.append(element('strong', '', e.libelle), fermer);
@@ -606,8 +663,8 @@ function ouvrirReglages(e, cadre) {
     const valeur = element('span', 'reglages-valeur');
     const moins = element('button', 'reglages-pas', '−');
     const plus = element('button', 'reglages-pas', '+');
-    moins.setAttribute('aria-label', `${c.titre} : moins`);
-    plus.setAttribute('aria-label', `${c.titre} : plus`);
+    moins.setAttribute('aria-label', tr('{reglage} : moins', { reglage: c.titre }));
+    plus.setAttribute('aria-label', tr('{reglage} : plus', { reglage: c.titre }));
     const pas = (s) => {
       const v = Math.max(c.min, Math.min(c.max, reglagesEcrans.get(id)[c.cle] + s));
       changerReglages(id, { [c.cle]: v });
@@ -637,32 +694,32 @@ function ouvrirReglages(e, cadre) {
     p.append(bloc);
     majs.push((r) => { for (const [v, b] of boutons) b.classList.toggle('actif', r[cle] === v); });
   };
-  choix('Définition', DEFINITIONS.map((d, i) => [i, d]), 'definition');
-  choix('Filtre', FILTRES, 'filtre');
+  choix(tr('Définition'), DEFINITIONS.map((d, i) => [i, d]), 'definition');
+  choix(tr('Filtre'), FILTRES, 'filtre');
 
   const note = element('p', 'reglages-note');
   p.append(note);
   majs.push((r) => {
-    const t = taillesSource.get(id);
-    const phrases = [t ? `DCS dessine cet écran en ${t} px.` : ''];
-    if (r.definition >= 2) phrases.push('Agrandi et affiné par le PC : plus net, plus lourd pour le Wi-Fi.');
-    if (r.definition === 0) phrases.push('Image allégée, pour un Wi-Fi faible.');
-    if (r.filtre === 'auto') phrases.push('Niveaux auto : le plus sombre au noir, le plus clair au blanc, image par image — pour un TGP ou un FLIR.');
-    if (r.filtre === 'inverse') phrases.push('Inversé : noir chaud ↔ blanc chaud.');
+    const taille = taillesSource.get(id);
+    const phrases = [taille ? tr('DCS dessine cet écran en {taille} px.', { taille }) : ''];
+    if (r.definition >= 2) phrases.push(tr('Agrandi et affiné par le PC : plus net, plus lourd pour le Wi-Fi.'));
+    if (r.definition === 0) phrases.push(tr('Image allégée, pour un Wi-Fi faible.'));
+    if (r.filtre === 'auto') phrases.push(tr('Niveaux auto : le plus sombre au noir, le plus clair au blanc, image par image — pour un TGP ou un FLIR.'));
+    if (r.filtre === 'inverse') phrases.push(tr('Inversé : noir chaud ↔ blanc chaud.'));
     note.textContent = phrases.filter(Boolean).join(' ');
   });
 
   const pied = element('div', 'reglages-pied');
-  const defaut = element('button', '', 'Par défaut');
+  const defaut = element('button', '', tr('Par défaut'));
   defaut.addEventListener('click', () => { changerReglages(id, { ...REGLAGES_DEFAUT }); maj(); });
   pied.append(defaut);
   const autres = profil.ecrans.filter((x) => x.id !== id);
   if (autres.length) {
-    const tous = element('button', '', 'Pareil sur les autres écrans');
+    const tous = element('button', '', tr('Pareil sur les autres écrans'));
     tous.addEventListener('click', () => {
       const r = reglagesEcrans.get(id);
       for (const x of autres) changerReglages(x.id, r);
-      tous.textContent = `Copié sur ${autres.map((x) => x.libelle).join(', ')}`;
+      tous.textContent = tr('Copié sur {ecrans}', { ecrans: autres.map((x) => x.libelle).join(', ') });
     });
     pied.append(tous);
   }
@@ -727,7 +784,7 @@ function construireCadre(e) {
   ecran.style.gridRow = `2 / ${lig.fin}`;
   if (typeof e.arrondi === 'number') ecran.style.setProperty('--arrondi', `${e.arrondi * 100}%`);
   const toile = element('canvas', 'video');
-  const msg = element('div', 'ecran-msg', "En attente de l'image…");
+  const msg = element('div', 'ecran-msg', tr("En attente de l'image…"));
   const retour = element('div', 'ecran-retour');
   ecran.append(toile, element('div', 'ecran-nom', e.libelle.toUpperCase()), msg, retour);
   cadre.append(ecran);
@@ -758,7 +815,10 @@ function construireCadre(e) {
     // (retour de vol). Seul un refus est dit, le temps de le lire.
     brancherAppui(el, (enfonce) => enFile('/api/bouton',
       { ecran: e.id, bouton: b.id, enfonce, siege }).then((ok) => {
-      if (ok !== true) dire(retour, `${b.id} : ${typeof ok === 'string' ? ok : 'non transmis'}`, true);
+      if (ok !== true) {
+        dire(retour, tr('{bouton} : {raison}', { bouton: b.id,
+          raison: typeof ok === 'string' ? ok : tr('non transmis') }), true);
+      }
     }));
   }
   moletteLuminosite(cadre, e, lig.fin, retour);
@@ -776,7 +836,8 @@ function toucheUfc(touche, libelle, classe = 'touche') {
 
 function molette(touche, sens) {
   const el = element('button', 'touche', sens > 0 ? '+' : '−');
-  el.setAttribute('aria-label', `${touche} ${sens > 0 ? 'cran suivant' : 'cran précédent'}`);
+  el.setAttribute('aria-label', sens > 0 ? tr('{molette} : cran suivant', { molette: touche })
+    : tr('{molette} : cran précédent', { molette: touche }));
   brancherGeste(el, () => enFile('/api/ufc', { touche, sens }));
   return el;
 }
@@ -958,13 +1019,13 @@ function construireSecours() {
   const sonde = cadran(cadrans.sonde);
   const hyd = cadran(cadrans.pression, ['#7cc7ff', '#ffb36b']);
   const frein = cadran(cadrans.pression);
-  case_('VITESSE kt', badin.el);
-  case_('ALTITUDE ft', alti.el);
-  case_('HORIZON', sai.el);
-  case_('VARIO ×1000 ft/min', vario.el);
-  case_('SONDE ft', sonde.el);
-  case_('HYD G / D ×1000 psi', hyd.el);
-  case_('FREIN ×1000 psi', frein.el);
+  case_(tr('VITESSE {unite}', { unite: 'kt' }), badin.el);
+  case_(tr('ALTITUDE {unite}', { unite: 'ft' }), alti.el);
+  case_(tr('HORIZON'), sai.el);
+  case_(tr('VARIO {unite}', { unite: '×1000 ft/min' }), vario.el);
+  case_(tr('SONDE ft'), sonde.el);
+  case_(tr('HYD G / D ×1000 psi'), hyd.el);
+  case_(tr('FREIN ×1000 psi'), frein.el);
   const calage = element('div', 'instrument lcd');
   calage.style.alignItems = 'center';
   calage.style.justifyContent = 'center';
@@ -997,7 +1058,7 @@ function construireSecours() {
     for (const [nom, allume] of Object.entries(etats)) {
       if (!lampes.has(nom)) {
         const couleur = VOYANTS_ROUGES.has(nom) ? ' rouge' : VOYANTS_VERTS.has(nom) ? ' vert' : '';
-        const l = element('div', `voyant${couleur}`, nom);
+        const l = element('div', `voyant${couleur}`, tr(nom));
         lampes.set(nom, l);
         voyants.append(l);
       }
@@ -1053,7 +1114,8 @@ function indicateurVirage() {
     svg('line', { x1: 74 * Math.cos(r), y1: 74 * Math.sin(r), x2: 90 * Math.cos(r),
       y2: 90 * Math.sin(r), stroke: a ? '#7cff9a' : '#c9d1d3', 'stroke-width': 5 }, s);
   }
-  for (const [x, t] of [[-58, 'G'], [58, 'D']]) {
+  // G et D : l'initiale de « gauche » et « droite » dans la langue de la page.
+  for (const [x, t] of [[-58, tr('gauche')[0].toUpperCase()], [58, tr('droite')[0].toUpperCase()]]) {
     svg('text', { x, y: -54, fill: '#7d878b', 'font-size': 15, 'text-anchor': 'middle',
       'font-family': 'sans-serif' }, s).textContent = t;
   }
@@ -1099,16 +1161,16 @@ function construireInstruments(c) {
   const vario = cadran({ graduations: c.vario });
   const g = cadran({ graduations: c.g });
   const regime = cadran({ graduations: c.regime }, c.moteurs > 1 ? ['#7cc7ff', '#ffb36b'] : ['#e8ecee']);
-  case_(`VITESSE ${u.vitesse}`, badin.el, 'badin');
-  case_('HORIZON', sai.el, 'sai');
-  case_(`ALTITUDE ${u.altitude}`, alti.el, 'alti');
+  case_(tr('VITESSE {unite}', { unite: u.vitesse }), badin.el, 'badin');
+  case_(tr('HORIZON'), sai.el, 'sai');
+  case_(tr('ALTITUDE {unite}', { unite: u.altitude }), alti.el, 'alti');
   case_('G', g.el, 'g');
-  case_('VIRAGE', virage.el, 'virage');
-  case_('CAP', cap.el, 'cap');
-  case_(`VARIO ${u.vario}`, vario.el, 'vario');
-  case_(c.moteurs > 1 ? 'RÉGIME % G / D' : 'RÉGIME %', regime.el, 'regime');
+  case_(tr('VIRAGE'), virage.el, 'virage');
+  case_(tr('CAP'), cap.el, 'cap');
+  case_(tr('VARIO {unite}', { unite: u.vario }), vario.el, 'vario');
+  case_(c.moteurs > 1 ? tr('RÉGIME % G / D') : tr('RÉGIME %'), regime.el, 'regime');
   const bandeau = element('div', 'bandeau');
-  const message = element('p', 'message-vol', 'En attente des données de vol (DCS en mission).');
+  const message = element('p', 'message-vol', tr('En attente des données de vol (DCS en mission).'));
   p.append(bandeau, message);
   p.cle = c.cle;
 
@@ -1117,8 +1179,8 @@ function construireInstruments(c) {
     p.classList.toggle('sans-donnees', !v);
     message.hidden = !!v;
     message.textContent = d && d.interdit
-      ? 'Données de vol coupées par le serveur multijoueur : il interdit l\'export de son appareil.'
-      : 'En attente des données de vol (DCS en mission).';
+      ? tr('Données de vol coupées par le serveur multijoueur : il interdit l\'export de son appareil.')
+      : tr('En attente des données de vol (DCS en mission).');
     if (!v) return;
     if (v.badin) { badin.tourner(0, v.badin.angle); badin.texte(v.badin.texte); }
     if (v.horizon) sai.poser(v.horizon.assiette, v.horizon.inclinaison);
@@ -1260,28 +1322,29 @@ async function rafraichirEtat() {
     const d = e.dcs;
     ailleurs = e.ailleurs;
     if (!d.connecte) {
-      detecte = 'DCS : pas de signal';
+      detecte = tr('DCS : pas de signal');
     } else if (!d.appareil) {
-      detecte = 'DCS : pas dans un appareil';
+      detecte = tr('DCS : pas dans un appareil');
     } else if (ailleurs) {
-      detecte = `DCS : ${ailleurs}`;
+      detecte = tr('DCS : {appareil}', { appareil: ailleurs });
     } else if (e.profil === 'generique') {
       classe = 'autre';
-      detecte = `${d.appareil} (pas de profil, kneeboard seul)`;
+      detecte = tr('{appareil} (pas de profil, kneeboard seul)', { appareil: d.appareil });
     } else {
       classe = 'ok';
-      detecte = e.choisi ? `DCS : ${e.libelle}` : e.libelle;
+      detecte = e.choisi ? tr('DCS : {appareil}', { appareil: e.libelle }) : e.libelle;
     }
     titre = detecte;
     if (ailleurs) {
       classe = 'autre';
-      titre = `Tablette réglée sur ${e.libelle}, DCS pilote ${ailleurs} : boutons coupés`;
+      titre = tr('Tablette réglée sur {choisi}, DCS pilote {pilote} : boutons coupés',
+        { choisi: e.libelle, pilote: ailleurs });
     }
     if (profil && e.profil !== profil.id) chargerProfil();
   } catch {
     classe = 'erreur';
-    detecte = 'serveur injoignable';
-    titre = 'Serveur de la tablette injoignable';
+    detecte = tr('serveur injoignable');
+    titre = tr('Serveur de la tablette injoignable');
   }
   el.className = 'etat ' + classe;
   el.title = titre;
@@ -1336,7 +1399,8 @@ function majMenuAppareil(detecte, ailleurs) {
   for (const opt of select.options) {
     if (!opt.dataset.libelle) continue;
     opt.textContent = opt.selected && ailleurs
-      ? `${opt.dataset.libelle} — DCS : ${ailleurs}` : opt.dataset.libelle;
+      ? tr('{appareil} — DCS : {pilote}', { appareil: opt.dataset.libelle, pilote: ailleurs })
+      : opt.dataset.libelle;
   }
   select.title = select.selectedOptions.length ? select.selectedOptions[0].textContent : '';
 }
@@ -1356,7 +1420,7 @@ $('#appareil').addEventListener('change', (e) => {
 // Ses flèches tournent les pages DANS DCS, comme les touches [ et ].
 // Puis les fichiers, lus tels quels, nets à toute taille : « Kneeboard de
 // l'avion » (mission, module, pages perso), les cartes, les autres missions.
-const KNEEBOARD_DCS = { id: 'dcs', titre: 'Kneeboard DCS (en direct)', direct: true };
+const KNEEBOARD_DCS = { id: 'dcs', titre: tr('Kneeboard DCS (en direct)'), direct: true };
 
 let carnets = [];
 let carnet = null;
@@ -1548,8 +1612,8 @@ function brancherKneeboard() {
 // « ⚠ n » qui apparaît quand il y a quelque chose à régler.
 
 const MARQUES = { ok: '✓', repare: '✓', attente: '…', a_faire: '!', manque: '✕' };
-const LIBELLES = { ok: '', repare: 'réparé', attente: 'en attente', a_faire: 'à régler',
-                   manque: 'manque' };
+const LIBELLES = { ok: '', repare: tr('réparé'), attente: tr('en attente'), a_faire: tr('à régler'),
+                   manque: tr('manque') };
 const PERIODE_DIAGNOSTIC_MS = 2000;
 let diagnosticOuvert = false;
 
@@ -1557,11 +1621,13 @@ function majBadgeDiagnostic(n) {
   const badge = $('#diag');
   badge.hidden = !n;
   badge.textContent = `⚠ ${n}`;
-  badge.setAttribute('aria-label', `Diagnostic : ${n} point${n > 1 ? 's' : ''} à régler`);
+  badge.setAttribute('aria-label', n > 1 ? tr('Diagnostic : {nombre} points à régler', { nombre: n })
+    : tr('Diagnostic : {nombre} point à régler', { nombre: n }));
 }
 
 function afficherDiagnostic(d) {
-  $('#diag-heure').textContent = d.heure ? `vérifié à ${d.heure}` : 'pas encore vérifié';
+  $('#diag-heure').textContent = d.heure ? tr('vérifié à {heure}', { heure: d.heure })
+    : tr('pas encore vérifié');
   const liste = $('#diag-points');
   liste.textContent = '';
   for (const p of d.points) {
@@ -1582,7 +1648,7 @@ function afficherDiagnostic(d) {
   $('#diag-titre-journal').hidden = d.journal.length === 0;
   for (const j of d.journal) {
     const li = element('li', j.etat);
-    li.append(element('span', 'heure', j.heure), `${j.titre} : ${j.detail}`);
+    li.append(element('span', 'heure', j.heure), tr('{titre} : {detail}', j));
     journal.append(li);
   }
   majBadgeDiagnostic(d.problemes);
@@ -1598,8 +1664,8 @@ async function chargerDiagnostic(verifier = false) {
       : { cache: 'no-store' });
     afficherDiagnostic(await r.json());
   } catch {
-    $('#diag-heure').textContent = 'PC injoignable : la fenêtre DCS Tablette est-elle '
-      + 'ouverte, et le PC sur le même Wi-Fi ?';
+    $('#diag-heure').textContent =
+      tr('PC injoignable : la fenêtre DCS Tablette est-elle ouverte, et le PC sur le même Wi-Fi ?');
   }
 }
 
@@ -1620,12 +1686,19 @@ function brancherDiagnostic() {
   $('#diag-verifier').addEventListener('click', async () => {
     const bouton = $('#diag-verifier');
     bouton.disabled = true;
-    $('#diag-heure').textContent = 'vérification…';
+    $('#diag-heure').textContent = tr('vérification…');
     await chargerDiagnostic(true);
     bouton.disabled = false;
   });
   setInterval(() => { if (diagnosticOuvert && !document.hidden) chargerDiagnostic(); },
               PERIODE_DIAGNOSTIC_MS);
+  brancherLangues();
+  // Rechargée par un changement de langue : le diagnostic, d'où on l'a
+  // changée, se rouvre.
+  if (lire('diagnostic.rouvrir', '') === '1') {
+    retenir('diagnostic.rouvrir', '');
+    ouvrirDiagnostic(true);
+  }
 }
 
 // --------------------------------------------------------------- plein écran
@@ -1653,6 +1726,7 @@ function brancherPleinEcran() {
 
 // --------------------------------------------------------------- démarrage
 
+traduirePage();
 brancherPleinEcran();
 brancherDiagnostic();
 construireMenuAppareil();

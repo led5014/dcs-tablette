@@ -11,6 +11,10 @@ réseau privé, sinon l'iPad ne verra jamais la page.
 
 `--local` n'écoute que ce PC : pour essayer la page dans un navigateur du PC
 sans exposer le serveur, ni déclencher la question du pare-feu.
+
+`--langue en` (ou fr) : la fenêtre en anglais (ou en français) plutôt que
+dans la langue de Windows, et pour les fois suivantes ; `--langue auto`
+revient à celle de Windows. Accepté partout : `Installer.bat --langue en`.
 """
 import argparse
 import logging
@@ -18,8 +22,9 @@ import sys
 from pathlib import Path
 from typing import List, Optional
 
-from . import VERSION
+from . import VERSION, langues
 from .config import adresses_locales
+from .langues import Texte
 
 
 class SansConnexionCoupee(logging.Filter):
@@ -54,7 +59,8 @@ def servir(local: bool, miroir: bool, mise_a_jour: bool = True, captures: bool =
     # c'est l'installé qui démarre, celui que les mises à jour tiennent à jour.
     installe = exe_installe() if fige else None
     if installe:
-        print(f"DCS Tablette est installé dans {installe.parent} : c'est lui qui démarre.")
+        print(Texte("DCS Tablette est installé dans {dossier} : c'est lui qui démarre.",
+                    dossier=installe.parent))
         lancer(installe, sys.argv[1:])
         return 0
     # Une version plus récente ? Installée avant tout le reste, sans rien
@@ -68,7 +74,7 @@ def servir(local: bool, miroir: bool, mise_a_jour: bool = True, captures: bool =
             return 0
     # Lancé sans être passé par Installer.bat : on installe d'abord.
     if premiere_fois(cfg.saved_games):
-        print("Première utilisation : installation.\n")
+        print(Texte("Première utilisation : installation.") + "\n")
         installer(cfg.saved_games)
         print()
         installe = exe_installe() if fige else None
@@ -76,8 +82,8 @@ def servir(local: bool, miroir: bool, mise_a_jour: bool = True, captures: bool =
             # Copié à sa place : c'est lui qui sert. Cette fenêtre-ci attend
             # qu'on ait lu ce que l'installation a dit, comme Installer.bat.
             lancer(installe, sys.argv[1:])
-            demander("DCS Tablette démarre dans sa propre fenêtre. Appuie sur Entrée pour "
-                     "fermer celle-ci. ")
+            demander(Texte("DCS Tablette démarre dans sa propre fenêtre. Appuie sur Entrée "
+                           "pour fermer celle-ci. "))
             return 0
     if fige:
         for ligne in tenir_a_jour(Path(sys.executable)):
@@ -95,17 +101,18 @@ def servir(local: bool, miroir: bool, mise_a_jour: bool = True, captures: bool =
     if vue_a_rogner(cfg.saved_games):
         # La fenêtre de DCS couvre aussi l'écran virtuel : partagée telle
         # quelle, elle montre les deux. Les captures, elles, sont recadrées.
-        print("Stream (Discord, OBS) : partager l'écran principal, pas la fenêtre de DCS, "
-              "qui comprend l'écran virtuel." + (" Les captures sont recadrées d'elles-"
-                                                  "mêmes." if captures else "") + "\n")
+        print(Texte("Stream (Discord, OBS) : partager l'écran principal, pas la fenêtre de "
+                    "DCS, qui comprend l'écran virtuel.")
+              + (" " + Texte("Les captures sont recadrées d'elles-mêmes.") if captures else "")
+              + "\n")
     if local:
-        print(f"Essai local : http://127.0.0.1:{cfg.port_web}")
+        print(Texte("Essai local : {adresse}", adresse=f"http://127.0.0.1:{cfg.port_web}"))
     else:
-        print("Ouvrir sur l'iPad :")
-        for adresse in adresses_locales() or ["<adresse de ce PC>"]:
+        print(Texte("Ouvrir sur l'iPad :"))
+        for adresse in adresses_locales() or [Texte("<adresse de ce PC>")]:
             print(f"  http://{adresse}:{cfg.port_web}")
-    print("Diagnostic : ci-dessus, puis ce qui change ; sur la tablette, toucher la "
-          "pastille en haut à gauche.\n")
+    print(Texte("Diagnostic : ci-dessus, puis ce qui change ; sur la tablette, toucher la "
+                "pastille en haut à gauche.") + "\n")
     try:
         uvicorn.run(create_app(cfg, pont, video, affichage, diagnostic=diagnostic,
                                controle_hote=True),
@@ -117,27 +124,52 @@ def servir(local: bool, miroir: bool, mise_a_jour: bool = True, captures: bool =
     return 0
 
 
+def regler_langue(arguments: List[str]) -> List[str]:
+    """`--langue fr|en|auto`, où qu'il soit (Installer.bat le passe après
+    `installer`) : la langue de la fenêtre, avant tout affichage et avant
+    d'importer le reste. Retenue pour les fois suivantes, sauf par le pilote
+    de l'écran virtuel, lancé en administrateur avec la langue de la fenêtre
+    qui l'a lancé. Rend les autres arguments."""
+    lecteur = argparse.ArgumentParser(add_help=False)
+    lecteur.add_argument("--langue", choices=("fr", "en", "auto"))
+    choix, reste = lecteur.parse_known_args(arguments)
+    if choix.langue and "pilote-ecran-virtuel" not in reste:
+        try:
+            langues.retenir(choix.langue)
+        except OSError:
+            pass                        # pour cette fois seulement
+    langues.regler_pc(choix.langue if choix.langue in langues.LANGUES else langues.du_pc())
+    return reste
+
+
 def main(arguments: Optional[List[str]] = None) -> int:
     # Sortie redirigée (fichier, autre console) : les flèches et les « × »
     # ne doivent pas faire tomber le programme.
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    arguments = regler_langue(sys.argv[1:] if arguments is None else arguments)
     options = argparse.ArgumentParser(prog="DCS-Tablette", description=f"DCS Tablette {VERSION}")
     options.add_argument("--local", action="store_true",
-                         help="n'écouter que ce PC (essais sans iPad)")
+                         help=Texte("n'écouter que ce PC (essais sans iPad)"))
     options.add_argument("--sans-miroir", action="store_true",
-                         help="ne pas recopier le kneeboard sur l'écran du PC")
+                         help=Texte("ne pas recopier le kneeboard sur l'écran du PC"))
     options.add_argument("--sans-mise-a-jour", action="store_true",
-                         help="ne pas demander à GitHub s'il existe une version plus récente")
+                         help=Texte("ne pas demander à GitHub s'il existe une version plus "
+                                    "récente"))
     options.add_argument("--captures-entieres", action="store_true",
-                         help="ne pas recadrer les captures de DCS sur l'écran principal")
+                         help=Texte("ne pas recadrer les captures de DCS sur l'écran principal"))
+    # Lue avant (regler_langue) : ici pour l'aide seulement.
+    options.add_argument("--langue", choices=("fr", "en", "auto"),
+                         help=Texte("langue de la fenêtre, retenue : fr, en, ou auto (celle "
+                                    "de Windows)"))
     commandes = options.add_subparsers(dest="commande", metavar="{installer,desinstaller}")
     installer = commandes.add_parser("installer",
-                                     help="écran virtuel, scripts dans DCS, écrans de DCS")
+                                     help=Texte("écran virtuel, scripts dans DCS, écrans de DCS"))
     installer.add_argument("--essai", action="store_true",
-                           help="sans second écran : les écrans en bas de la vue")
-    desinstaller = commandes.add_parser("desinstaller", help="retirer la tablette de DCS")
+                           help=Texte("sans second écran : les écrans en bas de la vue"))
+    desinstaller = commandes.add_parser("desinstaller",
+                                        help=Texte("retirer la tablette de DCS"))
     desinstaller.add_argument("--attendre", action="store_true",
-                              help="attendre Entrée avant de fermer la fenêtre")
+                              help=Texte("attendre Entrée avant de fermer la fenêtre"))
     # Lancée par `installer`, en administrateur : le pilote de l'écran virtuel.
     pilote = commandes.add_parser("pilote-ecran-virtuel")
     pilote.add_argument("--mode", required=True, help="largeurxhauteur@fréquence")

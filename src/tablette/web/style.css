@@ -926,6 +926,20 @@ body.en-kneeboard #modes { opacity: .45; }
 }
 #diag-verifier { background: #24433a; color: #dff5ea; }
 #diag-verifier:disabled { opacity: .5; }
+/* La langue de cette tablette : FR | EN, comme le choix « Kneeboard DCS sur ». */
+#langues {
+  flex: none;
+  display: flex;
+  background: #0f1213;
+  border: 1px solid #2a2f31;
+  border-radius: 9px;
+  padding: 2px;
+}
+.diag-barre #langues button { min-height: 32px; padding: 0 10px; border-radius: 7px; background: transparent; }
+.diag-barre #langues button.actif { background: #24433a; color: #dff5ea; }
+@media (max-width: 420px) {
+  .diag-barre { flex-wrap: wrap; }
+}
 #diag-points, #diag-journal { list-style: none; margin: 0; padding: 0; }
 #diag-points > li {
   display: grid;

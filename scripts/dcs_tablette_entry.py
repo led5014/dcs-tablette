@@ -3,6 +3,7 @@ import sys
 import traceback
 
 from tablette.__main__ import main
+from tablette.langues import Texte
 
 
 def principal() -> int:
@@ -19,7 +20,7 @@ def principal() -> int:
         code = 1
     # Lancé d'un double-clic, la console se fermerait avant qu'on lise l'erreur.
     if code and len(sys.argv) == 1:
-        input("\nAppuie sur Entrée pour fermer cette fenêtre.")
+        input("\n" + Texte("Appuie sur Entrée pour fermer cette fenêtre."))
     return code
 
 

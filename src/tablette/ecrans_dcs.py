@@ -21,6 +21,8 @@ import re
 from pathlib import Path
 from typing import Dict, Optional, Tuple
 
+from .langues import Texte
+
 Rect = Tuple[int, int, int, int]       # x, y, largeur, hauteur
 
 NOM_FICHIER = "tablette.lua"
@@ -212,11 +214,11 @@ def options_affichage(saved_games: Path) -> Tuple[str, int, int]:
         texte = (saved_games / "Config" / "options.lua").read_text(encoding="utf-8",
                                                                    errors="replace")
     except OSError:
-        raise PasDExport("Réglages de DCS introuvables (Config/options.lua).")
+        raise PasDExport(Texte("Réglages de DCS introuvables (Config/options.lua)."))
     choix, largeur, hauteur = (_option(texte, "multiMonitorSetup"),
                                _option(texte, "width"), _option(texte, "height"))
     if not (choix and largeur and hauteur):
-        raise PasDExport("Réglages d'affichage de DCS illisibles.")
+        raise PasDExport(Texte("Réglages d'affichage de DCS illisibles."))
     return choix, int(float(largeur)), int(float(hauteur))
 
 
@@ -244,7 +246,7 @@ def _remplacer(texte: str, valeurs: Dict[str, str]) -> str:
         texte, n = re.subn(rf'(\["{cle}"\]\s*=\s*)[^,\n]+(,)', rf"\g<1>{valeur}\g<2>",
                            texte, count=1)
         if n != 1:
-            raise PasDExport(f"options.lua : réglage « {cle} » introuvable.")
+            raise PasDExport(Texte("options.lua : réglage « {cle} » introuvable.", cle=cle))
     return texte
 
 
@@ -276,7 +278,7 @@ def retablir_options(saved_games: Path) -> Path:
     chemin = saved_games / "Config" / "options.lua"
     copie = chemin.with_suffix(".lua.avant-tablette")
     if not copie.exists():
-        raise PasDExport("pas de copie des réglages d'avant la tablette.")
+        raise PasDExport(Texte("pas de copie des réglages d'avant la tablette."))
     ancien = copie.read_text(encoding="utf-8", errors="replace")
     valeurs = {cle: _valeur_brute(ancien, cle) for cle in CLES_AFFICHAGE}
     texte = chemin.read_text(encoding="utf-8")
@@ -295,9 +297,10 @@ def fichier_actif(saved_games: Path) -> Path:
             nom = re.search(r"name\s*=\s*_\('([^']*)'\)", texte)
             if choix.lower() in (f.stem.lower(), (nom.group(1).lower() if nom else "")):
                 return f
-    raise PasDExport(f"DCS utilise la configuration d'écrans « {choix} », qui "
-                     f"n'exporte pas les écrans. Choisis « {NOM_AFFICHE} » dans "
-                     "Options → Système → Moniteurs, puis relance DCS.")
+    raise PasDExport(Texte("DCS utilise la configuration d'écrans « {choix} », qui "
+                           "n'exporte pas les écrans. Choisis « {nom} » dans "
+                           "Options → Système → Moniteurs, puis relance DCS.",
+                           choix=choix, nom=NOM_AFFICHE))
 
 
 def zones_actives(saved_games: Path) -> Dict[str, Rect]:

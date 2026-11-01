@@ -162,6 +162,23 @@ risque l'est tout seul, et c'est dit :
 Rien n'est jamais installé sans le demander : l'écran virtuel manquant,
 c'est « Installer.bat ».
 
+LANGUE
+------
+  - Sur la tablette : la page s'affiche en français si le navigateur est
+    en français, en anglais sinon. Pour changer : toucher la pastille en
+    haut à gauche (elle ouvre le panneau Diagnostic), puis FR ou EN. Le
+    choix est retenu sur cette tablette : chaque tablette ou téléphone
+    garde le sien.
+  - Sur le PC (fenêtre de DCS Tablette, installation, mise à jour) : en
+    français si Windows est en français, en anglais sinon. Pour forcer une
+    langue, lancer une fois « DCS-Tablette.exe --langue en » (ou
+    « --langue fr ») : le choix est retenu, et « --langue auto » fait de
+    nouveau suivre Windows. Le plus simple : Win + R, taper
+      %LOCALAPPDATA%\Programs\DCS-Tablette\DCS-Tablette.exe --langue en
+    puis Entrée. L'option marche aussi avec « Installer.bat --langue en ».
+
+Ce mode d'emploi existe aussi en anglais : README.txt.
+
 KNEEBOARD
 ---------
 Le bouton « Kneeboard » de la tablette montre les pages de l'avion piloté,

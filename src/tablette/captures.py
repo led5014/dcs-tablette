@@ -43,6 +43,7 @@ from PIL import Image, JpegImagePlugin
 from .config import dossier_windows
 from .copie import Rect, dans
 from .ecrans_dcs import PasDExport, fichier_actif, lire_vue, options_affichage
+from .langues import Texte
 
 APPLI_STEAM_DCS = "223750"
 CAPTURES_WINDOWS = uuid.UUID("B7BEDE81-DF94-4682-A7D8-57A52620B86F")   # FOLDERID_Screenshots
@@ -174,7 +175,8 @@ class Captures(threading.Thread):
                 try:
                     if rogner(chemin, *cadre):
                         recadrees.append(chemin)
-                        journal.info("Capture recadrée sur l'écran principal : %s", chemin.name)
+                        journal.info(Texte("Capture recadrée sur l'écran principal : {nom}",
+                                           nom=chemin.name))
                 except OSError:
                     self._essais[chemin] = self._essais.get(chemin, 0) + 1
                     if self._essais[chemin] < ESSAIS:
@@ -187,5 +189,5 @@ class Captures(threading.Thread):
             try:
                 self.tour()
             except Exception:                     # noqa: BLE001 — jamais le serveur
-                journal.exception("Recadrage des captures : passage ignoré")
+                journal.exception(Texte("Recadrage des captures : passage ignoré"))
             time.sleep(PERIODE_S)

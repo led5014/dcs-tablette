@@ -42,7 +42,9 @@ from pathlib import Path
 from typing import Callable, List, Optional, Sequence, Tuple
 from xml.etree import ElementTree
 
-Mode = Tuple[int, int, int]           # largeur, hauteur, fréquence
+from .langues import FRANCAIS, Texte, dans, pc
+
+Mode =Tuple[int, int, int]           # largeur, hauteur, fréquence
 
 VDD = "https://github.com/VirtualDrivers/Virtual-Display-Driver"
 # Versions fixées, vérifiées à l'empreinte : un fichier changé sur GitHub
@@ -68,14 +70,14 @@ REDEMARRAGE = 3010                     # ERROR_SUCCESS_REBOOT_REQUIRED
 REFUS_UAC = 1223                       # ERROR_CANCELLED
 
 MANUEL = [
-    "À la main (détail dans LISEZ-MOI.txt, « À la main ») :",
-    f"  1. Installer Virtual Display Driver : {VDD}/releases",
-    "     (« VDD Control », puis Install).",
-    "  2. Paramètres → Système → Écran : « Étendre ces affichages », écran virtuel",
-    "     à la définition et à la fréquence du principal, glissé à DROITE du",
-    "     principal, bords du HAUT alignés — ou DESSOUS, bords de GAUCHE alignés,",
-    "     si un de vos écrans occupe déjà la droite.",
-    "  3. Relancer Installer.bat : il vérifie et finit le reste.",
+    Texte("À la main (détail dans LISEZ-MOI.txt, « À la main ») :"),
+    Texte("  1. Installer Virtual Display Driver : {adresse}", adresse=f"{VDD}/releases"),
+    Texte("     (« VDD Control », puis Install)."),
+    Texte("  2. Paramètres → Système → Écran : « Étendre ces affichages », écran virtuel"),
+    Texte("     à la définition et à la fréquence du principal, glissé à DROITE du"),
+    Texte("     principal, bords du HAUT alignés — ou DESSOUS, bords de GAUCHE alignés,"),
+    Texte("     si un de vos écrans occupe déjà la droite."),
+    Texte("  3. Relancer Installer.bat : il vérifie et finit le reste."),
 ]
 
 
@@ -98,8 +100,14 @@ class Ecran:
         texte = f"{self.carte} {self.ident}".lower()
         return any(mot in texte for mot in MOTS_VIRTUELS)
 
+    @property
+    def texte(self) -> Texte:
+        """L'écran en clair, dans les messages : traduisible, lui."""
+        return Texte("« {carte} » ({largeur}×{hauteur}, {frequence} Hz)", carte=self.carte,
+                     largeur=self.largeur, hauteur=self.hauteur, frequence=self.frequence)
+
     def __str__(self) -> str:
-        return f"« {self.carte} » ({self.largeur}×{self.hauteur}, {self.frequence} Hz)"
+        return str(self.texte)
 
 
 @dataclass(frozen=True)
@@ -114,9 +122,14 @@ class Placement:
     cote: str = "droite"          # ou « dessous » : à droite du principal, ou sous lui
 
     @property
-    def ou(self) -> str:
-        return ("à droite du principal, aligné en haut" if self.cote == "droite"
-                else "sous le principal, aligné à gauche")
+    def ou(self) -> Texte:
+        return (Texte("à droite du principal, aligné en haut") if self.cote == "droite"
+                else Texte("sous le principal, aligné à gauche"))
+
+    @property
+    def voulu(self) -> Texte:
+        return Texte("{largeur}×{hauteur}, {frequence} Hz, {ou}", largeur=self.largeur,
+                     hauteur=self.hauteur, frequence=self.frequence, ou=self.ou)
 
     @property
     def a_faire(self) -> bool:
@@ -164,14 +177,15 @@ def planifier(ecrans: Sequence[Ecran]) -> Tuple[Optional[Placement], List[str]]:
     """
     principal = next((e for e in ecrans if e.principal), None)
     if principal is None:
-        return None, ["Écran principal introuvable."]
+        return None, [Texte("Écran principal introuvable.")]
     if principal.virtuel:
-        return None, [f"L'écran principal est l'écran virtuel {principal}.",
-                      "Paramètres → Système → Écran : choisir l'écran qu'on regarde, puis",
-                      "cocher « En faire mon écran principal », et relancer Installer.bat."]
+        return None, [
+            Texte("L'écran principal est l'écran virtuel {ecran}.", ecran=principal.texte),
+            Texte("Paramètres → Système → Écran : choisir l'écran qu'on regarde, puis"),
+            Texte("cocher « En faire mon écran principal », et relancer Installer.bat.")]
     virtuels = [e for e in ecrans if e.virtuel and not e.principal]
     if not virtuels:
-        return None, ["Aucun écran virtuel."]
+        return None, [Texte("Aucun écran virtuel.")]
     px, py, pl, ph = principal.x, principal.y, principal.largeur, principal.hauteur
     places = {"droite": (px + pl, py), "dessous": (px, py + ph)}
     # Plusieurs écrans virtuels : celui qui est déjà à une place, sinon le premier.
@@ -191,10 +205,12 @@ def planifier(ecrans: Sequence[Ecran]) -> Tuple[Optional[Placement], List[str]]:
             return Placement(cible, x, y, largeur, hauteur, frequence, cote), []
     genants = [e for e in ecrans if e is not cible and e.actif and not e.principal]
     return None, [
-        "Les écrans " + ", ".join(str(e) for e in genants) + " occupent la droite et le",
-        "dessous de l'écran principal : la fenêtre de DCS les couvrirait, ils resteraient noirs.",
-        "Paramètres → Système → Écran : en glisser un à gauche ou au-dessus du principal,",
-        "puis relancer Installer.bat. Ou, pour essayer sans : Installer.bat --essai."]
+        Texte("Les écrans {ecrans} occupent la droite et le",
+              ecrans=[e.texte for e in genants]),
+        Texte("dessous de l'écran principal : la fenêtre de DCS les couvrirait, ils resteraient "
+              "noirs."),
+        Texte("Paramètres → Système → Écran : en glisser un à gauche ou au-dessus du principal,"),
+        Texte("puis relancer Installer.bat. Ou, pour essayer sans : Installer.bat --essai.")]
 
 
 def moniteurs() -> List[Tuple[int, int, int, int, bool, bool]]:
@@ -211,18 +227,25 @@ def decrire(ecrans: Sequence[Ecran]) -> List[str]:
     lignes = []
     for i, e in enumerate(ecrans, 1):
         if not e.actif:
-            ou = "dupliqué ou déconnecté"
+            ou = Texte("dupliqué ou déconnecté")
         elif e.principal or principal is None:
-            ou = "principal" if e.principal else ""
+            ou = Texte("principal") if e.principal else ""
         else:
             px, py, pl, ph = principal.x, principal.y, principal.largeur, principal.hauteur
-            ou = ("à droite du principal" if e.x >= px + pl else
-                  "à gauche du principal" if e.x + e.largeur <= px else
-                  "sous le principal" if e.y >= py + ph else
-                  "au-dessus du principal" if e.y + e.hauteur <= py else "")
-            if (e.x, e.y) not in ((px + pl, py), (px, py + ph)) and ou.startswith(("à d", "sous")):
-                ou += ", décalé"
-        lignes.append(f"{i}. {e}" + (" — virtuel" if e.virtuel else "") + (f" — {ou}" if ou else ""))
+            decale = (e.x, e.y) not in ((px + pl, py), (px, py + ph))
+            if e.x >= px + pl:
+                ou = (Texte("à droite du principal, décalé") if decale
+                      else Texte("à droite du principal"))
+            elif e.x + e.largeur <= px:
+                ou = Texte("à gauche du principal")
+            elif e.y >= py + ph:
+                ou = Texte("sous le principal, décalé") if decale else Texte("sous le principal")
+            elif e.y + e.hauteur <= py:
+                ou = Texte("au-dessus du principal")
+            else:
+                ou = ""
+        lignes.append(f"{i}. {e}" + (" — " + Texte("virtuel") if e.virtuel else "")
+                      + (f" — {ou}" if ou else ""))
     return lignes
 
 
@@ -403,9 +426,10 @@ def appliquer(placement: Placement) -> Optional[str]:
     code = user32.ChangeDisplaySettingsExW(placement.ecran.nom, ctypes.byref(m), None,
                                            CDS_UPDATEREGISTRY | CDS_NORESET, None)
     if code != 0:
-        return f"Windows refuse ce réglage (code {code})"
+        return Texte("Windows refuse ce réglage (code {code})", code=code)
     code = user32.ChangeDisplaySettingsExW(None, None, None, 0, None)
-    return None if code == 0 else f"Windows n'a pas appliqué le réglage (code {code})"
+    return None if code == 0 else Texte("Windows n'a pas appliqué le réglage (code {code})",
+                                        code=code)
 
 
 # ------------------------------------------------- installation du pilote
@@ -424,8 +448,8 @@ def _telecharger(url: str, empreinte: str) -> bytes:
     with urllib.request.urlopen(url, timeout=60) as reponse:
         donnees = reponse.read()
     if hashlib.sha256(donnees).hexdigest() != empreinte:
-        raise OSError(f"{url.rsplit('/', 1)[-1]} n'est pas le fichier attendu "
-                      "(empreinte différente) : rien n'est installé.")
+        raise OSError(Texte("{fichier} n'est pas le fichier attendu (empreinte différente) : "
+                            "rien n'est installé.", fichier=url.rsplit("/", 1)[-1]))
     return donnees
 
 
@@ -462,14 +486,14 @@ def installer_pilote(mode: Mode, journal: Callable[[str], None] = print) -> int:
     except (OSError, subprocess.SubprocessError):
         existant = None
     if existant and existant[1] == PROBLEME_DESACTIVE:
-        journal("Virtual Display Driver est installé mais désactivé : réactivation.")
+        journal(Texte("Virtual Display Driver est installé mais désactivé : réactivation."))
         r = _powershell("Enable-PnpDevice -InstanceId $env:DT_INSTANCE -Confirm:$false",
                         DT_INSTANCE=existant[0])
         if r.returncode:
-            journal(f"Réactivation refusée : {r.stderr.strip()[:300]}")
+            journal(Texte("Réactivation refusée : {erreur}", erreur=r.stderr.strip()[:300]))
         return r.returncode
     if existant and existant[1] == 0:
-        journal("Virtual Display Driver est déjà installé et en marche.")
+        journal(Texte("Virtual Display Driver est déjà installé et en marche."))
         return 0
 
     dossier = dossier_vdd()
@@ -477,11 +501,11 @@ def installer_pilote(mode: Mode, journal: Callable[[str], None] = print) -> int:
         temporaire = Path(temporaire)
         try:
             for nom, (url, empreinte) in (("NefCon", NEFCON), ("VDD", PILOTE)):
-                journal(f"Téléchargement : {url}")
+                journal(Texte("Téléchargement : {adresse}", adresse=url))
                 with zipfile.ZipFile(io.BytesIO(_telecharger(url, empreinte))) as z:
                     z.extractall(temporaire / nom)
         except OSError as e:
-            journal(f"Téléchargement impossible : {e}")
+            journal(Texte("Téléchargement impossible : {erreur}", erreur=e))
             return 1
         source = temporaire / "VDD" / "VirtualDisplayDriver"
         dossier.mkdir(parents=True, exist_ok=True)
@@ -491,25 +515,27 @@ def installer_pilote(mode: Mode, journal: Callable[[str], None] = print) -> int:
         modele = reglages if reglages.exists() else source / "vdd_settings.xml"
         reglages.write_text(reglages_vdd(modele.read_text(encoding="utf-8"), *mode),
                             encoding="utf-8")
-        journal(f"Réglages de l'écran virtuel : {reglages} ({mode[0]}×{mode[1]}, {mode[2]} Hz)")
+        journal(Texte("Réglages de l'écran virtuel : {fichier} ({largeur}×{hauteur}, "
+                      "{frequence} Hz)", fichier=reglages, largeur=mode[0], hauteur=mode[1],
+                      frequence=mode[2]))
         nefcon = str(temporaire / "NefCon" / "x64" / "nefconw.exe")
         inf = str(dossier / "MttVDD.inf")
         # Un appareil déjà là (pilote en panne) reçoit le pilote ; sinon on le
         # crée avec : « install » en créerait un second à côté du premier.
         commande = ([nefcon, "--install-driver", "--inf-path", inf] if existant
                     else [nefcon, "install", inf, ID_MATERIEL])
-        journal("Installation du pilote (Windows peut demander de confirmer l'éditeur)…")
+        journal(Texte("Installation du pilote (Windows peut demander de confirmer l'éditeur)…"))
         try:
             code = subprocess.run(commande, cwd=dossier, timeout=300).returncode
         except (OSError, subprocess.SubprocessError) as e:
-            journal(f"NefCon n'a pas pu s'exécuter : {e}")
+            journal(Texte("NefCon n'a pas pu s'exécuter : {erreur}", erreur=e))
             return 1
     if code == REDEMARRAGE:
-        journal("Pilote installé ; Windows demande un redémarrage.")
+        journal(Texte("Pilote installé ; Windows demande un redémarrage."))
     elif code:
-        journal(f"Le pilote n'a pas été installé (NefCon : code {code}).")
+        journal(Texte("Le pilote n'a pas été installé (NefCon : code {code}).", code=code))
     else:
-        journal("Pilote installé.")
+        journal(Texte("Pilote installé."))
     return code
 
 
@@ -529,8 +555,10 @@ def lancer_installation(mode: Mode) -> Tuple[int, List[str]]:
     descripteur, journal = tempfile.mkstemp(prefix="dcs-tablette-", suffix=".txt")
     os.close(descripteur)
     try:
-        arguments = debut + ["pilote-ecran-virtuel", "--mode", "{}x{}@{}".format(*mode),
-                             "--journal", journal]
+        # Sa langue est celle de cette fenêtre : en administrateur, le choix
+        # retenu (%LOCALAPPDATA%) pourrait être celui d'un autre compte.
+        arguments = debut + ["--langue", pc(), "pilote-ecran-virtuel",
+                             "--mode", "{}x{}@{}".format(*mode), "--journal", journal]
         info = SHELLEXECUTEINFOW()
         info.cbSize = ctypes.sizeof(info)
         info.fMask = SEE_MASK_NOCLOSEPROCESS
@@ -547,8 +575,10 @@ def lancer_installation(mode: Mode) -> Tuple[int, List[str]]:
         if not shell32.ShellExecuteExW(ctypes.byref(info)):
             erreur = ctypes.get_last_error()
             if erreur == REFUS_UAC:
-                return REFUS_UAC, ["Autorisation administrateur refusée : rien n'a été installé."]
-            return erreur or 1, [f"Lancement en administrateur impossible (erreur {erreur})."]
+                return REFUS_UAC, [Texte("Autorisation administrateur refusée : rien n'a été "
+                                         "installé.")]
+            return erreur or 1, [Texte("Lancement en administrateur impossible (erreur "
+                                       "{erreur}).", erreur=erreur)]
         kernel32.WaitForSingleObject(info.hProcess, INFINI)
         code = wintypes.DWORD()
         kernel32.GetExitCodeProcess(info.hProcess, ctypes.byref(code))
@@ -604,26 +634,29 @@ def remettre(reparer: bool = True, physique: bool = False,
     ecrans = lister()
     placement, raisons = planifier(ecrans)
     if placement is not None and not placement.a_faire:
-        return "ok", f"{placement.ecran}, {placement.ou}", []
+        return "ok", Texte("{ecran}, {ou}", ecran=placement.ecran.texte, ou=placement.ou), []
     if not any(e.virtuel and not e.principal for e in ecrans):
         deja = physique_en_place(ecrans) if physique else None
         if deja is not None:
-            return "ok", f"pas d'écran virtuel : {deja[0]}, choisi à l'installation", []
-        return "manque", "aucun : les écrans du cockpit iraient sur la vue", [
-            "Lancer Installer.bat : il propose de l'installer (répondre O) et le place."
+            return "ok", Texte("pas d'écran virtuel : {ecran}, choisi à l'installation",
+                               ecran=deja[0].texte), []
+        return "manque", Texte("aucun : les écrans du cockpit iraient sur la vue"), [
+            Texte("Lancer Installer.bat : il propose de l'installer (répondre O) et le place.")
         ] + MANUEL[1:3]
     if placement is None:
         return "manque", raisons[0], raisons[1:]
     p = placement
-    voulu = f"{p.largeur}×{p.hauteur}, {p.frequence} Hz, {p.ou}"
     if not reparer:
-        return "a_faire", f"{p.ecran} n'est pas à sa place", [
-            "« Vérifier » pour réessayer de le remettre, ou relancer Installer.bat.",
-            f"À la main : Paramètres → Système → Écran, « Étendre ces affichages », {voulu}."]
+        return "a_faire", Texte("{ecran} n'est pas à sa place", ecran=p.ecran.texte), [
+            Texte("« Vérifier » pour réessayer de le remettre, ou relancer Installer.bat."),
+            Texte("À la main : Paramètres → Système → Écran, « Étendre ces affichages », "
+                  "{voulu}.", voulu=p.voulu)]
     lignes: List[str] = []
     if preparer(lignes.append, lambda question: None, lister, etendre, appliquer,
                 attendre=attendre):
-        return "repare", next((l for l in lignes if " placé : " in l), lignes[-1]), []
+        # Cherchée dans le texte français, la référence, quelle que soit la langue.
+        return "repare", next((l for l in lignes if " placé : " in dans(l, FRANCAIS)),
+                              lignes[-1]), []
     return "manque", lignes[-2] if len(lignes) > 1 else lignes[-1], lignes[-1:]
 
 
@@ -643,30 +676,34 @@ def preparer(afficher: Callable[[str], None], demander: Callable[[str], Optional
     ecrans = lister()
     principal = next((e for e in ecrans if e.principal), None)
     if principal is None:
-        afficher("Écran principal introuvable.")
+        afficher(Texte("Écran principal introuvable."))
         return None
     if not any(e.virtuel and not e.principal for e in ecrans) and not principal.virtuel:
         deja = physique_en_place(ecrans)
         if deja is not None:
             # Jamais pris d'office : c'est peut-être l'écran qu'il regarde.
             ecran, cote = deja
-            afficher(f"L'écran {ecran} est {'à droite du' if cote == 'droite' else 'sous le'} "
-                     "principal.")
-            afficher("Si personne ne le regarde (prise HDMI factice), les écrans du cockpit")
-            afficher("peuvent aller dessus ; DCS le couvrira pendant le vol.")
-            if oui(demander("Est-ce un écran que personne ne regarde ? [o/N] ")):
-                afficher(f"Écran {ecran} gardé pour les écrans du cockpit.")
+            afficher(Texte("L'écran {ecran} est à droite du principal.", ecran=ecran.texte)
+                     if cote == "droite" else
+                     Texte("L'écran {ecran} est sous le principal.", ecran=ecran.texte))
+            afficher(Texte("Si personne ne le regarde (prise HDMI factice), les écrans du cockpit"))
+            afficher(Texte("peuvent aller dessus ; DCS le couvrira pendant le vol."))
+            if oui(demander(Texte("Est-ce un écran que personne ne regarde ? [o/N] "))):
+                afficher(Texte("Écran {ecran} gardé pour les écrans du cockpit.",
+                               ecran=ecran.texte))
                 return "physique"
-            afficher("Cet écran reste à vous : un écran virtuel sera ajouté à côté.")
-        for ligne in ("Aucun écran virtuel. Il en faut un, que personne ne regarde, pour que",
-                      "DCS y dessine les écrans exportés au lieu de les poser sur la vue.",
-                      "DCS Tablette peut installer Virtual Display Driver (gratuit, open source) :",
-                      f"  {VDD}",
-                      "Windows demandera l'autorisation administrateur, puis peut-être de",
-                      "confirmer l'installation du pilote : accepter les deux."):
+            afficher(Texte("Cet écran reste à vous : un écran virtuel sera ajouté à côté."))
+        for ligne in (
+                Texte("Aucun écran virtuel. Il en faut un, que personne ne regarde, pour que"),
+                Texte("DCS y dessine les écrans exportés au lieu de les poser sur la vue."),
+                Texte("DCS Tablette peut installer Virtual Display Driver (gratuit, open "
+                      "source) :"),
+                f"  {VDD}",
+                Texte("Windows demandera l'autorisation administrateur, puis peut-être de"),
+                Texte("confirmer l'installation du pilote : accepter les deux.")):
             afficher(ligne)
-        if not accepte(demander("Installer l'écran virtuel maintenant ? [O/n] ")):
-            afficher("Écran virtuel non installé.")
+        if not accepte(demander(Texte("Installer l'écran virtuel maintenant ? [O/n] "))):
+            afficher(Texte("Écran virtuel non installé."))
             for ligne in MANUEL:
                 afficher(ligne)
             return None
@@ -684,12 +721,13 @@ def preparer(afficher: Callable[[str], None], demander: Callable[[str], Optional
                 break
             attendre(1)
         else:
-            afficher("Le pilote est installé, mais aucun écran virtuel n'apparaît.")
-            afficher("Redémarrer le PC, puis relancer Installer.bat.")
+            afficher(Texte("Le pilote est installé, mais aucun écran virtuel n'apparaît."))
+            afficher(Texte("Redémarrer le PC, puis relancer Installer.bat."))
             return None
 
     if not any(e.virtuel and e.actif and not e.principal for e in ecrans):
-        afficher("L'écran virtuel est dupliqué ou déconnecté : passage en mode « Étendre ».")
+        afficher(Texte("L'écran virtuel est dupliqué ou déconnecté : passage en mode "
+                       "« Étendre »."))
         if etendre():
             attendre(2)
             ecrans = lister()
@@ -699,9 +737,9 @@ def preparer(afficher: Callable[[str], None], demander: Callable[[str], Optional
             afficher(ligne)
         return None
     p = placement
-    voulu = f"{p.largeur}×{p.hauteur}, {p.frequence} Hz, {p.ou}"
     if not p.a_faire:
-        afficher(f"Écran virtuel {p.ecran} déjà en place, {p.ou}.")
+        afficher(Texte("Écran virtuel {ecran} déjà en place, {ou}.", ecran=p.ecran.texte,
+                       ou=p.ou))
         return "virtuel"
     erreur = appliquer(p)
     if erreur is None:
@@ -709,12 +747,15 @@ def preparer(afficher: Callable[[str], None], demander: Callable[[str], Optional
         apres = next((e for e in lister() if e.nom == p.ecran.nom), None)
         if apres is None or (apres.x, apres.y, apres.largeur, apres.hauteur) != (
                 p.x, p.y, p.largeur, p.hauteur):
-            erreur = "Windows n'a pas gardé la position demandée"
+            erreur = Texte("Windows n'a pas gardé la position demandée")
     if erreur:
-        afficher(f"Écran virtuel {p.ecran} non placé : {erreur}.")
-        afficher(f"À régler dans Paramètres → Système → Écran : {voulu}.")
+        afficher(Texte("Écran virtuel {ecran} non placé : {erreur}.", ecran=p.ecran.texte,
+                       erreur=erreur))
+        afficher(Texte("À régler dans Paramètres → Système → Écran : {voulu}.", voulu=p.voulu))
         return None
-    afficher(f"Écran virtuel « {p.ecran.carte} » placé : {voulu}.")
+    afficher(Texte("Écran virtuel « {carte} » placé : {voulu}.", carte=p.ecran.carte,
+                   voulu=p.voulu))
     if p.cote == "dessous":
-        afficher("(Un écran occupe déjà la droite du principal : l'écran virtuel va dessous.)")
+        afficher(Texte("(Un écran occupe déjà la droite du principal : l'écran virtuel va "
+                       "dessous.)"))
     return "virtuel"

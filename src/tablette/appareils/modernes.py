@@ -15,6 +15,7 @@ from dataclasses import replace
 
 from ..instruments import HELICO_KT, HELICO_METRIQUE, OTAN
 from . import Bouton, Ecran, Profil, couronne_horaire
+from ..langues import Texte
 
 # AV-8B N/A : MPCD_LEFT = 26, MPCD_RIGHT = 27 ; boutons 1–20 = 3199 + n à
 # gauche, 3223 + n à droite ; numérotés comme les DDI du Hornet (1 en bas du
@@ -25,9 +26,9 @@ AV8B = Profil(
     libelle="AV-8B Harrier",
     noms_dcs=("AV8BNA",),
     ecrans=(
-        Ecran("mpcd_gauche", "MPCD gauche", "LEFT_MFCD", {"": 26},
+        Ecran("mpcd_gauche", Texte("MPCD gauche"), "LEFT_MFCD", {"": 26},
               couronne_horaire(5, "gauche", tuple((str(n), 3199 + n) for n in range(1, 21)))),
-        Ecran("mpcd_droit", "MPCD droit", "RIGHT_MFCD", {"": 27},
+        Ecran("mpcd_droit", Texte("MPCD droit"), "RIGHT_MFCD", {"": 27},
               couronne_horaire(5, "gauche", tuple((str(n), 3223 + n) for n in range(1, 21)))),
     ),
     kneeboard=100,          # pas de KNEEBOARD dans devices.lua : 100 (declare_kneeboard_device.lua)
@@ -58,8 +59,8 @@ F15E = Profil(
     libelle="F-15E Strike Eagle",
     noms_dcs=("F-15ESE",),
     ecrans=(
-        Ecran("mpd_gauche", "MPD gauche", "LEFT_MFCD", {"": 34}, _cadre_f15e()),
-        Ecran("mpd_droit", "MPD droit", "RIGHT_MFCD", {"": 36}, _cadre_f15e()),
+        Ecran("mpd_gauche", Texte("MPD gauche"), "LEFT_MFCD", {"": 34}, _cadre_f15e()),
+        Ecran("mpd_droit", Texte("MPD droit"), "RIGHT_MFCD", {"": 36}, _cadre_f15e()),
         Ecran("mpcd", "MPCD", "CENTER_MFCD", {"": 35}, _cadre_f15e()),
     ),
     kneeboard=100,          # 68 y est l'IFF, pas le kneeboard
@@ -89,11 +90,11 @@ JF17 = Profil(
     libelle="JF-17 Thunder",
     noms_dcs=("JF-17",),
     ecrans=(
-        Ecran("mfcd_gauche", "MFCD gauche", "LEFT_MFCD", {"": 47},
+        Ecran("mfcd_gauche", Texte("MFCD gauche"), "LEFT_MFCD", {"": 47},
               _cadre_jf17(3238, 3244, 3252, 3262), **_JF17),
-        Ecran("mfcd_droit", "MFCD droit", "RIGHT_MFCD", {"": 47},
+        Ecran("mfcd_droit", Texte("MFCD droit"), "RIGHT_MFCD", {"": 47},
               _cadre_jf17(3304, 3310, 3318, 3326), **_JF17),
-        Ecran("mfcd_centre", "MFCD centre", "CENTER_MFCD", {"": 47},
+        Ecran("mfcd_centre", Texte("MFCD centre"), "CENTER_MFCD", {"": 47},
               _cadre_jf17(3271, 3277, 3285, 3293), **_JF17),
     ),
     kneeboard=100,

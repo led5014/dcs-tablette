@@ -41,6 +41,7 @@ from .config import BUREAU, dossier_windows
 from .ecrans_dcs import (NOM_AFFICHE, NOM_FICHIER, PasDExport, disposition, disposition_essai,
                          fichier_actif, generer, lire_zones, options_affichage,
                          plein_ecran, regler_options, retablir_options)
+from .langues import Texte, fichier_langue, message
 
 SCRIPTS = ("DCS-Tablette-Export.lua", "DCS-Tablette-Appareils.lua")
 RACCOURCI = "DCS Tablette.lnk"
@@ -53,7 +54,7 @@ PROGRAMME = "DCS-Tablette"
 EXE = f"{PROGRAMME}.exe"
 # Ce que le zip pose dans le dossier du programme : copié à l'installation,
 # et seul effacé à la désinstallation — rien d'autre de ce dossier.
-LIVRES = (EXE, "_internal", "Installer.bat", "Desinstaller.bat", "LISEZ-MOI.txt")
+LIVRES = (EXE, "_internal", "Installer.bat", "Desinstaller.bat", "LISEZ-MOI.txt", "README.txt")
 CLE_WINDOWS = rf"Software\Microsoft\Windows\CurrentVersion\Uninstall\{PROGRAMME}"
 MENU_DEMARRER = uuid.UUID("A77F5D77-2E2B-44C3-A6A2-ABA601054A51")      # FOLDERID_Programs
 DEPOT = "https://github.com/led5014/dcs-tablette"
@@ -115,20 +116,20 @@ def installer_scripts(saved_games: Path, source: Optional[Path] = None) -> List[
     lignes = []
     for nom in SCRIPTS:
         shutil.copyfile(source / nom, dossier / nom)
-        lignes.append(f"Copié : {dossier / nom}")
+        lignes.append(Texte("Copié : {chemin}", chemin=dossier / nom))
     export = dossier / "Export.lua"
     if est_installe(saved_games):
-        return lignes + ["Export.lua charge déjà la tablette."]
+        return lignes + [Texte("Export.lua charge déjà la tablette.")]
     brut = export.read_bytes() if export.exists() else b""
     if export.exists():
         copie = export.with_name(f"Export.lua.avant-tablette-{date.today():%Y%m%d}")
         shutil.copyfile(export, copie)
-        lignes.append(f"Copie de l'ancien Export.lua : {copie.name}")
+        lignes.append(Texte("Copie de l'ancien Export.lua : {nom}", nom=copie.name))
     with open(export, "ab") as f:
         if brut and not brut.endswith(b"\n"):
             f.write(b"\n")
         f.write(f"{ENTETE}\n{LIGNE}\n".encode("ascii"))
-    return lignes + ["Export.lua : ligne de la tablette ajoutée."]
+    return lignes + [Texte("Export.lua : ligne de la tablette ajoutée.")]
 
 
 def desinstaller_scripts(saved_games: Path) -> List[str]:
@@ -146,12 +147,13 @@ def desinstaller_scripts(saved_games: Path) -> List[str]:
             copie = export.with_name(f"Export.lua.avant-desinstallation-{date.today():%Y%m%d}")
             shutil.copyfile(export, copie)
             export.write_bytes(b"".join(apres))
-            lignes.append(f"Export.lua : ligne de la tablette retirée (copie : {copie.name}).")
+            lignes.append(Texte("Export.lua : ligne de la tablette retirée (copie : {nom}).",
+                                nom=copie.name))
     for nom in SCRIPTS:
         chemin = dossier / nom
         if chemin.exists():
             chemin.unlink()
-            lignes.append(f"Supprimé : {chemin}")
+            lignes.append(Texte("Supprimé : {chemin}", chemin=chemin))
     return lignes
 
 
@@ -306,7 +308,7 @@ def configurer_ecrans(saved_games: Path, essai: bool = False,
     ecrans = moniteurs() if ecrans is None else ecrans
     principal = next((m for m in ecrans if m[4]), None)
     if not principal:
-        return False, ["Écran principal introuvable."]
+        return False, [Texte("Écran principal introuvable.")]
     pl, ph = principal[2:4]
     if essai:
         # La taille de l'ÉCRAN, pas celle réglée dans DCS : après un réglage
@@ -318,15 +320,17 @@ def configurer_ecrans(saved_games: Path, essai: bool = False,
         trouves = supports(ecrans, physique)
         if not trouves:
             return False, [
-                "Pas d'écran libre collé à droite ou sous l'écran principal.",
-                "Il en faut un que personne ne regarde, pour que DCS y dessine les écrans",
-                "exportés au lieu de les poser sur la vue :",
-                f"  - écran virtuel : Virtual Display Driver, gratuit — {VDD}",
-                "  - ou une prise HDMI factice.",
-                "Installer.bat installe et place l'écran virtuel lui-même. À la main :",
-                "Paramètres → Système → Écran, « Étendre ces affichages », le glisser à",
-                "droite du principal (bords du haut alignés) ou dessous (bords de gauche",
-                "alignés), là où aucun autre écran ne se trouve, puis relancer l'installation."]
+                Texte("Pas d'écran libre collé à droite ou sous l'écran principal."),
+                Texte("Il en faut un que personne ne regarde, pour que DCS y dessine les écrans"),
+                Texte("exportés au lieu de les poser sur la vue :"),
+                Texte("  - écran virtuel : Virtual Display Driver, gratuit — {adresse}",
+                      adresse=VDD),
+                Texte("  - ou une prise HDMI factice."),
+                Texte("Installer.bat installe et place l'écran virtuel lui-même. À la main :"),
+                Texte("Paramètres → Système → Écran, « Étendre ces affichages », le glisser à"),
+                Texte("droite du principal (bords du haut alignés) ou dessous (bords de gauche"),
+                Texte("alignés), là où aucun autre écran ne se trouve, puis relancer "
+                      "l'installation.")]
         _, cote, zone, resolution = trouves[0]
         zones = disposition(zone, resolution)
         description = "Vue sur l'ecran principal, ecrans exportes sur le second" + (
@@ -343,12 +347,12 @@ def configurer_ecrans(saved_games: Path, essai: bool = False,
     inchange = (fichier.exists()
                 and fichier.read_text(encoding="ascii", errors="replace") == texte)
     if inchange:
-        lignes = [f"Inchangé : {fichier}"]
+        lignes = [Texte("Inchangé : {chemin}", chemin=fichier)]
     else:
         if fichier.exists():
             fichier.replace(fichier.with_suffix(".lua.precedent"))
         fichier.write_text(texte, encoding="ascii")
-        lignes = [f"Écrit : {fichier}"]
+        lignes = [Texte("Écrit : {chemin}", chemin=fichier)]
     for ancien in ANCIENS:                       # l'ancienne « Tablette Hornet »
         (dossier / ancien).unlink(missing_ok=True)
     lignes += [f"  {nom:12} x={x} y={y} {l}×{h}" for nom, (x, y, l, h) in zones.items()]
@@ -356,24 +360,29 @@ def configurer_ecrans(saved_games: Path, essai: bool = False,
     # Mise à jour : déjà choisie dans DCS, à la bonne résolution, en fenêtré,
     # rien à régler ni à relancer.
     if inchange and dcs_regle(saved_games, resolution):
-        return True, lignes + [f"DCS déjà réglé : « {NOM_AFFICHE} », "
-                               f"{resolution[0]}×{resolution[1]}."]
+        return True, lignes + [Texte("DCS déjà réglé : « {nom} », {largeur}×{hauteur}.",
+                                     nom=NOM_AFFICHE, largeur=resolution[0],
+                                     hauteur=resolution[1])]
 
     if not ouvert():
         try:
             copie = regler_options(saved_games, *resolution)
         except (OSError, PasDExport) as e:
-            lignes.append(f"Réglages de DCS non modifiés ({e}). À régler à la main :")
+            lignes.append(Texte("Réglages de DCS non modifiés ({erreur}). À régler à la main :",
+                                erreur=message(e)))
         else:
-            return True, lignes + [
-                f"DCS réglé : « {NOM_AFFICHE} », {resolution[0]}×{resolution[1]}, fenêtré "
-                f"(réglages d'origine gardés dans {copie.name})."]
+            return True, lignes + [Texte(
+                "DCS réglé : « {nom} », {largeur}×{hauteur}, fenêtré (réglages d'origine "
+                "gardés dans {copie}).", nom=NOM_AFFICHE, largeur=resolution[0],
+                hauteur=resolution[1], copie=copie.name)]
     else:
-        lignes.append("DCS est ouvert : il réécrira ses réglages en quittant. À régler dans DCS :")
+        lignes.append(Texte("DCS est ouvert : il réécrira ses réglages en quittant. "
+                            "À régler dans DCS :"))
     return True, lignes + [
-        "  Options → Système → Moniteurs : « " + NOM_AFFICHE + " »",
-        f"  Résolution : {resolution[0]}×{resolution[1]}, « Plein écran » décoché",
-        "puis relancer DCS."]
+        Texte("  Options → Système → Moniteurs : « {nom} »", nom=NOM_AFFICHE),
+        Texte("  Résolution : {largeur}×{hauteur}, « Plein écran » décoché",
+              largeur=resolution[0], hauteur=resolution[1]),
+        Texte("puis relancer DCS.")]
 
 
 def retirer_ecrans(saved_games: Path, ouvert: Callable[[], bool] = dcs_ouvert) -> List[str]:
@@ -386,23 +395,25 @@ def retirer_ecrans(saved_games: Path, ouvert: Callable[[], bool] = dcs_ouvert) -
     lignes = []
     if choix.lower() in (Path(NOM_FICHIER).stem, NOM_AFFICHE.lower()):
         if ouvert():
-            return ["DCS est ouvert : ferme-le puis relance la désinstallation, ou choisis",
-                    "toi-même dans Options → Système → Moniteurs ta configuration d'avant",
-                    "et ta résolution."]
+            return [Texte("DCS est ouvert : ferme-le puis relance la désinstallation, ou choisis"),
+                    Texte("toi-même dans Options → Système → Moniteurs ta configuration d'avant"),
+                    Texte("et ta résolution.")]
         try:
             copie = retablir_options(saved_games)
         except (OSError, PasDExport) as e:
-            return [f"Réglages de DCS non remis ({e}). Dans Options → Système, choisis",
-                    "« 1 Screen » dans Moniteurs et ta résolution, puis relance la",
-                    "désinstallation pour retirer « Tablette DCS »."]
-        lignes.append(f"Affichage de DCS remis comme avant la tablette (d'après {copie.name}).")
+            return [Texte("Réglages de DCS non remis ({erreur}). Dans Options → Système, choisis",
+                          erreur=message(e)),
+                    Texte("« 1 Screen » dans Moniteurs et ta résolution, puis relance la"),
+                    Texte("désinstallation pour retirer « {nom} ».", nom=NOM_AFFICHE)]
+        lignes.append(Texte("Affichage de DCS remis comme avant la tablette (d'après {copie}).",
+                            copie=copie.name))
         # Gardée, elle servirait à une prochaine installation : on reviendrait
         # un jour à une résolution vieille de plusieurs écrans.
         copie.unlink(missing_ok=True)
     for chemin in (fichier, fichier.with_suffix(".lua.precedent")):
         if chemin.exists():
             chemin.unlink()
-            lignes.append(f"Supprimé : {chemin}")
+            lignes.append(Texte("Supprimé : {chemin}", chemin=chemin))
     return lignes
 
 
@@ -421,13 +432,14 @@ def creer_raccourci(cible: Path, dossier: Optional[Path] = None) -> Path:
     commande = ("$r = (New-Object -ComObject WScript.Shell).CreateShortcut($env:DT_LIEN); "
                 "$r.TargetPath = $env:DT_CIBLE; $r.WorkingDirectory = $env:DT_DOSSIER; "
                 "$r.IconLocation = $env:DT_CIBLE + ',0'; "
-                "$r.Description = 'Les ecrans du cockpit de DCS sur la tablette'; $r.Save()")
+                "$r.Description = $env:DT_DESCRIPTION; $r.Save()")
     environnement = dict(os.environ, DT_LIEN=str(lien), DT_CIBLE=str(cible),
-                         DT_DOSSIER=str(cible.parent))
+                         DT_DOSSIER=str(cible.parent),
+                         DT_DESCRIPTION=str(Texte("Les écrans du cockpit de DCS sur la tablette")))
     subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", commande],
                    env=environnement, capture_output=True, check=True, timeout=60)
     if not lien.exists():
-        raise OSError("PowerShell n'a rien écrit")
+        raise OSError(Texte("PowerShell n'a rien écrit"))
     return lien
 
 
@@ -548,11 +560,12 @@ def tenir_a_jour(exe: Path) -> List[str]:
     try:
         enregistrer(exe.parent)
     except (OSError, ImportError) as e:
-        lignes.append(f"Entrée dans Applications installées non mise à jour ({e}).")
+        lignes.append(Texte("Entrée dans Applications installées non mise à jour ({erreur}).",
+                            erreur=e))
     if not (dossier_menu() / RACCOURCI).exists():
         try:
             creer_raccourci(exe, dossier_menu())
-            lignes.append("Raccourci « DCS Tablette » ajouté au menu Démarrer.")
+            lignes.append(Texte("Raccourci « DCS Tablette » ajouté au menu Démarrer."))
         except (OSError, subprocess.SubprocessError):
             pass
     return lignes
@@ -567,26 +580,32 @@ def installer_programme(demander: Callable[[str], Optional[str]],
     if not meme_fichier(source, cible):
         # Un DCS Tablette ouvert depuis l'installation tient ses fichiers.
         while autres():
-            reponse = demander("  DCS Tablette est ouvert. Ferme sa fenêtre, puis appuie "
-                               "sur Entrée (ou tape p pour passer) : ")
+            reponse = demander("  " + Texte("DCS Tablette est ouvert. Ferme sa fenêtre, puis "
+                                            "appuie sur Entrée (ou tape p pour passer) : "))
             if reponse is None or reponse.strip().lower() == "p":
                 break
         try:
             copier_programme(source, cible)
-            print(f"\nProgramme installé dans {cible}.")
-            print("Le dossier extrait du zip ne sert plus : il peut être supprimé.")
+            print("\n" + Texte("Programme installé dans {dossier}.", dossier=cible))
+            print(Texte("Le dossier extrait du zip ne sert plus : il peut être supprimé."))
         except OSError as e:
-            print(f"\nProgramme non copié dans {cible} ({e}) : il reste ici, {source}.")
+            print("\n" + Texte("Programme non copié dans {dossier} ({erreur}) : il reste ici, "
+                               "{source}.", dossier=cible, erreur=e, source=source))
             exe = Path(sys.executable)
-    for dossier, ou in ((dossier_bureau(), "le bureau"), (dossier_menu(), "le menu Démarrer")):
+    raccourcis = (
+        (dossier_bureau(), lambda e: Texte("Raccourci sur le bureau non créé ({erreur}).",
+                                           erreur=e)),
+        (dossier_menu(), lambda e: Texte("Raccourci dans le menu Démarrer non créé "
+                                         "({erreur}).", erreur=e)))
+    for dossier, echec in raccourcis:
         try:
             creer_raccourci(exe, dossier)
         except (OSError, subprocess.SubprocessError) as e:
-            print(f"Raccourci sur {ou} non créé ({e}).")
+            print(echec(e))
     try:
         enregistrer(exe.parent)
     except OSError as e:
-        print(f"Entrée dans Applications installées non créée ({e}).")
+        print(Texte("Entrée dans Applications installées non créée ({erreur}).", erreur=e))
     return exe
 
 
@@ -628,73 +647,79 @@ def installer(saved_games: Path, essai: bool = False,
     """
     from . import ecran_virtuel
     if not saved_games.is_dir():
-        print(f"Dossier de DCS introuvable ({saved_games}).")
-        print("Lance DCS une fois pour qu'il le crée, puis recommence.")
+        print(Texte("Dossier de DCS introuvable ({dossier}).", dossier=saved_games))
+        print(Texte("Lance DCS une fois pour qu'il le crée, puis recommence."))
         return 1
     lister_ecrans = lister_ecrans or ecran_virtuel.lister
-    print(f"Dossier de DCS : {saved_games}")
+    print(Texte("Dossier de DCS : {dossier}", dossier=saved_games))
 
     # Ce que le pilote a déjà, avant de toucher à quoi que ce soit.
     try:
         ecrans = lister_ecrans()
     except OSError:
         ecrans = []
-    print("\nVos écrans :")
-    for ligne in ecran_virtuel.decrire(ecrans) or ["(illisibles)"]:
+    print("\n" + Texte("Vos écrans :"))
+    for ligne in ecran_virtuel.decrire(ecrans) or [Texte("(illisibles)")]:
         print("  " + ligne)
     try:
         nom, largeur, hauteur = options_affichage(saved_games)
-        print(f"DCS : configuration « {nom} », {largeur}×{hauteur}, "
-              + ("plein écran" if plein_ecran(saved_games) else "fenêtré"))
+        print(Texte("DCS : configuration « {nom} », {largeur}×{hauteur}, {mode}", nom=nom,
+                    largeur=largeur, hauteur=hauteur,
+                    mode=Texte("plein écran") if plein_ecran(saved_games) else Texte("fenêtré")))
     except PasDExport as e:
-        print(f"DCS : {e}")
+        print(Texte("DCS : {erreur}", erreur=message(e)))
 
     choix: Dict = {"mode": "essai" if essai else "second_ecran", "physique": False}
     existante = None if essai else configuration_existante(saved_games)
     if existante:
         nom, zones = existante
-        print(f"\nDCS exporte déjà {len(zones)} écrans du cockpit avec votre configuration "
-              f"« {nom} » : {', '.join(sorted(zones))}.")
-        print("La tablette peut les prendre là où ils sont, sans toucher à vos écrans ni à DCS.")
-        if ecran_virtuel.accepte(demander("Garder votre configuration ? [O/n] ")):
+        print("\n" + Texte("DCS exporte déjà {nombre} écrans du cockpit avec votre "
+                           "configuration « {nom} » : {zones}.", nombre=len(zones), nom=nom,
+                           zones=sorted(zones)))
+        print(Texte("La tablette peut les prendre là où ils sont, sans toucher à vos écrans "
+                    "ni à DCS."))
+        if ecran_virtuel.accepte(demander(Texte("Garder votre configuration ? [O/n] "))):
             choix = {"mode": "existante", "configuration": nom}
 
     etapes = 3 if choix["mode"] == "second_ecran" else 2
     pret = True
     if choix["mode"] == "second_ecran":
-        print(f"\n1/{etapes}  Écran virtuel")
+        print("\n" + Texte("{etape}/{etapes}  Écran virtuel", etape=1, etapes=etapes))
         resultat = ecran_virtuel.preparer(lambda ligne: print("  " + ligne),
                                           lambda question: demander("  " + question))
         if resultat is None:
-            print("  Sans écran pour eux, la tablette marche quand même en mode essai : les")
-            print("  écrans du cockpit sont dessinés en bas de la vue, par-dessus le cockpit.")
-            if ecran_virtuel.oui(demander("  Passer en mode essai ? [o/N] ")):
+            print(Texte("  Sans écran pour eux, la tablette marche quand même en mode essai : les"))
+            print(Texte("  écrans du cockpit sont dessinés en bas de la vue, par-dessus le "
+                        "cockpit."))
+            if ecran_virtuel.oui(demander(Texte("  Passer en mode essai ? [o/N] "))):
                 choix["mode"] = "essai"
             else:
                 pret = False
         else:
             choix["physique"] = resultat == "physique"
     ecrire_choix(choix, chemin_choix)
-    print(f"\n{etapes - 1}/{etapes}  Scripts de la tablette")
+    print("\n" + Texte("{etape}/{etapes}  Scripts de la tablette", etape=etapes - 1,
+                       etapes=etapes))
     for ligne in installer_scripts(saved_games):
         print("  " + ligne)
-    print(f"\n{etapes}/{etapes}  Écrans de DCS")
+    print("\n" + Texte("{etape}/{etapes}  Écrans de DCS", etape=etapes, etapes=etapes))
     if choix["mode"] == "existante":
-        print(f"  Votre configuration « {choix['configuration']} » est gardée : rien à changer.")
+        print(Texte("  Votre configuration « {nom} » est gardée : rien à changer.",
+                    nom=choix["configuration"]))
         complet = True
         if plein_ecran(saved_games):
-            print("  Mais DCS est en plein écran, que la tablette ne voit pas : dans DCS,")
-            print("  Options → Système, décocher « Plein écran », puis relancer DCS.")
+            print(Texte("  Mais DCS est en plein écran, que la tablette ne voit pas : dans DCS,"))
+            print(Texte("  Options → Système, décocher « Plein écran », puis relancer DCS."))
     elif not pret:
-        print("  Écran virtuel pas prêt : la configuration d'écrans de DCS attendra.")
-        print("  Relancer Installer.bat une fois l'écran virtuel en place.")
+        print(Texte("  Écran virtuel pas prêt : la configuration d'écrans de DCS attendra."))
+        print(Texte("  Relancer Installer.bat une fois l'écran virtuel en place."))
         complet = False
     else:
         # DCS réécrit options.lua en quittant : réglé DCS ouvert, le choix
         # « Tablette DCS » serait perdu. On attend qu'il soit fermé.
         while ouvert():
-            reponse = demander("  DCS est ouvert. Ferme-le, puis appuie sur Entrée "
-                               "(ou tape p pour passer) : ")
+            reponse = demander(Texte("  DCS est ouvert. Ferme-le, puis appuie sur Entrée "
+                                     "(ou tape p pour passer) : "))
             if reponse is None or reponse.strip().lower() == "p":
                 break
         # Relus : l'écran virtuel vient peut-être d'arriver ou de bouger.
@@ -711,18 +736,18 @@ def installer(saved_games: Path, essai: bool = False,
     # Depuis le code source, ni copie ni raccourci : ils pointeraient vers Python.
     if getattr(sys, "frozen", False):
         exe = installer_programme(demander, autres_instances)
-        a_lancer = "« DCS Tablette » (bureau ou menu Démarrer)"
+        a_lancer = Texte("« DCS Tablette » (bureau ou menu Démarrer)")
     if complet and demarrer and exe and not autres_instances():
         lancer(exe)
-        print("\nInstallation terminée. DCS Tablette démarre dans sa fenêtre : ouvre sur "
-              "la tablette l'adresse qu'il affiche. Les fois suivantes, lance "
-              f"{a_lancer}.")
+        print("\n" + Texte("Installation terminée. DCS Tablette démarre dans sa fenêtre : "
+                           "ouvre sur la tablette l'adresse qu'il affiche. Les fois suivantes, "
+                           "lance {programme}.", programme=a_lancer))
     elif complet:
-        print(f"\nInstallation terminée. Lance {a_lancer} et ouvre sur la tablette "
-              "l'adresse qu'il affiche.")
+        print("\n" + Texte("Installation terminée. Lance {programme} et ouvre sur la tablette "
+                           "l'adresse qu'il affiche.", programme=a_lancer))
     else:
-        print("\nScripts installés ; les écrans restent à régler (voir ci-dessus, et "
-              "LISEZ-MOI.txt, « À la main »).")
+        print("\n" + Texte("Scripts installés ; les écrans restent à régler (voir ci-dessus, "
+                           "et LISEZ-MOI.txt, « À la main »)."))
     return 0 if complet else 1
 
 
@@ -745,28 +770,30 @@ def desinstaller(saved_games: Path, demander: Callable[[str], Optional[str]] = d
     compris. `attendre` : lancé par Paramètres → Applications installées, la
     fenêtre se fermerait avant qu'on ait pu la lire."""
     while autres():
-        reponse = demander("  DCS Tablette est encore ouvert. Ferme sa fenêtre, puis appuie "
-                           "sur Entrée (ou tape p pour passer) : ")
+        reponse = demander(Texte("  DCS Tablette est encore ouvert. Ferme sa fenêtre, puis "
+                                 "appuie sur Entrée (ou tape p pour passer) : "))
         if reponse is None or reponse.strip().lower() == "p":
             break
     lignes = desinstaller_scripts(saved_games) + retirer_ecrans(saved_games)
-    for chemin in (dossier_bureau() / RACCOURCI, dossier_menu() / RACCOURCI, fichier_choix()):
+    for chemin in (dossier_bureau() / RACCOURCI, dossier_menu() / RACCOURCI, fichier_choix(),
+                   fichier_langue()):
         if chemin.exists():
             chemin.unlink()
-            lignes.append(f"Supprimé : {chemin}")
+            lignes.append(Texte("Supprimé : {chemin}", chemin=chemin))
     fige = getattr(sys, "frozen", False)
     if fige and oublier():
-        lignes.append("Retiré de Paramètres → Applications installées.")
-    for ligne in lignes or ["Rien à retirer : la tablette n'était pas installée."]:
+        lignes.append(Texte("Retiré de Paramètres → Applications installées."))
+    for ligne in lignes or [Texte("Rien à retirer : la tablette n'était pas installée.")]:
         print("  " + ligne)
     if fige:
         effacer_programme_apres(Path(sys.executable).parent)
-        print("\nLe programme s'efface dès que cette fenêtre se ferme.")
+        print("\n" + Texte("Le programme s'efface dès que cette fenêtre se ferme."))
     else:
-        print("\nOn peut maintenant supprimer le dossier de DCS Tablette.")
-    print("L'écran virtuel reste installé : il peut servir à autre chose. Pour le retirer :")
-    print("Gestionnaire de périphériques → Cartes graphiques → Virtual Display Driver,")
-    print("clic droit → Désinstaller l'appareil.")
+        print("\n" + Texte("On peut maintenant supprimer le dossier de DCS Tablette."))
+    print(Texte("L'écran virtuel reste installé : il peut servir à autre chose. Pour le "
+                "retirer :"))
+    print(Texte("Gestionnaire de périphériques → Cartes graphiques → Virtual Display Driver,"))
+    print(Texte("clic droit → Désinstaller l'appareil."))
     if attendre:
-        demander("\nAppuie sur Entrée pour fermer cette fenêtre. ")
+        demander("\n" + Texte("Appuie sur Entrée pour fermer cette fenêtre. "))
     return 0

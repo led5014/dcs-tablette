@@ -22,6 +22,7 @@ from dataclasses import dataclass, field
 from typing import Dict, FrozenSet, Iterable, List, Optional, Sequence, Tuple
 
 from ..instruments import OTAN, Instruments
+from ..langues import FRANCAIS, Texte, dans
 
 COTES = ("gauche", "haut", "droite", "bas")
 
@@ -42,7 +43,7 @@ class Bouton:
 class Ecran:
     """Un écran exporté en image par DCS, et les boutons de son cadre."""
     id: str
-    libelle: str
+    libelle: str             # un `Texte` s'il a des mots à traduire : « DDI gauche »
     viewport: str            # nom de la zone d'export (MonitorSetup)
     appareils: Dict[str, int]  # siège ("" si une seule place) → appareil DCS
     boutons: Tuple[Bouton, ...] = ()
@@ -114,15 +115,16 @@ class Profil:
             return self.imperial[1]
         return self.instruments
 
-    def description(self) -> Dict:
-        """Ce que la page doit construire pour cet appareil."""
+    def description(self, langue: str = FRANCAIS) -> Dict:
+        """Ce que la page doit construire pour cet appareil, libellés dans
+        la langue de la tablette."""
         return {
             "id": self.id,
-            "libelle": self.libelle,
+            "libelle": dans(self.libelle, langue),
             "sieges": list(self.sieges),
             "kneeboard": self.kneeboard is not None,
             "panneaux": list(self.panneaux),
-            "ecrans": [{"id": e.id, "libelle": e.libelle, "par_cote": e.par_cote,
+            "ecrans": [{"id": e.id, "libelle": dans(e.libelle, langue), "par_cote": e.par_cote,
                         "par_cote_y": e.par_cote_y, "aspect": e.aspect,
                         "arrondi": e.arrondi,
                         "reperes_x": list(e.reperes_x) if e.reperes_x else None,
@@ -179,7 +181,7 @@ PROFILS: Tuple[Profil, ...] = (
 # Tout autre appareil : pas d'écran connu, pas de commande. La capture du
 # kneeboard marche partout (c'est celui de DCS), pas ses pages : l'appareil
 # qui les tourne n'est sûr que pour les modules relevés.
-GENERIQUE = Profil(id="generique", libelle="Autre appareil", noms_dcs=())
+GENERIQUE = Profil(id="generique", libelle=Texte("Autre appareil"), noms_dcs=())
 
 PAR_DEFAUT = fa18c.PROFIL           # avant que DCS ait annoncé quoi que ce soit
 

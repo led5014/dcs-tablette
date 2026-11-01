@@ -23,6 +23,7 @@ from .copie import Copie, Rect, dans, zone_temoin
 from .ecrans_dcs import (PasDExport, fichier_actif, options_affichage, zone_kneeboard,
                          zones_actives)
 from .filtres import Reglages
+from .langues import Texte, message
 
 KNEEBOARD = "KNEEBOARD"
 TEMOIN = "TEMOIN"
@@ -40,7 +41,8 @@ ROGNAGE = 0.012
 
 
 class PasDImage(Exception):
-    """Pas d'image à servir, avec la raison à montrer sur la tablette."""
+    """Pas d'image à servir, avec la raison à montrer sur la tablette (un
+    `Texte` : traduit dans la langue de chaque tablette)."""
 
 
 class KneeboardFerme(PasDImage):
@@ -97,12 +99,12 @@ class Video:
                 # tablette capturait à côté. On le dit au lieu de capturer.
                 lance = self._lancement()
                 if lance is not None and fichier_actif(self.saved_games).stat().st_mtime > lance:
-                    raise PasDExport("La configuration d'écrans a changé depuis le "
-                                     "lancement de DCS, qui ne la relit qu'au "
-                                     "démarrage : relance DCS.")
+                    raise PasDExport(Texte("La configuration d'écrans a changé depuis le "
+                                           "lancement de DCS, qui ne la relit qu'au "
+                                           "démarrage : relance DCS."))
                 self._zones = (maintenant, zones, None)
             except PasDExport as e:
-                self._zones = (maintenant, {}, str(e))
+                self._zones = (maintenant, {}, message(e))
         _, zones, raison = self._zones
         if raison:
             raise PasDImage(raison)
@@ -123,7 +125,7 @@ class Video:
         self._copie = (maintenant, self._capturer(voulues))
         instant, copie = self._copie
         if copie is None:
-            raise PasDImage("DCS n'est pas lancé, ou sa fenêtre est réduite.")
+            raise PasDImage(Texte("DCS n'est pas lancé, ou sa fenêtre est réduite."))
         return instant, copie
 
     def _hors_fenetre(self, nom: str, taille: Tuple[int, int]) -> PasDImage:
@@ -132,12 +134,14 @@ class Video:
         if (rl, rh) != (fl, fh):
             # Vu en vrai : DCS réglé plus grand que l'espace des écrans garde
             # une fenêtre plus petite, et ce qui dépasse n'est dessiné nulle part.
-            return PasDImage(f"DCS est réglé en {rl} × {rh} mais sa fenêtre ne fait "
-                             f"que {fl} × {fh} : vérifie la résolution dans Options → "
-                             "Système, puis relance DCS.")
-        return PasDImage(f"{nom} sort de la fenêtre de DCS ({fl} × {fh}) : la "
-                         "configuration d'écrans ne correspond pas à la résolution. "
-                         "Quitte DCS : DCS Tablette remet ses réglages, puis relance DCS.")
+            return PasDImage(Texte("DCS est réglé en {largeur} × {hauteur} mais sa fenêtre "
+                                   "ne fait que {fenetre_l} × {fenetre_h} : vérifie la "
+                                   "résolution dans Options → Système, puis relance DCS.",
+                                   largeur=rl, hauteur=rh, fenetre_l=fl, fenetre_h=fh))
+        return PasDImage(Texte("{nom} sort de la fenêtre de DCS ({largeur} × {hauteur}) : la "
+                               "configuration d'écrans ne correspond pas à la résolution. "
+                               "Quitte DCS : DCS Tablette remet ses réglages, puis relance DCS.",
+                               nom=nom, largeur=fl, hauteur=fh))
 
     # ----------------------------------------------------------- images
 
@@ -145,7 +149,8 @@ class Video:
         maintenant = self._horloge()
         zones = self._zones_actives(maintenant)
         if nom not in zones:
-            raise PasDImage(f"La configuration d'écrans de DCS n'exporte pas {nom}.")
+            raise PasDImage(Texte("La configuration d'écrans de DCS n'exporte pas {nom}.",
+                                  nom=nom))
         instant, copie = self._copie_pour(nom, maintenant, zones)
         if nom not in copie.ecrans:
             raise self._hors_fenetre(nom, copie.taille)
@@ -156,8 +161,8 @@ class Video:
             # disposition encore chargée par DCS) suffisait à le croire ouvert.
             l, h = image.size
             if _noire(image.crop((0, int(h * 0.75), l, int(h * 0.95)))):
-                raise KneeboardFerme("Kneeboard fermé dans DCS : ouvre-le avec RShift+K "
-                                     "(ou garde K enfoncé pour un coup d'œil).")
+                raise KneeboardFerme(Texte("Kneeboard fermé dans DCS : ouvre-le avec RShift+K "
+                                           "(ou garde K enfoncé pour un coup d'œil)."))
             return instant, image
         if not _noire(image):
             return instant, image
@@ -166,8 +171,8 @@ class Video:
         # écran exclusif. Le témoin n'est copié que dans ce cas.
         temoin = self._capturer({TEMOIN: zone_temoin(copie.taille)})
         if temoin is not None and TEMOIN in temoin.ecrans and _noire(temoin.ecrans[TEMOIN]):
-            raise PasDImage("Image noire : décoche « Plein écran » dans "
-                            "Options → Système de DCS (le mode fenêtré se capture).")
+            raise PasDImage(Texte("Image noire : décoche « Plein écran » dans "
+                                  "Options → Système de DCS (le mode fenêtré se capture)."))
         return instant, image
 
     def kneeboard(self) -> Image.Image:
@@ -195,7 +200,7 @@ class Video:
             except KneeboardFerme:
                 raise
             except PasDImage as e:
-                self.dernier = (self._horloge(), str(e))
+                self.dernier = (self._horloge(), message(e))
                 raise
             self.dernier = (self._horloge(), None)
             self.tailles[nom] = image.size

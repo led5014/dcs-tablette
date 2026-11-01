@@ -24,58 +24,68 @@
   <button id="diag" class="diag" hidden aria-label="Diagnostic : à régler"></button>
   <!-- L'appareil : celui que DCS annonce (Auto), ou choisi à la main pour
        préparer la page avant même de lancer la mission. -->
-  <select id="appareil" aria-label="Appareil"><option value="auto">Auto · DCS : …</option></select>
+  <select id="appareil" aria-label="Appareil" data-t-aria><option value="auto">Auto · DCS : …</option></select>
   <!-- Rempli d'après le profil de l'appareil et la place disponible : une
        disposition n'est proposée que si chacun de ses panneaux reste
        confortable au doigt sur cet écran-là. -->
   <span class="saut" aria-hidden="true"></span>
-  <nav id="modes" aria-label="Disposition"></nav>
-  <nav id="sieges" aria-label="Siège" hidden></nav>
-  <button id="bascule" class="bascule">Kneeboard</button>
-  <button id="plein" class="plein" hidden aria-label="Plein écran">⛶</button>
+  <nav id="modes" aria-label="Disposition" data-t-aria></nav>
+  <nav id="sieges" aria-label="Siège" data-t-aria hidden></nav>
+  <button id="bascule" class="bascule" data-t>Kneeboard</button>
+  <button id="plein" class="plein" hidden aria-label="Plein écran" data-t-aria>⛶</button>
 </header>
 
-<main id="scene" aria-label="Écrans du cockpit"></main>
+<!-- Les textes sont en français, la référence ; marqués data-t (texte),
+     data-t-aria (aria-label) ou data-t-alt (alt), app.js les traduit dans la
+     langue de la tablette au chargement. -->
+<main id="scene" aria-label="Écrans du cockpit" data-t-aria></main>
 
 <section id="kneeboard" hidden aria-label="Kneeboard">
   <div class="kb-barre">
-    <select id="kb-carnet" aria-label="Carnet"></select>
-    <button id="kb-prec" aria-label="Page précédente">‹</button>
+    <select id="kb-carnet" aria-label="Carnet" data-t-aria></select>
+    <button id="kb-prec" aria-label="Page précédente" data-t-aria>‹</button>
     <span id="kb-num"></span>
-    <button id="kb-suiv" aria-label="Page suivante">›</button>
+    <button id="kb-suiv" aria-label="Page suivante" data-t-aria>›</button>
     <!-- Où va le kneeboard quand on l'ouvre dans DCS (RShift+K, K) : sur le
          PC comme d'habitude, ou ici, la tablette basculant d'elle-même. -->
-    <nav id="kb-sur" aria-label="Kneeboard ouvert dans DCS : afficher sur">
-      <span class="kb-sur-titre">Kneeboard DCS sur</span>
+    <nav id="kb-sur" aria-label="Kneeboard ouvert dans DCS : afficher sur" data-t-aria>
+      <span class="kb-sur-titre" data-t>Kneeboard DCS sur</span>
       <button data-sur="pc">PC</button>
-      <button data-sur="tablette">Tablette</button>
+      <button data-sur="tablette" data-t>Tablette</button>
     </nav>
   </div>
   <div id="kb-vue">
-    <canvas id="kb-direct" aria-label="Kneeboard de DCS en direct"></canvas>
-    <p id="kb-msg">En attente du kneeboard de DCS…</p>
-    <img id="kb-image" alt="Page de kneeboard" draggable="false">
-    <p id="kb-vide" hidden>Aucune page à afficher.<br>
-      Dépose des images PNG ou JPG dans <code>Saved Games\DCS\Kneeboard</code>
-      (ou son sous-dossier au nom de l'appareil), ou vole une mission qui en
-      embarque.</p>
+    <canvas id="kb-direct" aria-label="Kneeboard de DCS en direct" data-t-aria></canvas>
+    <p id="kb-msg" data-t>En attente du kneeboard de DCS…</p>
+    <img id="kb-image" alt="Page de kneeboard" data-t-alt draggable="false">
+    <p id="kb-vide" hidden><span data-t>Aucune page à afficher.</span><br>
+      <span data-t>Dépose des images PNG ou JPG dans</span>
+      <code>Saved Games\DCS\Kneeboard</code>
+      <span data-t>(ou son sous-dossier au nom de l'appareil), ou vole une mission qui en
+      embarque.</span></p>
   </div>
 </section>
 
 <!-- Ce qui manque pour que la tablette marche, et comment le régler : les
-     mêmes vérifications que la fenêtre de DCS Tablette sur le PC. -->
-<section id="diagnostic" hidden aria-label="Diagnostic">
+     mêmes vérifications que la fenêtre de DCS Tablette sur le PC. Et la
+     langue de cette tablette, FR ou EN : lisible dans l'une comme l'autre. -->
+<section id="diagnostic" hidden aria-label="Diagnostic" data-t-aria>
   <div class="diag-barre">
-    <strong>Diagnostic</strong>
+    <strong data-t>Diagnostic</strong>
     <span id="diag-heure"></span>
-    <button id="diag-verifier">Vérifier</button>
-    <button id="diag-fermer">Fermer</button>
+    <nav id="langues" aria-label="Langue / Language">
+      <button data-langue="fr" lang="fr">FR</button>
+      <button data-langue="en" lang="en">EN</button>
+    </nav>
+    <button id="diag-verifier" data-t>Vérifier</button>
+    <button id="diag-fermer" data-t>Fermer</button>
   </div>
   <ul id="diag-points"></ul>
-  <h2 id="diag-titre-journal" hidden>Dernières réparations et alertes</h2>
+  <h2 id="diag-titre-journal" hidden data-t>Dernières réparations et alertes</h2>
   <ul id="diag-journal"></ul>
 </section>
 
+<script src="/textes.js"></script>
 <script src="/app.js"></script>
 </body>
 </html>

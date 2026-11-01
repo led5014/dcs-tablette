@@ -1857,6 +1857,8 @@ class TestDesinstallation(unittest.TestCase):
                 mock.patch.object(installation, "dossier_menu", lambda: Path(dossier)), \
                 mock.patch.object(installation, "fichier_choix",
                                   lambda: Path(dossier) / "installation.json"), \
+                mock.patch.object(installation, "fichier_langue",
+                                  lambda: Path(dossier) / "langue.txt"), \
                 contextlib.redirect_stdout(io.StringIO()):
             installation.desinstaller(Path(dossier), demander=lambda q: questions.append(q) or "",
                                       autres=lambda: ouverts.pop(0))
@@ -1878,18 +1880,22 @@ class TestDesinstallation(unittest.TestCase):
             programme = dossier / "Programs" / "DCS-Tablette"
             programme.mkdir(parents=True)
             (dossier / installation.RACCOURCI).write_bytes(b"L")
+            (dossier / "langue.txt").write_text("en")       # --langue en, retenu
             with mock.patch.object(sys, "frozen", True, create=True), \
                     mock.patch.object(sys, "executable", str(programme / installation.EXE)), \
                     mock.patch.object(installation, "dossier_bureau", lambda: dossier), \
                     mock.patch.object(installation, "dossier_menu", lambda: dossier), \
                     mock.patch.object(installation, "fichier_choix",
                                       lambda: dossier / "installation.json"), \
+                    mock.patch.object(installation, "fichier_langue",
+                                      lambda: dossier / "langue.txt"), \
                     mock.patch.object(installation, "oublier", lambda: True), \
                     mock.patch.object(installation, "effacer_programme_apres", effaces.append), \
                     contextlib.redirect_stdout(sortie):
                 installation.desinstaller(dossier, demander=questions.append,
                                           autres=lambda: 0, attendre=True)
             self.assertFalse((dossier / installation.RACCOURCI).exists())
+            self.assertFalse((dossier / "langue.txt").exists())
         self.assertEqual(effaces, [programme])
         self.assertIn("Applications installées", sortie.getvalue())
         self.assertIn("Entrée pour fermer", questions[-1])
@@ -1911,7 +1917,7 @@ class TestProgramme(unittest.TestCase):
         from tablette.installation import EXE
         (dossier / "_internal").mkdir(parents=True)
         (dossier / "_internal" / "python312.dll").write_text("dll")
-        for nom in (EXE, "Installer.bat", "Desinstaller.bat", "LISEZ-MOI.txt"):
+        for nom in (EXE, "Installer.bat", "Desinstaller.bat", "LISEZ-MOI.txt", "README.txt"):
             (dossier / nom).write_text(nom)
         return dossier
 
@@ -2802,6 +2808,30 @@ class TestDiagnostic(unittest.TestCase):
             "2026-10-30 21:00:02.000 INFO    EDCORE (Main): autre chose\n", encoding="utf-8")
         self.assertEqual(derniere_ligne_tablette(self.saved), (False, "pret : appuis ecoutes"))
 
+    def test_tout_se_traduit_pour_une_tablette_en_anglais(self):
+        """Quel que soit l'état, aucune phrase ne reste en français sur une
+        tablette anglaise, et la fenêtre du PC garde le français."""
+        from tablette import langues
+        from tablette.ecran_virtuel import remettre
+        langues.manquants.clear()
+        self.reseaux = [("Maison", "Public")]
+        self.virtuel = remettre(False, lister=lambda: [PRINCIPAL, ecran(x=-2560)])
+        options = self.saved / "Config" / "options.lua"
+        options.write_text(lire(options).replace('"tablette"', '"1camera"'), encoding="utf-8")
+        textes = []
+        for lance, pont in ((False, None), (True, FauxPont()), (True, FauxPont(a_l_ecoute=False))):
+            self.lance = lance
+            d = self.diagnostic(pont=pont)
+            d.verifier()
+            d.tablette_vue("192.168.1.20")
+            d.verifier()
+            textes.append(langues.dans(d.etat(), "en"))
+        self.assertEqual(langues.manquants, set())
+        titres = {p["titre"] for etat in textes for p in etat["points"]}
+        self.assertTrue({"DCS folder", "Virtual display", "DCS settings", "PC network",
+                         "Tablet script in DCS"} <= titres, titres)
+        self.assertEqual(d.etat()["points"][0]["titre"], "Dossier de DCS")
+
 
 class TestRemettreEcranVirtuel(unittest.TestCase):
     def remettre(self, listes, reparer=True, refus=None):
@@ -2844,6 +2874,303 @@ class TestRemettreEcranVirtuel(unittest.TestCase):
         self.assertEqual(etat, "manque")
         self.assertIn("Windows refuse", detail)
         self.assertIn("Paramètres", solution[0])
+
+
+# Les voyants du Hornet dont le nom, montré tel quel en français, se traduit.
+VOYANTS_FRANCAIS = ("FIRE G", "FIRE D", "TRAIN", "AOA HAUT", "AOA CENTRE", "AOA BAS", "ALT BASSE")
+
+
+class TestLangues(unittest.TestCase):
+    """Français ou anglais, au choix de chaque tablette et du PC. Le français
+    fait référence ; l'anglais ne doit manquer aucun texte, ni en garder un
+    qui ne sert plus. Rien n'est écrit dans le vrai %LOCALAPPDATA%."""
+
+    def setUp(self):
+        from tablette import langues
+        self.langues = langues
+        langues.manquants.clear()
+        self.tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.dossier = Path(self.tmp.name)
+
+    def tearDown(self):
+        self.langues.regler_pc("fr")            # les autres tests lisent du français
+        self.tmp.cleanup()
+
+    # ------------------------------------------------------------ le catalogue
+
+    @staticmethod
+    def cles_du_serveur():
+        """Toutes les phrases données à Texte() ou à traduire() dans le code."""
+        import ast
+        cles = set()
+        for f in [*(RACINE / "src" / "tablette").rglob("*.py"),
+                  RACINE / "scripts" / "dcs_tablette_entry.py"]:
+            for n in ast.walk(ast.parse(lire(f))):
+                if (isinstance(n, ast.Call) and n.args and isinstance(n.args[0], ast.Constant)
+                        and isinstance(n.args[0].value, str)
+                        and getattr(n.func, "id", getattr(n.func, "attr", ""))
+                        in ("Texte", "traduire")):
+                    cles.add(n.args[0].value)
+        return cles
+
+    @staticmethod
+    def lignes_du_script():
+        """Les lignes title et echo du script de mise à jour qui ont des mots."""
+        from tablette.mise_a_jour import REMPLACER
+        lignes = set()
+        for ligne in REMPLACER.splitlines():
+            commande, _, texte = ligne.partition(" ")
+            if commande in ("title", "echo") and re.search(r"[a-z]{3}",
+                                                            re.sub(r"%\w+%", "", texte)):
+                lignes.add(texte)
+        return lignes
+
+    @staticmethod
+    def cles_de_la_page():
+        """Les phrases de app.js données à tr(), celles de index.html marquées
+        data-t (texte), data-t-aria (aria-label), data-t-alt (alt), et les
+        voyants au nom français."""
+        from html.parser import HTMLParser
+        web = RACINE / "src" / "tablette" / "web"
+        cles = {re.sub(r"\\(.)", r"\1", m.group(1)[1:-1]) for m in re.finditer(
+            r"""\btr\(\s*('(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*")""", lire(web / "app.js"))}
+        vides = ("br", "img", "meta", "link", "input")
+
+        class Lecteur(HTMLParser):
+            pile = []
+
+            def handle_starttag(self, balise, attributs):
+                a = dict(attributs)
+                for marque, attribut in (("data-t-aria", "aria-label"), ("data-t-alt", "alt")):
+                    if marque in a:
+                        cles.add(a[attribut])
+                if balise not in vides:
+                    self.pile.append(["data-t" in a, ""])
+
+            def handle_endtag(self, balise):
+                if balise not in vides:
+                    marque, texte = self.pile.pop()
+                    if marque:
+                        cles.add(" ".join(texte.split()))
+
+            def handle_data(self, donnees):
+                for niveau in self.pile:
+                    niveau[1] += donnees
+        Lecteur().feed(lire(web / "index.html"))
+        return cles | set(VOYANTS_FRANCAIS)
+
+    def test_aucun_texte_du_serveur_sans_anglais(self):
+        from tablette.anglais import SERVEUR
+        self.assertEqual(sorted(self.cles_du_serveur() - set(SERVEUR)), [])
+        self.assertEqual(sorted(self.lignes_du_script() - set(SERVEUR)), [])
+
+    def test_aucun_texte_de_la_page_sans_anglais(self):
+        from tablette.anglais import PAGE
+        self.assertTrue(set(VOYANTS_FRANCAIS) <= set(planche.VOYANTS))
+        self.assertEqual(sorted(self.cles_de_la_page() - set(PAGE)), [])
+
+    def test_rien_en_trop_dans_le_catalogue(self):
+        """Une phrase changée dans le code laisse l'ancienne ici : à retirer."""
+        from tablette.anglais import PAGE, SERVEUR
+        self.assertEqual(sorted(set(SERVEUR) - self.cles_du_serveur() - self.lignes_du_script()),
+                         [])
+        self.assertEqual(sorted(set(PAGE) - self.cles_de_la_page()), [])
+
+    def test_chaque_traduction_garde_ses_valeurs_et_sa_forme(self):
+        from tablette.anglais import PAGE, SERVEUR
+        for francais, anglais in [*SERVEUR.items(), *PAGE.items()]:
+            with self.subTest(francais):
+                self.assertEqual(set(re.findall(r"\{(\w+)\}", francais)),
+                                 set(re.findall(r"\{(\w+)\}", anglais)))
+                # Retrait de la console, et espace après une question posée.
+                self.assertEqual(len(francais) - len(francais.lstrip()),
+                                 len(anglais) - len(anglais.lstrip()))
+                self.assertEqual(francais.endswith(" "), anglais.endswith(" "))
+
+    def test_une_phrase_de_la_page_et_du_serveur_se_traduit_pareil(self):
+        from tablette.anglais import PAGE, SERVEUR
+        for cle in set(PAGE) & set(SERVEUR):
+            self.assertEqual(PAGE[cle], SERVEUR[cle], cle)
+
+    # ------------------------------------------------------------ Texte
+
+    def test_un_texte_garde_son_francais_et_se_traduit_au_dernier_moment(self):
+        from dataclasses import asdict
+
+        from tablette.diagnostic import Point
+        from tablette.langues import Texte, dans
+        point = Point(Texte("Réseau du PC"), "ok", Texte("{reseaux} en privé", reseaux=[
+            Texte("« {nom} »", nom="Maison"), "Bureau"]))
+        self.assertEqual(point.titre, "Réseau du PC")        # la langue du PC
+        self.assertEqual(point.detail, "« Maison », Bureau en privé")
+        copie = asdict(point)                                # comme /api/diagnostic
+        self.assertEqual(dans(copie, "en"), {"titre": "PC network", "etat": "ok",
+                                             "detail": '"Maison", Bureau set to Private',
+                                             "solution": ()})
+        self.assertEqual(dans(copie, "fr")["detail"], "« Maison », Bureau en privé")
+        # Des nombres dans une liste de valeurs : écrits tels quels.
+        self.assertEqual(Texte("{reseaux} en privé", reseaux=["Maison", 2]).dans("en"),
+                         "Maison, 2 set to Private")
+
+    def test_sans_traduction_le_francais_plutot_que_rien(self):
+        from tablette.langues import Texte
+        self.assertEqual(Texte("Une phrase oubliée ({n})", n=3).dans("en"),
+                         "Une phrase oubliée (3)")
+        self.assertIn("Une phrase oubliée ({n})", self.langues.manquants)
+
+    def test_la_langue_du_pc_au_lancement(self):
+        from tablette.langues import Texte
+        self.langues.regler_pc("en")
+        self.assertEqual(Texte("Vos écrans :"), "Your displays:")
+        self.langues.regler_pc("de")                          # inconnue : la référence
+        self.assertEqual(Texte("Vos écrans :"), "Vos écrans :")
+
+    # ------------------------------------------------------------ laquelle
+
+    def test_langue_du_navigateur(self):
+        du_navigateur = self.langues.du_navigateur
+        self.assertEqual(du_navigateur("fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7"), "fr")
+        self.assertEqual(du_navigateur("en-GB,en;q=0.9"), "en")
+        self.assertEqual(du_navigateur("en;q=0.5, fr-CA;q=0.8"), "fr")     # par préférence
+        self.assertEqual(du_navigateur("de-DE,de;q=0.9,fr;q=0.8"), "fr")   # la première parlée
+        self.assertEqual(du_navigateur("de-DE,de;q=0.9"), "en")            # aucune : l'anglais
+        self.assertEqual(du_navigateur(""), "fr")                          # rien : la référence
+        self.assertEqual(du_navigateur(None), "fr")
+        self.assertEqual(du_navigateur("*"), "fr")
+        self.assertEqual(self.langues.de_la_tablette("en", "fr-FR"), "en")  # choix de la page
+        self.assertEqual(self.langues.de_la_tablette("xx", "en-US"), "en")  # cookie tordu
+
+    def test_langue_du_pc_retenue_sinon_celle_de_windows(self):
+        chemin = self.dossier / "DCS-Tablette" / "langue.txt"
+        du_pc = self.langues.du_pc
+        self.assertEqual(du_pc(chemin, windows=lambda: "en"), "en")
+        self.assertEqual(du_pc(chemin, windows=lambda: None), "fr")       # hors de Windows
+        self.langues.retenir("fr", chemin)
+        self.assertEqual(du_pc(chemin, windows=lambda: "en"), "fr")
+        self.langues.retenir("auto", chemin)
+        self.assertFalse(chemin.exists())
+        self.assertEqual(du_pc(chemin, windows=lambda: "en"), "en")
+
+    def test_option_langue_ou_qu_elle_soit(self):
+        """`Installer.bat --langue en` la passe après `installer` : lue quand
+        même, retenue, et retirée des arguments. Pas retenue par le pilote
+        de l'écran virtuel, lancé en administrateur."""
+        from unittest import mock
+
+        from tablette.__main__ import regler_langue
+        fichier = self.dossier / "DCS-Tablette" / "langue.txt"
+        with mock.patch.dict(os.environ, {"LOCALAPPDATA": str(self.dossier)}):
+            self.assertEqual(regler_langue(["installer", "--langue", "en", "--essai"]),
+                             ["installer", "--essai"])
+            self.assertEqual((self.langues.pc(), lire(fichier).strip()), ("en", "en"))
+            self.assertEqual(regler_langue([]), [])
+            self.assertEqual(self.langues.pc(), "en")                     # retenue
+            regler_langue(["--langue", "auto"])
+            self.assertFalse(fichier.exists())
+            regler_langue(["--langue", "fr", "pilote-ecran-virtuel", "--mode", "1x1@60",
+                           "--journal", "j"])
+            self.assertEqual(self.langues.pc(), "fr")
+            self.assertFalse(fichier.exists())
+
+    # ------------------------------------------------------------ partout
+
+    def test_console_du_pc_en_anglais(self):
+        from tablette.diagnostic import Point, lignes_console
+        from tablette.installation import configurer_ecrans
+        from tablette.langues import Texte
+        self.langues.regler_pc("en")
+        self.assertEqual(lignes_console([Point(Texte("Réseau du PC"), "repare",
+                                               Texte("non vérifié"),
+                                               (Texte("Relancer Installer.bat."),))]),
+                         ["  FIXED    PC network: not checked",
+                          "           → Run Installer.bat again."])
+        complet, lignes = configurer_ecrans(self.dossier, ecrans=[(0, 0, 2560, 1440, True)],
+                                            ouvert=lambda: False)
+        self.assertFalse(complet)
+        self.assertEqual(lignes[0], "No free display right next to or below the main display.")
+        self.assertEqual(lignes[0].dans("fr"),
+                         "Pas d'écran libre collé à droite ou sous l'écran principal.")
+
+    def test_script_de_mise_a_jour_en_anglais(self):
+        from tablette.mise_a_jour import REMPLACER, script_dans
+        anglais = script_dans(REMPLACER, "en")
+        self.assertTrue(anglais.isascii())                     # lu par cmd tel quel
+        self.assertIn("echo Updating DCS Tablette: waiting for it to close...", anglais)
+        self.assertIn('echo into "%DT_CIBLE%"', anglais)
+        self.assertNotIn("Mise a jour", anglais)
+        self.assertEqual(script_dans(REMPLACER, "fr"), REMPLACER)
+        # Le reste du script ne bouge pas.
+        self.assertEqual([l for l in anglais.splitlines() if not l.startswith(("echo ", "title "))],
+                         [l for l in REMPLACER.splitlines()
+                          if not l.startswith(("echo ", "title "))])
+
+    def test_notes_de_version_en_anglais_si_elles_en_ont(self):
+        from tablette.mise_a_jour import nouveautes
+        notes = "## Nouveau\n\n- Une nouveauté.\n\n## New\n\n- Something new.\n\n## Mettre à jour\n"
+        self.assertEqual(nouveautes(notes, langue="en"), ["Something new."])
+        self.assertEqual(nouveautes(notes, langue="fr"), ["Une nouveauté."])
+        self.assertEqual(nouveautes("## Nouveau\n\n- Seulement.\n", langue="en"), ["Seulement."])
+
+    def test_libelles_des_appareils_et_des_ecrans(self):
+        for profil in (*appareils.PROFILS, appareils.GENERIQUE):
+            d = profil.description("en")
+            texte = " ".join([d["libelle"], *(e["libelle"] for e in d["ecrans"])])
+            self.assertNotRegex(texte, r"\b(gauche|droit|centre|Appareil|Autre|OTAN)\b")
+        ecrans = {e["libelle"] for e in fa18c.PROFIL.description("en")["ecrans"]}
+        self.assertEqual(ecrans, {"Left DDI", "Right DDI", "AMPCD"})
+        self.assertEqual(fa18c.PROFIL.description()["ecrans"][0]["libelle"], "DDI gauche")
+
+    def test_bandeau_des_instruments_en_anglais(self):
+        from tablette.instruments import OTAN, lecture
+        vol = {"carb": 300, "train": 1.0, "aerofreins": 0.5, "inc": 0.07}
+        bandeau = {b["titre"]: b["texte"] for b in lecture(vol, OTAN, "en")["bandeau"]}
+        self.assertEqual(set(bandeau), {"AOA", "FUEL", "GEAR", "SPEED BRAKE"})
+        self.assertEqual(bandeau["GEAR"], "DOWN")
+
+    def test_l_api_parle_la_langue_de_chaque_tablette(self):
+        from fastapi.testclient import TestClient
+
+        from tablette.app import create_app
+        from tablette.config import Config
+        app = create_app(Config(saved_games=Path(".")),
+                         FauxPont(connecte=True, appareil="FA-18C_hornet"),
+                         dossier_dcs=lambda: None)
+        anglaise, francaise = {"Accept-Language": "en-US,en;q=0.9"}, {"Accept-Language": "fr-FR"}
+        client = TestClient(app)
+        self.assertEqual(client.get("/api/profil", headers=anglaise).json()["ecrans"][0]["libelle"],
+                         "Left DDI")
+        self.assertEqual(client.get("/api/profil", headers=francaise).json()["ecrans"][0]["libelle"],
+                         "DDI gauche")
+        self.assertEqual(client.post("/api/bouton", json={"ecran": "?"}, headers=anglaise).json(),
+                         {"detail": "unknown display"})
+        self.assertIn("FC3 aircraft", [p["libelle"] for p in
+                                       client.get("/api/profils", headers=anglaise).json()])
+        self.assertEqual(client.get("/api/etat", headers=anglaise).json()["langue"], "en")
+        textes = client.get("/textes.js", headers=anglaise)
+        self.assertTrue(textes.text.startswith('const LANGUE = "en";'))
+        self.assertIn('"Vérifier": "Check"', textes.text)
+        self.assertIn("Cookie", textes.headers["Vary"])
+        self.assertIn("const TEXTES = {}", client.get("/textes.js", headers=francaise).text)
+        # Choisie sur la page : elle l'emporte sur le navigateur.
+        choisie = TestClient(app, cookies={"tablette_langue": "fr"})
+        self.assertEqual(choisie.get("/api/profil", headers=anglaise).json()["ecrans"][0]["libelle"],
+                         "DDI gauche")
+        self.assertTrue(choisie.get("/textes.js", headers=anglaise).text
+                        .startswith('const LANGUE = "fr";'))
+
+    def test_page_chargee_avec_ses_textes(self):
+        index = lire(RACINE / "src" / "tablette" / "web" / "index.html")
+        self.assertLess(index.index('src="/textes.js"'), index.index('src="/app.js"'))
+        self.assertIn('data-langue="en"', index)
+
+    def test_documentation_dans_les_deux_langues(self):
+        from tablette.installation import LIVRES
+        zip_ = RACINE / "distribution" / "tablette" / "zip"
+        self.assertTrue((zip_ / "README.txt").is_file())
+        # Tout ce que le zip livre est copié à l'installation, et effacé à la désinstallation.
+        self.assertLessEqual({f.name for f in zip_.iterdir()}, set(LIVRES))
+        self.assertIn("README.en.md", lire(RACINE / "README.md"))
+        self.assertIn("README.md", lire(RACINE / "README.en.md"))
 
 
 if __name__ == "__main__":

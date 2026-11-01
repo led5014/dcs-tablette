@@ -351,6 +351,25 @@ cadrans, et la page redemande les siens quand elle change.
   pas. Mesuré sur la capture Steam : 67 ms. `--captures-entieres` coupe tout.
   La vignette de Steam est refaite, mais `screenshots.vdf` garde la taille
   d'origine : Steam le tient ouvert et le réécrit.
+- Les langues (`langues.py`, 01/11/2026) : français ou anglais. Le texte
+  s'écrit toujours en français dans le code ; `Texte("… {valeur} …",
+  valeur=…)` le traduit à la demande d'après `anglais.py`, dont les clés sont
+  les phrases françaises. Comme chaîne, un `Texte` vaut sa traduction dans la
+  langue du PC (celle de Windows, ou `--langue en|fr|auto`, retenue dans
+  `%LOCALAPPDATA%\DCS-Tablette\langue.txt`) ; la tablette a la sienne (choix
+  FR / EN du panneau Diagnostic, cookie `tablette_langue`, sinon
+  `Accept-Language`), et l'API lui traduit chaque `Texte` au dernier moment
+  (`langues.dans`). Un point du diagnostic peut ainsi s'afficher en français
+  sur le PC et en anglais sur la tablette. La page passe par `tr('…')` ; ses
+  textes lui arrivent par `/textes.js`, avec la langue décidée par le
+  serveur. Français si la langue demandée est le français, anglais pour toute
+  autre, français faute de rien savoir. Une phrase changée dans le code doit
+  l'être dans `anglais.py` : `TestLangues` refuse une clé manquante ou en
+  trop, et une traduction qui perd une `{valeur}`. Une f-string ou un `+`
+  aplatissent un `Texte` dans la langue du PC : ce qui part vers la tablette
+  s'assemble par des `Texte` imbriqués. Les décisions prises sur un texte
+  (« commence par aucun ») regardent le français, la référence
+  (`dans(texte, "fr")`).
 
 ## Essayé et écarté
 

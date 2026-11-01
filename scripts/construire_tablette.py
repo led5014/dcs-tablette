@@ -7,7 +7,10 @@ Rend dist/DCS-Tablette-<version>.zip, qui contient un dossier DCS-Tablette/ :
     Installer.bat        scripts dans DCS + écrans
     Desinstaller.bat
     LISEZ-MOI.txt
+    README.txt           le même, en anglais
     _internal/           Python et les bibliothèques
+Tout distribution/tablette/zip/ y est copié : un fichier ajouté là voyage
+dans le zip, et doit figurer dans installation.LIVRES pour être installé.
 Rien à installer chez celui qui le télécharge, pas même Python.
 """
 import shutil

@@ -43,6 +43,7 @@ from pathlib import Path
 from typing import Callable, Dict, Optional, Tuple
 
 from . import VERSION
+from .langues import ANGLAIS, Texte, message, pc, traduire
 
 DEPOT = "led5014/dcs-tablette"
 API = f"https://api.github.com/repos/{DEPOT}/releases/latest"
@@ -78,6 +79,18 @@ echo dans "%DT_CIBLE%"
 pause
 exit /b 1
 """
+
+
+def script_dans(script: str, langue: str) -> str:
+    """Le script avec ses lignes « title » et « echo » traduites (catalogue :
+    anglais.py). En ASCII, comme le reste : cmd lit le fichier tel quel."""
+    lignes = []
+    for ligne in script.split("\n"):
+        commande, espace, texte = ligne.partition(" ")
+        if commande in ("title", "echo") and espace:
+            ligne = f"{commande} {traduire(texte, langue)}"
+        lignes.append(ligne)
+    return "\n".join(lignes)
 
 
 def numero(version: str) -> Tuple[int, ...]:
@@ -137,9 +150,11 @@ def plus_recente(publiee: Optional[Dict], actuelle: str = VERSION) -> bool:
     return publiee is not None and numero(publiee["version"]) > numero(actuelle)
 
 
-def nouveautes(notes: str, lignes: int = 6) -> list:
-    """Les premières puces de la section « Nouveau » des notes de version."""
-    section = notes.split("## Nouveau", 1)[-1].split("\n## ", 1)[0]
+def nouveautes(notes: str, lignes: int = 6, langue: str = "") -> list:
+    """Les premières puces de la section « Nouveau » des notes de version ;
+    de la section « New », en anglais, si les notes en ont une."""
+    titre = "## New" if (langue or pc()) == ANGLAIS and "## New\n" in notes else "## Nouveau"
+    section = notes.split(titre, 1)[-1].split("\n## ", 1)[0]
     puces = [re.sub(r"\*\*|`", "", l.strip()[2:]) for l in section.splitlines()
              if l.strip().startswith("- ")]
     return [p if len(p) <= 110 else p[:107] + "…" for p in puces[:lignes]]
@@ -157,12 +172,13 @@ def telecharger(publiee: Dict, dossier: Path,
             empreinte.update(bloc)
             f.write(bloc)
     if empreinte.hexdigest() != publiee["empreinte"]:
-        raise OSError("le fichier téléchargé n'est pas celui publié (empreinte différente)")
+        raise OSError(Texte("le fichier téléchargé n'est pas celui publié (empreinte "
+                            "différente)"))
     with zipfile.ZipFile(zip_) as z:
         z.extractall(dossier / "extrait")
     source = dossier / "extrait" / NOM
     if not (source / f"{NOM}.exe").exists():
-        raise OSError(f"{NOM}.exe absent du zip")
+        raise OSError(Texte("{exe} absent du zip", exe=f"{NOM}.exe"))
     return source
 
 
@@ -184,7 +200,7 @@ def lancer_remplacement(source: Path, cible: Path, dossier: Path, zip_: Path) ->
     """Le script qui attend la fermeture, copie, relance et fait le ménage
     (le zip et son extraction, dans `dossier`), dans sa propre console."""
     script = Path(tempfile.gettempdir()) / "dcs-tablette-mise-a-jour.bat"
-    script.write_text(REMPLACER.replace("\n", "\r\n"), encoding="ascii")
+    script.write_text(script_dans(REMPLACER, pc()).replace("\n", "\r\n"), encoding="ascii")
     subprocess.Popen(commande(script),
                      env=environnement_remplacement(source, cible, dossier, zip_),
                      creationflags=getattr(subprocess, "CREATE_NEW_CONSOLE", 0),
@@ -200,21 +216,26 @@ def appliquer(afficher: Callable[[str], None], publiee: Optional[Dict]) -> bool:
         return False                    # depuis le code source : git pull
     if not plus_recente(publiee):
         return False
-    afficher(f"Nouvelle version : DCS Tablette {publiee['version']} (vous avez {VERSION}).")
+    afficher(Texte("Nouvelle version : DCS Tablette {nouvelle} (vous avez {version}).",
+                   nouvelle=publiee["version"], version=VERSION))
     for puce in nouveautes(publiee["notes"]):
         afficher(f"  - {puce}")
     taille = publiee.get("taille", 0) / 1e6
-    afficher(f"Mise à jour, réglages gardés. Téléchargement ({taille:.0f} Mo)…" if taille
-             else "Mise à jour, réglages gardés. Téléchargement…")
+    afficher(Texte("Mise à jour, réglages gardés. Téléchargement ({taille} Mo)…",
+                   taille=f"{taille:.0f}") if taille
+             else Texte("Mise à jour, réglages gardés. Téléchargement…"))
     dossier = Path(tempfile.mkdtemp(prefix="dcs-tablette-"))
     try:
         source = telecharger(publiee, dossier)
     except Exception as e:              # noqa: BLE001 — jamais bloquant
         shutil.rmtree(dossier, ignore_errors=True)
-        afficher(f"Mise à jour impossible : {e}. On continue avec la {VERSION}.")
-        afficher(f"À la main : https://github.com/{DEPOT}/releases/latest\n")
+        afficher(Texte("Mise à jour impossible : {erreur}. On continue avec la {version}.",
+                       erreur=message(e), version=VERSION))
+        afficher(Texte("À la main : {adresse}",
+                       adresse=f"https://github.com/{DEPOT}/releases/latest") + "\n")
         return False
     lancer_remplacement(source, Path(sys.executable).parent, dossier,
                         dossier / f"{NOM}-{publiee['version']}.zip")
-    afficher("Fichier vérifié. DCS Tablette se ferme, se met à jour et se relance tout seul.")
+    afficher(Texte("Fichier vérifié. DCS Tablette se ferme, se met à jour et se relance "
+                   "tout seul."))
     return True

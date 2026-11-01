@@ -13,6 +13,7 @@ sur le forum DCS — pas confirmé par ED, à vérifier au premier vol.
 """
 from ..instruments import HELICO_KT
 from . import Bouton, Ecran, Profil
+from ..langues import Texte
 
 
 def _cadre_mfd():
@@ -33,8 +34,8 @@ PROFIL = Profil(
     libelle="OH-58D Kiowa",
     noms_dcs=("OH58D",),
     ecrans=(
-        Ecran("mfd_gauche", "MFD gauche", "LEFT_MFCD", {"": 23}, _CADRE),
-        Ecran("mfd_droit", "MFD droit", "RIGHT_MFCD", {"": 11}, _CADRE),
+        Ecran("mfd_gauche", Texte("MFD gauche"), "LEFT_MFCD", {"": 23}, _CADRE),
+        Ecran("mfd_droit", Texte("MFD droit"), "RIGHT_MFCD", {"": 11}, _CADRE),
     ),
     kneeboard=51,
     instruments=HELICO_KT,

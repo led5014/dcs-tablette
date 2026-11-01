@@ -13,6 +13,7 @@ from dataclasses import replace
 from .. import planche
 from ..instruments import OTAN
 from . import Ecran, Profil, couronne_horaire, reperes
+from ..langues import Texte
 
 DOSSIER_KNEEBOARD = "FA-18C_hornet"
 
@@ -33,9 +34,9 @@ PROFIL = Profil(
     noms_dcs=("FA-18C_hornet",),
     ecrans=(
         # Verre arrondi, mesuré sur l'export : rayon ≈ 1/6 du côté.
-        Ecran("ddi_gauche", "DDI gauche", "LEFT_MFCD", {"": 35}, _CADRE, arrondi=0.17,
+        Ecran("ddi_gauche", Texte("DDI gauche"), "LEFT_MFCD", {"": 35}, _CADRE, arrondi=0.17,
               reperes_x=REPERES_X, reperes_y=REPERES_Y),
-        Ecran("ddi_droit", "DDI droit", "RIGHT_MFCD", {"": 36}, _CADRE, arrondi=0.17,
+        Ecran("ddi_droit", Texte("DDI droit"), "RIGHT_MFCD", {"": 36}, _CADRE, arrondi=0.17,
               reperes_x=REPERES_X, reperes_y=REPERES_Y),
         Ecran("ampcd", "AMPCD", "CENTER_MFCD", {"": 37}, _CADRE, arrondi=0.17,
               reperes_x=REPERES_X, reperes_y=REPERES_Y),

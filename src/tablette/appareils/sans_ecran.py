@@ -24,6 +24,7 @@ from dataclasses import replace
 
 from ..instruments import HELICO_KT, HELICO_METRIQUE, METRIQUE, OTAN
 from . import Bouton, Ecran, Profil
+from ..langues import Texte
 
 # MiG-29A Fulcrum : pas de MFD, mais l'HDD, le petit écran tête basse qui
 # recopie le HUD (ou montre la situation tactique). Le module l'exporte de
@@ -105,7 +106,7 @@ AJS37 = Profil(id="ajs37", libelle="AJS-37 Viggen", noms_dcs=("AJS37",), instrum
 # mètres. Tous biréacteurs.
 FC3 = Profil(
     id="fc3",
-    libelle="Appareil FC3",
+    libelle=Texte("Appareil FC3"),
     noms_dcs=("Su-25T", "Su-33", "Su-27", "J-11A", "Su-25", "MiG-29A", "MiG-29S"),
     kneeboard=100,
     instruments=replace(METRIQUE, moteurs=2),
@@ -113,7 +114,7 @@ FC3 = Profil(
 
 FC3_OTAN = Profil(
     id="fc3_otan",
-    libelle="Appareil FC3 (OTAN)",
+    libelle=Texte("Appareil FC3 (OTAN)"),
     noms_dcs=("F-15C", "A-10A", "MiG-29G"),
     kneeboard=100,
     instruments=replace(OTAN, moteurs=2),

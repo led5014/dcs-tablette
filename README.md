@@ -1,5 +1,7 @@
 # DCS Tablette
 
+**English:** [README.en.md](README.en.md)
+
 [![Discord : L'atelier DCS OS](https://img.shields.io/badge/Discord-L%27atelier%20DCS%20OS-5865F2?logo=discord&logoColor=white)](https://discord.gg/4KJYjt7pbc)
 [![Dernière version](https://img.shields.io/github/v/release/led5014/dcs-tablette?label=version)](../../releases/latest)
 
@@ -236,6 +238,22 @@ plus sur les écrans, DCS repassé en plein écran ou sur une autre
 configuration (une fois DCS fermé : il réécrit ses réglages en quittant).
 Rien n'est installé sans le demander : l'écran virtuel manquant, c'est
 `Installer.bat`.
+
+## Langue
+
+- **Sur la tablette** : la page s'affiche en français si le navigateur est
+  en français, en anglais sinon. Pour changer : toucher la pastille en haut
+  à gauche (elle ouvre le panneau Diagnostic), puis **FR** ou **EN**. Le
+  choix est retenu sur cette tablette : chaque tablette ou téléphone garde
+  le sien.
+- **Sur le PC** (fenêtre de DCS Tablette, installation, mise à jour) : en
+  français si Windows est en français, en anglais sinon. Pour forcer une
+  langue, lancer une fois `DCS-Tablette.exe --langue en` (ou `--langue fr`) :
+  le choix est retenu, et `--langue auto` fait de nouveau suivre Windows. Le
+  plus simple : *Win + R*, taper
+  `%LOCALAPPDATA%\Programs\DCS-Tablette\DCS-Tablette.exe --langue en` puis
+  Entrée. L'option marche aussi avec l'installation :
+  `Installer.bat --langue en`.
 
 ## Problèmes courants
 

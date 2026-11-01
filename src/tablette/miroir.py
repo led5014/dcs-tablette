@@ -30,6 +30,7 @@ from typing import Callable, Optional, Tuple
 
 from .copie import Rect
 from .ecrans_dcs import PasDExport, options_affichage, zone_kneeboard
+from .langues import Texte
 
 PERIODE_MS = 100
 VALIDITE_PLACE_S = 2.0
@@ -107,7 +108,7 @@ class Miroir(threading.Thread):
         try:
             self._boucle()
         except Exception:                         # noqa: BLE001
-            journal.exception("Miroir du kneeboard arrêté")
+            journal.exception(Texte("Miroir du kneeboard arrêté"))
 
     def _ecran_principal_si_necessaire(self) -> Optional[Rect]:
         """La partie utile de l'écran principal (sans la barre des tâches, qui
@@ -192,7 +193,7 @@ class Miroir(threading.Thread):
                 # Une seule trace : répétée dix fois par seconde, elle
                 # noierait la fenêtre du serveur.
                 if not etat.get("erreur_dite"):
-                    journal.exception("Miroir du kneeboard : image ignorée")
+                    journal.exception(Texte("Miroir du kneeboard : image ignorée"))
                     etat["erreur_dite"] = True
                 cacher()
             racine.after(PERIODE_MS, tic)

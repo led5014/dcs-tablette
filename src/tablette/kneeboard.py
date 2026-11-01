@@ -35,6 +35,8 @@ from typing import Dict, List, Optional, Tuple, Union
 
 from PIL import Image
 
+from .langues import Texte
+
 EXTENSIONS = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg"}
 # Lues par DCS, pas par les navigateurs : converties en PNG au passage.
 CONVERTIES = {".dds", ".tga", ".bmp"}
@@ -166,14 +168,15 @@ def lister_carnets(saved_games: Path, appareil: str,
              + _images(module / "Cockpit" / "Scripts" / "KNEEBOARD" / "pages" if module else None)
              + _images(racine / appareil) + _images(racine))
     if avion:
-        carnets.append(Carnet("avion", "Kneeboard de l'avion", list(avion)))
+        carnets.append(Carnet("avion", Texte("Kneeboard de l'avion"), list(avion)))
 
     carte = carte_de(en_cours) if en_cours else None
     planches = _cartes(str(dcs)).get(carte) if dcs and carte else None
     if planches is not None:
         pages = _images(planches / appareil) + _images(planches)
         if pages:
-            carnets.append(Carnet(f"carte:{carte}", f"Cartes : {carte}", list(pages)))
+            carnets.append(Carnet(f"carte:{carte}", Texte("Cartes : {carte}", carte=carte),
+                                  list(pages)))
 
     dossier_missions = saved_games / "Missions"
     if dossier_missions.is_dir():

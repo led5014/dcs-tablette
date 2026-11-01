@@ -21,6 +21,7 @@ from dataclasses import replace
 
 from ..instruments import HELICO_KT
 from . import Bouton, Ecran, Profil, reperes
+from ..langues import Texte
 
 DOSSIER_KNEEBOARD = "AH-64D_BLK_II"
 
@@ -55,9 +56,9 @@ PROFIL = Profil(
     libelle="AH-64D Apache",
     noms_dcs=("AH-64D_BLK_II",),
     ecrans=(
-        Ecran("mpd_gauche", "MPD gauche", "LEFT_MFCD", {"pilote": 42, "cpg": 44},
+        Ecran("mpd_gauche", Texte("MPD gauche"), "LEFT_MFCD", {"pilote": 42, "cpg": 44},
               _CADRE, par_cote=6, reperes_x=REPERES_X, reperes_y=REPERES_Y),
-        Ecran("mpd_droit", "MPD droit", "RIGHT_MFCD", {"pilote": 43, "cpg": 45},
+        Ecran("mpd_droit", Texte("MPD droit"), "RIGHT_MFCD", {"pilote": 43, "cpg": 45},
               _CADRE, par_cote=6, reperes_x=REPERES_X, reperes_y=REPERES_Y),
         Ecran("tedac", "TEDAC", "TEDAC", {"cpg": 51}, (), par_cote=6),
     ),
