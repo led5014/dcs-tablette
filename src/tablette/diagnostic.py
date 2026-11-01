@@ -251,7 +251,7 @@ class Diagnostic:
         titre = Texte("Écrans de DCS")
         support = support_ecrans(ecrans, essai, physique)
         if support is None:
-            return Point(titre, ATTENTE, Texte("en attente de l'écran virtuel")), None
+            return self._en_attente(ecrans, lance), None
         ecran, resolution = support
         ou = Texte("en bas de la vue") if essai else Texte("sur le second écran")
         fichier = self.saved_games / "Config" / "MonitorSetup" / NOM_FICHIER
@@ -278,6 +278,45 @@ class Diagnostic:
                                           "écrans du cockpit {ou}", nom=NOM_AFFICHE, ou=ou)
                      ), resolution
 
+    def _sous_dcs(self, ecrans: list, support: Optional[Tuple[int, int, int, int]] = None
+                  ) -> Tuple[int, int, list]:
+        """La fenêtre de DCS telle que réglée dans options.lua (elle part du
+        coin haut gauche du principal), et les écrans réels qu'elle recouvre,
+        hors du principal et du `support` des écrans du cockpit."""
+        try:
+            _, largeur, hauteur = options_affichage(self.saved_games)
+        except PasDExport:
+            return 0, 0, []
+        principal = next((m for m in ecrans if m[4]), None)
+        if principal is None:
+            return largeur, hauteur, []
+        px, py = principal[:2]
+        recouverts = []
+        for m in ecrans:
+            x, y, l, h = m[0] - px, m[1] - py, m[2], m[3]
+            if m[4] or (x, y, l, h) == tuple(support or ()) or (len(m) > 5 and m[5]):
+                continue
+            if x < largeur and 0 < x + l and y < hauteur and 0 < y + h:
+                recouverts.append(Texte("votre écran {largeur}×{hauteur}", largeur=l, hauteur=h))
+        return largeur, hauteur, recouverts
+
+    def _en_attente(self, ecrans: list, lance: bool) -> Point:
+        """Pas d'écran à sa place pour ceux du cockpit. La fenêtre de DCS,
+        réglée pour l'ancienne disposition, recouvre parfois alors un écran du
+        pilote (photo d'un pilote, 01/11/2026 : écran virtuel repassé en
+        1920 × 1080 à gauche, son écran réel à sa place) : c'est à régler."""
+        titre = Texte("Écrans de DCS")
+        largeur, hauteur, recouverts = self._sous_dcs(ecrans)
+        if not recouverts:
+            return Point(titre, ATTENTE, Texte("en attente de l'écran virtuel"))
+        return Point(titre, A_FAIRE, Texte(
+            "en attente de l'écran virtuel, et la fenêtre de DCS ({largeur}×{hauteur}) "
+            "recouvre {recouverts}", largeur=largeur, hauteur=hauteur, recouverts=recouverts), (
+            Texte("Quitter DCS : DCS Tablette remet l'écran virtuel à sa place et règle DCS, "
+                  "puis relancer DCS.") if lance else
+            Texte("Remettre d'abord l'écran virtuel (point « Écran virtuel ») : DCS Tablette "
+                  "règle ensuite DCS tout seul."),))
+
     def _ne_tombe_plus(self, support: Tuple[int, int, int, int], ecrans: list) -> Texte:
         """Pourquoi « Tablette DCS » ne tombe plus sur les écrans : l'écran qui
         reçoit ceux du cockpit a changé (définition, place). La fenêtre de DCS,
@@ -285,24 +324,16 @@ class Diagnostic:
         pilote : c'est ce qu'il voit, DCS qui déborde sur cet écran-là."""
         principal = next(m for m in ecrans if m[4])
         px, py = principal[:2]
-        places = [((m[0] - px, m[1] - py) + tuple(m[2:4]), m) for m in ecrans]
         _, _, l, h = support
-        sur = next((m for zone, m in places if zone == tuple(support)), principal)
+        sur = next((m for m in ecrans if (m[0] - px, m[1] - py) + tuple(m[2:4]) == tuple(support)),
+                   principal)
         if sur[4]:
             ecran = Texte("de l'écran principal ({largeur}×{hauteur})", largeur=l, hauteur=h)
         elif len(sur) > 5 and sur[5]:
             ecran = Texte("de l'écran virtuel ({largeur}×{hauteur})", largeur=l, hauteur=h)
         else:
             ecran = Texte("du second écran ({largeur}×{hauteur})", largeur=l, hauteur=h)
-        try:
-            _, largeur, hauteur = options_affichage(self.saved_games)
-        except PasDExport:
-            largeur = hauteur = 0
-        # Les écrans réels sous la fenêtre de DCS, hors du principal et du support.
-        recouverts = [Texte("votre écran {largeur}×{hauteur}", largeur=m[2], hauteur=m[3])
-                      for (x, y, zl, zh), m in places
-                      if not m[4] and m is not sur and not (len(m) > 5 and m[5])
-                      and x < largeur and 0 < x + zl and y < hauteur and 0 < y + zh]
+        largeur, hauteur, recouverts = self._sous_dcs(ecrans, support)
         if recouverts:
             return Texte("« {nom} » ne tombe plus sur les écrans : les écrans du cockpit "
                          "sortent {ecran}, et la fenêtre de DCS ({largeur}×{hauteur}) "

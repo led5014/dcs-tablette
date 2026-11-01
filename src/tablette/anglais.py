@@ -197,6 +197,18 @@ SERVEUR = {
     "Ou relancer Installer.bat pour passer à « {nom} ».":
         "Or run Installer.bat again to switch to \"{nom}\".",
     "en attente de l'écran virtuel": "waiting for the virtual display",
+    "en attente de l'écran virtuel, et la fenêtre de DCS ({largeur}×{hauteur}) recouvre "
+    "{recouverts}":
+        "waiting for the virtual display, and the DCS window ({largeur}×{hauteur}) covers "
+        "{recouverts}",
+    "Quitter DCS : DCS Tablette remet l'écran virtuel à sa place et règle DCS, puis relancer "
+    "DCS.":
+        "Quit DCS: DCS Tablette puts the virtual display back and sets up DCS, then restart "
+        "DCS.",
+    "Remettre d'abord l'écran virtuel (point « Écran virtuel ») : DCS Tablette règle "
+    "ensuite DCS tout seul.":
+        "First put the virtual display back (\"Virtual display\" item): DCS Tablette then sets "
+        "up DCS by itself.",
     "en bas de la vue": "at the bottom of the view",
     "sur le second écran": "on the second display",
     "« {nom} » : {nombre} écrans {ou}": "\"{nom}\": {nombre} displays {ou}",

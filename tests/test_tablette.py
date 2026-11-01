@@ -2675,12 +2675,38 @@ class TestDiagnostic(unittest.TestCase):
                          'outside the virtual display (1920×1080), and the DCS window '
                          '(5120×1440) covers your 1080×1920 display')
 
+    def test_ecran_virtuel_parti_dcs_recouvre_l_ecran_qui_a_pris_sa_place(self):
+        """Paramètres → Écran d'un pilote, le 01/11/2026 : l'écran virtuel est
+        repassé en 1920×1080 à gauche, son écran réel a pris sa place à droite,
+        et DCS, toujours en 5120×1440, le recouvre. « En attente » ne suffit
+        pas : c'est à régler, et on dit quel écran DCS recouvre."""
+        self.choix = {"mode": "second_ecran", "physique": False}
+        self.lance = True
+        self.ecrans = [(0, 0, 2560, 1440, True, False), (2560, 0, 2560, 1440, False, False),
+                       (-1920, 420, 1920, 1080, False, True)]
+        point = self.points()["Écrans de DCS"]
+        self.assertEqual((point.etat, point.detail),
+                         ("a_faire", "en attente de l'écran virtuel, et la fenêtre de DCS "
+                                     "(5120×1440) recouvre votre écran 2560×1440"))
+        self.assertIn("Quitter DCS", point.solution[0])
+        self.lance = False
+        self.virtuel = ("manque", "non placé", [])
+        point = self.points()["Écrans de DCS"]
+        self.assertEqual(point.etat, "a_faire")
+        self.assertIn("Remettre d'abord l'écran virtuel", point.solution[0])
+        # Ailleurs que sous la fenêtre de DCS, un écran réel ne gêne pas : on attend.
+        self.ecrans = [(0, 0, 2560, 1440, True, False), (-2560, 0, 2560, 1440, False, False)]
+        self.assertEqual(self.points()["Écrans de DCS"].etat, "attente")
+
     def test_ecran_reel_pris_seulement_s_il_a_ete_donne(self):
         self.choix = {"mode": "second_ecran", "physique": False}
         self.ecrans = [(0, 0, 2560, 1440, True, False), (2560, 0, 2560, 1440, False, False)]
         self.virtuel = ("manque", "aucun : les écrans du cockpit iraient sur la vue", [])
-        points = self.points()
-        self.assertEqual(points["Écrans de DCS"].etat, "attente")
+        point = self.points()["Écrans de DCS"]
+        # Pas pris pour les écrans du cockpit ; mais sous la fenêtre de DCS,
+        # réglée pour l'écran virtuel d'avant : c'est à régler.
+        self.assertTrue(point.detail.startswith("en attente de l'écran virtuel"), point.detail)
+        self.assertEqual(point.etat, "a_faire")
         self.assertEqual(self.reparer[-1:], [True])
 
     def diagnostic(self, **autres):
