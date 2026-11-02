@@ -602,10 +602,11 @@ class TestInstallation(unittest.TestCase):
         self.assertEqual(lire(self.saved / "Config" / "options.lua"), avant)
         self.assertIn("5120×1440", "\n".join(lignes))
 
-    def installer(self, reponses, ouvert, pret=True, autres=()):
+    def installer(self, reponses, ouvert, pret=True, autres=(), refus_principal=None):
         """`installer` sans console ni écrans réels : réponses et état de DCS
         joués d'avance, `autres` écrans en plus du principal et de l'écran
-        virtuel. Rend le code de sortie et ce qui s'est affiché."""
+        virtuel, `refus_principal` ce que Windows répond quand on change
+        d'écran principal. Rend le code de sortie et ce qui s'est affiché."""
         import contextlib
         import io
         from unittest import mock
@@ -623,12 +624,15 @@ class TestInstallation(unittest.TestCase):
                   *autres]
         with mock.patch("tablette.ecran_virtuel.preparer", return_value=pret) as preparer, \
                 mock.patch("tablette.ecran_virtuel.ranger", return_value=None) as ranger, \
+                mock.patch("tablette.ecran_virtuel.rendre_principal",
+                           return_value=refus_principal) as rendre_principal, \
                 contextlib.redirect_stdout(sortie):
             code = installation.installer(self.saved, demander=demander, ouvert=ouvert,
                                           lister_ecrans=lambda: ecrans,
                                           chemin_choix=self.chemin_choix)
         self.preparer_appele = preparer.called
         self.ranger_appele = ranger.called
+        self.nouveau_principal = [appel.args[0] for appel in rendre_principal.call_args_list]
         self.sans_reponse = reponses                       # réponses pas demandées
         return code, sortie.getvalue()
 
@@ -697,43 +701,52 @@ class TestInstallation(unittest.TestCase):
         self.assertEqual(self.choix(), {"mode": "second_ecran", "physique": True})
 
     # Photo d'un pilote, 01/11/2026 : « Identifier » montrait son écran 2 à
-    # gauche du principal, l'écran virtuel 3 à droite ; DCS partait du 2.
+    # gauche du principal, un peu plus bas, l'écran virtuel 3 à droite ; DCS
+    # partait du 2. Essayé avec lui le 02/11 : débranché, ou remonté bords du
+    # haut alignés, DCS revenu sur le principal ; redescendu, DCS reparti.
     PILOTE = ((0, 0, 2560, 1440, True, False), (2560, 0, 2560, 1440, False, True),
               (-1920, 420, 1920, 1080, False, False))
 
-    def test_un_ecran_a_gauche_du_principal_va_sous_la_fenetre_de_dcs(self):
+    def test_un_ecran_de_gauche_decale_est_aligne_en_haut(self):
         from tablette.installation import genants, rangement
         principal, virtuel, gauche = self.PILOTE
-        self.assertEqual(rangement(self.PILOTE), [(gauche, 0, 1440)])
-        # Au-dessus aussi : DCS part du coin haut gauche du bureau entier.
+        self.assertEqual(rangement(self.PILOTE), [(gauche, -1920, 0)])
+        # Aligné en haut, il ne gêne pas : la disposition qui a marché en vrai.
+        aligne = (-1920, 0, 1920, 1080, False, False)
+        self.assertEqual(genants([principal, virtuel, aligne]), [])
+        # Au-dessus du principal : à gauche, aligné en haut.
         dessus = (0, -1080, 1920, 1080, False, False)
         self.assertEqual(genants([principal, virtuel, dessus]), [dessus])
-        # Un écran virtuel mal placé n'est pas à ranger : remettre s'en charge.
-        self.assertEqual(rangement([principal, (-2560, 0, 2560, 1440, False, True)]), [])
+        self.assertEqual(rangement([principal, virtuel, dessus]), [(dessus, -1920, 0)])
+        # Sous le principal, rien ne prouve qu'il gêne : on n'y touche pas.
+        self.assertEqual(genants([principal, virtuel, (0, 1440, 1920, 1080, False, False)]), [])
+        # Un écran virtuel mal placé n'est pas à aligner : remettre s'en charge.
+        self.assertEqual(rangement([principal, (-2560, 420, 2560, 1440, False, True)]), [])
         self.assertEqual(rangement([principal, virtuel]), [])
 
-    def test_ecran_virtuel_dessous_on_range_a_droite_sans_rien_couvrir(self):
-        """Écran réel à droite, écran virtuel dessous : l'écran de gauche va à
-        droite de la fenêtre de DCS, sans chevaucher ceux qui y sont déjà."""
-        from tablette.installation import _chevauche, rangement
-        principal, droite = (0, 0, 2560, 1440, True, False), (2560, 0, 2560, 1440, False, False)
-        dessous, gauche = (0, 1440, 2560, 1440, False, True), (-1920, 0, 1920, 1080, False, False)
-        ((ecran_, x, y),) = rangement([principal, droite, dessous, gauche])
-        self.assertIs(ecran_, gauche)
-        self.assertGreaterEqual(x, 2560)                  # hors de la fenêtre de DCS (2560 × 2880)
-        self.assertFalse(any(_chevauche((x, y, 1920, 1080), o)
-                             for o in (principal, droite, dessous)))
-        # Rien à droite du principal, l'écran virtuel dessous : à droite, collé.
-        self.assertEqual(rangement([principal, dessous, gauche]), [(gauche, 2560, 0)])
+    def test_plusieurs_ecrans_alignes_sans_se_chevaucher_ni_changer_d_ordre(self):
+        """À gauche, collés au principal ou aux écrans déjà alignés, dans le
+        même ordre ; à droite de la fenêtre de DCS pour un écran qui y était."""
+        from tablette.installation import rangement
+        principal, virtuel = (0, 0, 2560, 1440, True, False), (2560, 0, 2560, 1440, False, True)
+        proche, loin = (-1920, 0, 1920, 1080, False, False), (-3840, 300, 1920, 1080, False, False)
+        self.assertEqual(rangement([principal, virtuel, proche, loin]), [(loin, -3840, 0)])
+        bas = (-1920, 200, 1920, 1080, False, False)
+        self.assertEqual(rangement([principal, virtuel, loin, bas]),
+                         [(bas, -1920, 0), (loin, -3840, 0)])
+        droite = (5120, -200, 1920, 1080, False, False)
+        self.assertEqual(rangement([principal, virtuel, droite]), [(droite, 5120, 0)])
 
-    def test_installer_propose_de_ranger_l_ecran_de_gauche(self):
+    def test_installer_propose_d_aligner_l_ecran_de_gauche(self):
         gauche = ecran("\\\\.\\DISPLAY3", "NVIDIA", "PCI", -1920, 420, 1920, 1080, 60)
-        # DCS sur le principal ? Entrée (oui) ; ranger maintenant ? Entrée (oui).
+        # Écran de DCS ? Entrée (le principal) ; aligner maintenant ? Entrée (oui).
         code, sortie = self.installer(["", ""], lambda: False, autres=[gauche])
-        self.assertIn("l'écran principal de Windows (2560×1440", sortie)
-        self.assertIn("votre écran 1920×1080", sortie)
-        self.assertIn("sous la fenêtre de DCS", sortie)
+        self.assertIn("3. « NVIDIA » (1920×1080, 60 Hz) — à gauche du principal, décalé en "
+                      "hauteur", sortie)
+        self.assertIn("aujourd'hui le n° 1 de la liste", sortie)
+        self.assertIn("aligner leur bord du haut", sortie)
         self.assertTrue(self.ranger_appele)
+        self.assertEqual(self.nouveau_principal, [])
         self.assertEqual(self.sans_reponse, [])            # les deux questions posées
         self.assertEqual(self.choix(), {"mode": "second_ecran", "physique": False, "ranger": True})
         # Non : rien ne bouge, la marche à suivre, et rien de retenu.
@@ -741,14 +754,51 @@ class TestInstallation(unittest.TestCase):
         self.assertFalse(self.ranger_appele)
         self.assertIn("À la main", sortie)
         self.assertNotIn("ranger", self.choix())
+        # Déjà aligné en haut : rien à demander.
+        aligne = ecran("\\\\.\\DISPLAY3", "NVIDIA", "PCI", -1920, 0, 1920, 1080, 60)
+        code, sortie = self.installer([""], lambda: False, autres=[aligne])
+        self.assertNotIn("Aligner maintenant", sortie)
+        self.assertEqual(self.sans_reponse, [])
 
-    def test_installer_s_arrete_si_dcs_n_est_pas_voulu_sur_le_principal(self):
+    def test_installer_fait_de_l_ecran_choisi_l_ecran_principal(self):
+        """Le pilote choisit l'écran de DCS par son numéro dans « Vos écrans » :
+        celui de l'écran virtuel ou une faute de frappe redemandent ; un autre
+        que le principal en devient le principal."""
         droite = ecran("\\\\.\\DISPLAY3", "NVIDIA", "PCI", 5120, 0, 1920, 1080, 60)
-        code, sortie = self.installer(["n"], lambda: False, autres=[droite])
+        code, sortie = self.installer(["2", "x", "3"], lambda: False, autres=[droite])
+        self.assertEqual(code, 0)
+        self.assertEqual(sortie.count("Le numéro d'un de vos écrans : 1, 3."), 2)
+        self.assertEqual(self.nouveau_principal, [droite])
+        self.assertIn("Écran principal : « NVIDIA » (1920×1080, 60 Hz).", sortie)
+        self.assertTrue(self.preparer_appele)
+
+    def test_installer_s_arrete_si_windows_refuse_l_ecran_choisi(self):
+        droite = ecran("\\\\.\\DISPLAY3", "NVIDIA", "PCI", 5120, 0, 1920, 1080, 60)
+        code, sortie = self.installer(["3"], lambda: False, autres=[droite],
+                                      refus_principal="Windows refuse ce réglage (code -1)")
         self.assertEqual(code, 1)
+        self.assertIn("Écran principal inchangé : Windows refuse ce réglage (code -1).", sortie)
         self.assertIn("En faire mon écran principal", sortie)
         self.assertFalse(self.preparer_appele)
         self.assertFalse(self.chemin_choix.exists())
+
+    def test_l_ecran_virtuel_en_principal_fait_choisir_un_vrai_ecran(self):
+        """L'écran virtuel principal, un seul écran réel : sans Entrée par
+        défaut, le pilote donne le numéro du sien."""
+        import contextlib
+
+        from tablette.installation import ecran_de_dcs
+        virtuel = ecran(principal=True, x=0)
+        reel = ecran("\\\\.\\DISPLAY1", "AMD Radeon", "PCI", -2560, 0)
+        questions, changes = [], []
+        reponses = ["", "2"]
+        with contextlib.redirect_stdout(io.StringIO()) as sortie:
+            self.assertTrue(ecran_de_dcs([virtuel, reel],
+                                         lambda q: questions.append(q) or reponses.pop(0),
+                                         lambda e: changes.append(e)))
+        self.assertEqual(changes, [reel])
+        self.assertIn("(son numéro)", questions[0])
+        self.assertIn("aujourd'hui l'écran virtuel", sortie.getvalue())
 
 
 def ecran(nom="\\\\.\\DISPLAY2", carte="Virtual Display Driver",
@@ -2789,17 +2839,17 @@ class TestDiagnostic(unittest.TestCase):
         self.ecrans = [(0, 0, 2560, 1440, True, False), (-2560, 0, 2560, 1440, False, False)]
         self.assertEqual(self.points()["Écrans de DCS"].etat, "attente")
 
-    def test_un_ecran_a_gauche_du_principal_est_signale_puis_range(self):
-        """Photo d'un pilote, 01/11/2026 : son écran 2 à gauche du principal, et
-        DCS parti dessus. Signalé ; rangé tout seul DCS fermé s'il l'a accepté
-        à l'installation, pas en boucle après un refus de Windows."""
+    def test_un_ecran_de_gauche_decale_est_signale_puis_aligne(self):
+        """Pilote du 01/11/2026 : son écran 2 à gauche du principal, un peu plus
+        bas, et DCS parti dessus. Signalé ; aligné tout seul DCS fermé s'il l'a
+        accepté à l'installation, pas en boucle après un refus de Windows."""
         titre = "Écrans de Windows"
         self.ecrans = list(TestInstallation.PILOTE)
         self.lance = True
         point = self.points()[titre]
         self.assertEqual((point.etat, point.detail),
-                         ("a_faire", "votre écran 1920×1080 à gauche ou au-dessus de l'écran "
-                                     "principal : DCS ouvre sa fenêtre à partir de là"))
+                         ("a_faire", "votre écran 1920×1080 décalés en hauteur par rapport à "
+                                     "l'écran principal : DCS ouvre sa fenêtre à partir d'eux"))
         self.assertIn("Installer.bat", point.solution[0])
         self.choix = {"mode": "second_ecran", "physique": False, "ranger": True}
         rangements = []
@@ -3064,28 +3114,67 @@ class TestDiagnostic(unittest.TestCase):
 
 
 class TestRangerEcrans(unittest.TestCase):
-    """Les écrans réels à gauche du principal, rangés avec l'accord du pilote :
-    sur des écrans décrits, rien du poste n'est déplacé."""
+    """Les écrans réels décalés à gauche du principal, alignés avec l'accord
+    du pilote, et l'écran principal qu'il choisit : sur des écrans décrits,
+    rien du poste n'est déplacé."""
 
-    def test_l_ecran_de_gauche_va_sous_le_principal_et_c_est_verifie(self):
+    def test_l_ecran_de_gauche_est_aligne_en_haut_et_c_est_verifie(self):
         from dataclasses import replace
 
         from tablette.ecran_virtuel import ranger
         gauche = ecran("\\\\.\\DISPLAY2", "NVIDIA", "PCI", -1920, 420, 1920, 1080, 60)
         avant = [PRINCIPAL, ecran("\\\\.\\DISPLAY3"), gauche]
-        apres = [PRINCIPAL, ecran("\\\\.\\DISPLAY3"), replace(gauche, x=0, y=1440)]
+        apres = [PRINCIPAL, ecran("\\\\.\\DISPLAY3"), replace(gauche, y=0)]
         demandes = []
         listes = [avant, apres]
         self.assertIsNone(ranger(lister=lambda: listes.pop(0),
                                  deplacer=lambda places: demandes.extend(
                                      (e.nom, x, y) for e, x, y in places),
                                  attendre=lambda s: None))
-        self.assertEqual(demandes, [("\\\\.\\DISPLAY2", 0, 1440)])
+        self.assertEqual(demandes, [("\\\\.\\DISPLAY2", -1920, 0)])
         # Windows ne garde pas la place : on le dit.
         self.assertIn("pas gardé", ranger(lister=lambda: avant, deplacer=lambda places: None,
                                           attendre=lambda s: None))
-        # Rien à gauche : rien à déplacer.
+        # Déjà aligné : rien à déplacer.
         self.assertIsNone(ranger(lister=lambda: apres, deplacer=lambda places: 1 / 0))
+
+    def test_l_ecran_choisi_devient_le_principal_sans_changer_la_disposition(self):
+        """Windows veut le principal en (0, 0) : tous les écrans sont décalés
+        d'autant, lui d'abord, et on vérifie qu'il l'est devenu."""
+        from dataclasses import replace
+
+        from tablette.ecran_virtuel import rendre_principal
+        gauche = ecran("\\\\.\\DISPLAY2", "NVIDIA", "PCI", -1920, 0, 1920, 1080, 60)
+        avant = [PRINCIPAL, ecran("\\\\.\\DISPLAY3"), gauche]
+        apres = [replace(PRINCIPAL, x=1920, principal=False),
+                 ecran("\\\\.\\DISPLAY3", x=4480), replace(gauche, x=0, principal=True)]
+        demandes = []
+
+        def deplacer(places, principal=None):
+            demandes.append(([(e.nom, x, y) for e, x, y in places], principal.nom))
+        listes = [avant, apres]
+        self.assertIsNone(rendre_principal(gauche, lister=lambda: listes.pop(0),
+                                           deplacer=deplacer, attendre=lambda s: None))
+        self.assertEqual(demandes, [([("\\\\.\\DISPLAY2", 0, 0), ("\\\\.\\DISPLAY1", 1920, 0),
+                                      ("\\\\.\\DISPLAY3", 4480, 0)], "\\\\.\\DISPLAY2")])
+        # Windows n'en fait rien : on le dit.
+        self.assertIn("pas changé", rendre_principal(gauche, lister=lambda: avant,
+                                                     deplacer=deplacer, attendre=lambda s: None))
+        # Déjà le principal, ou débranché entre-temps : rien à déplacer.
+        self.assertIsNone(rendre_principal(PRINCIPAL, lister=lambda: avant,
+                                           deplacer=lambda *a, **k: 1 / 0))
+        self.assertIn("plus sur le bureau", rendre_principal(
+            gauche, lister=lambda: [PRINCIPAL], deplacer=lambda *a, **k: 1 / 0))
+
+    def test_un_ecran_reel_se_nomme_par_son_modele(self):
+        """Deux écrans d'une même carte se distinguent par leur modèle ;
+        l'écran virtuel garde le nom de son pilote."""
+        from dataclasses import replace
+        self.assertEqual(str(replace(PRINCIPAL, modele="MAG 274Q X24").texte),
+                         "« MAG 274Q X24 » (2560×1440, 240 Hz)")
+        self.assertEqual(str(replace(ecran(), modele="VDD by MTT").texte),
+                         "« Virtual Display Driver » (2560×1440, 240 Hz)")
+        self.assertEqual(str(PRINCIPAL.texte), "« AMD Radeon RX 9070 XT » (2560×1440, 240 Hz)")
 
 
 class TestRemettreEcranVirtuel(unittest.TestCase):

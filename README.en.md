@@ -109,9 +109,11 @@ the frame: a screenshot of their MFDs would let us line them up too.
    anyway*. The executable isn't signed; it is built from this repository
    (`scripts/construire_tablette.py`).
 3. Answer the window's questions. It first shows your displays and your DCS
-   settings, then does the rest based on what you already have. If your DCS
-   monitor setup already exports the cockpit displays (real MFDs, Helios…),
-   it offers to keep it: the tablet picks them up where they are.
+   settings, then does the rest based on what you already have. With
+   several monitors, it asks which one you want DCS on (Enter: the current
+   main display), and makes it the Windows main display if needed. If your
+   DCS monitor setup already exports the cockpit displays (real MFDs,
+   Helios…), it offers to keep it: the tablet picks them up where they are.
 
    1. **Virtual display.** DCS draws exported displays on a monitor: without
       a second monitor, they cover your view. If there is no virtual
@@ -125,10 +127,10 @@ the frame: a screenshot of their MFDs would let us line them up too.
       rate: nothing to set in Settings → System → Display. One of your own
       monitors is only used if you say it is an HDMI dummy plug; with no
       free spot left, it offers test mode. One of your monitors to the
-      **left** of (or above) the main one? DCS opens its window at the top
-      left corner of the whole desktop and would start from it: the
-      installer offers to move it below the DCS window, and remembers it if
-      Windows puts it back on the left.
+      **left** of the main one, higher or lower than it (or above the main
+      one)? DCS would open its window from it: the installer offers to align
+      its top edge with the main display's, and remembers it if Windows
+      offsets it again.
    2. **Tablet scripts** in `Saved Games\DCS\Scripts`.
    3. **DCS displays**: "Tablette DCS" monitor setup, resolution spanning
       both displays, windowed. If DCS is open, the window waits for you to

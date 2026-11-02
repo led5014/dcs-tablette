@@ -228,19 +228,19 @@ class Diagnostic:
         return Point(titre, etat, detail, tuple(solution))
 
     def _windows(self, ecrans: list, lance: bool, forcer: bool, accord: bool) -> Point:
-        """Aucun écran réel à gauche ni au-dessus du principal : DCS ouvre sa
-        fenêtre au coin haut gauche du bureau entier (installation.genants).
-        Rangés tout seuls DCS fermé si le pilote l'a accepté à l'installation
-        — comme l'écran virtuel, pas en boucle après un échec —, sinon la
-        marche à suivre."""
+        """Aucun écran réel décalé en hauteur à gauche du principal, ni
+        au-dessus : DCS ouvrirait sa fenêtre à partir de lui
+        (installation.genants). Alignés tout seuls DCS fermé si le pilote l'a
+        accepté à l'installation — comme l'écran virtuel, pas en boucle après
+        un échec —, sinon la marche à suivre."""
         titre = Texte("Écrans de Windows")
         a_ranger = genants(ecrans)
         if not a_ranger:
-            return Point(titre, OK, Texte("rien à gauche ni au-dessus de l'écran principal"))
+            return Point(titre, OK, Texte("alignés en haut sur l'écran principal"))
         noms = [Texte("votre écran {largeur}×{hauteur}", largeur=m[2], hauteur=m[3])
                 for m in a_ranger]
-        a_la_main = Texte("Ou Paramètres → Système → Écran : les glisser sous l'écran principal "
-                          "(ou à droite de l'écran virtuel), puis relancer DCS.")
+        a_la_main = Texte("Ou Paramètres → Système → Écran : les glisser à gauche de l'écran "
+                          "principal, bords du haut alignés, puis relancer DCS.")
         if accord and not lance and (forcer or self._horloge() - self._echec_rangement
                                      > PAUSE_APRES_ECHEC_S):
             if self._ranger is None:
@@ -248,18 +248,18 @@ class Diagnostic:
                 self._ranger = ranger
             erreur = self._ranger()
             if erreur is None:
-                return Point(titre, REPARE, Texte("rangés hors de la fenêtre de DCS : {ecrans}",
-                                                  ecrans=noms))
+                return Point(titre, REPARE, Texte("alignés en haut sur l'écran principal : "
+                                                  "{ecrans}", ecrans=noms))
             self._echec_rangement = self._horloge()
-            return Point(titre, MANQUE, Texte("{ecrans} pas rangés : {erreur}", ecrans=noms,
+            return Point(titre, MANQUE, Texte("{ecrans} pas alignés : {erreur}", ecrans=noms,
                                               erreur=erreur), (a_la_main,))
         return Point(titre, A_FAIRE, Texte(
-            "{ecrans} à gauche ou au-dessus de l'écran principal : DCS ouvre sa fenêtre à "
-            "partir de là", ecrans=noms), (
-            Texte("Quitter DCS : DCS Tablette les range tout seul, puis relancer DCS.")
+            "{ecrans} décalés en hauteur par rapport à l'écran principal : DCS ouvre sa fenêtre "
+            "à partir d'eux", ecrans=noms), (
+            Texte("Quitter DCS : DCS Tablette les aligne tout seul, puis relancer DCS.")
             if accord else
-            Texte("Relancer Installer.bat (DCS fermé) : il propose de les ranger hors de la "
-                  "fenêtre de DCS."), a_la_main))
+            Texte("Relancer Installer.bat (DCS fermé) : il propose de les aligner sur l'écran "
+                  "principal."), a_la_main))
 
     def _existante(self, nom: str) -> List[Point]:
         """Le pilote a gardé sa configuration d'écrans, qui exporte déjà les

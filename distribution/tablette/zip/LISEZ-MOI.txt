@@ -23,9 +23,11 @@ INSTALLATION
      écrans et vos réglages de DCS, puis fait le reste en tenant compte de
      ce que vous avez déjà :
 
-     Plusieurs écrans ? Elle dit sur lequel DCS s'affichera : l'écran
-     principal de Windows. Si ce n'est pas le bon, elle s'arrête et dit
-     comment choisir le principal.
+     Plusieurs écrans ? DCS s'affiche sur l'écran principal de Windows.
+     Elle demande sur lequel vous voulez DCS, par son numéro dans la liste
+     de vos écrans (nommés par leur modèle) : Entrée garde l'écran
+     principal actuel. Un autre numéro, et elle en fait l'écran principal
+     de Windows (la barre des tâches y passe aussi).
 
      Votre configuration d'écrans de DCS exporte déjà les écrans du
      cockpit (vrais MFD, Helios, écran tactile…) ?
@@ -52,12 +54,12 @@ INSTALLATION
            prise HDMI factice que personne ne regarde.
          - Plus aucune place (écrans à droite ET dessous) : elle propose le
            mode essai, ou dit quel écran déplacer.
-         - Un de vos écrans à GAUCHE (ou au-dessus) du principal : DCS ouvre
-           sa fenêtre au coin haut gauche du bureau entier, sa vue partirait
-           de cet écran-là. Elle propose de le ranger sous la fenêtre de DCS
-           (la souris y passe alors par le bas) : répondre O. Seule sa place
-           change, et c'est retenu : si Windows le remet à gauche, DCS
-           Tablette le range de nouveau, DCS fermé.
+         - Un de vos écrans à GAUCHE du principal, plus haut ou plus bas que
+           lui (ou au-dessus du principal) : DCS ouvre alors sa fenêtre à
+           partir de cet écran-là. Elle propose d'aligner son bord du haut
+           sur celui du principal : répondre O. Seule sa place change, il
+           reste à gauche, et c'est retenu : si Windows le décale de
+           nouveau, DCS Tablette le réaligne, DCS fermé.
      2/3 Scripts de la tablette
          Deux scripts copiés dans Saved Games\DCS\Scripts, une ligne ajoutée
          à Export.lua (copie de l'ancien à côté). Tacview, SRS et les autres
@@ -170,9 +172,10 @@ risque l'est tout seul, et c'est dit :
   - écran virtuel déplacé par une mise à jour de Windows ou du pilote
     graphique : remis à sa place ;
   - configuration d'écrans qui ne tombe plus sur les écrans : réécrite ;
-  - écran à gauche ou au-dessus du principal : rangé sous la fenêtre de
-    DCS, DCS fermé, si vous l'avez accepté à l'installation (sinon, le
-    diagnostic dit de relancer « Installer.bat ») ;
+  - écran à gauche du principal mais décalé en hauteur (ou au-dessus du
+    principal) : aligné en haut sur le principal, DCS fermé, si vous l'avez
+    accepté à l'installation (sinon, le diagnostic dit de relancer
+    « Installer.bat ») ;
   - DCS repassé en plein écran, ou sur une autre configuration d'écrans :
     remis, une fois DCS fermé (il réécrit ses réglages en quittant).
 Rien n'est jamais installé sans le demander : l'écran virtuel manquant,
@@ -189,7 +192,7 @@ Pour que ça n'arrive pas, « DCS Tablette (écrans) », dans le dossier
 Démarrage de Windows, remet tout en place à chaque ouverture de session,
 avant que vous lanciez DCS : il attend l'écran virtuel, le replace (à
 droite du principal, ou dessous si un de vos écrans occupe la droite),
-range sous la fenêtre de DCS un écran revenu à gauche du principal (si vous
+réaligne en haut un écran de gauche que Windows aurait décalé (si vous
 l'avez accepté à l'installation), puis règle « Tablette DCS » et la
 résolution de DCS. Sans fenêtre, en quelques secondes ; les écrans peuvent
 clignoter une fois s'il y avait quelque chose à remettre. Il ne touche
@@ -297,10 +300,9 @@ B. Placer l'écran virtuel (Paramètres → Système → Écran)
    Si un de vos écrans est déjà à droite du principal, mettre l'écran
    virtuel DESSOUS, les bords de GAUCHE au même niveau. La fenêtre de DCS
    ne doit couvrir aucun de vos écrans.
-   6. Aucun écran à GAUCHE ni AU-DESSUS du principal : DCS ouvre sa fenêtre
-      au coin haut gauche du bureau entier, il partirait de cet écran-là.
-      En glisser un qui y serait sous le principal (ou à droite de l'écran
-      virtuel).
+   6. Un écran à GAUCHE du principal : bords du HAUT exactement alignés
+      avec le principal. Plus haut ou plus bas, ou un écran AU-DESSUS du
+      principal, et DCS ouvre sa fenêtre à partir de cet écran-là.
 
 C. Scripts de la tablette
    « Installer.bat » le fait toujours, même quand le reste échoue.
@@ -334,10 +336,13 @@ pastille de la tablette. Il dit ce qui manque et comment le régler.
   déplacer). DCS Tablette le remet tout seul ; quitter DCS et le relancer.
   S'il n'y arrive pas, le diagnostic dit pourquoi.
 - DCS s'affiche sur un autre de vos écrans :
-  - cet écran est à gauche (ou au-dessus) du principal dans Paramètres →
-    Système → Écran (« Identifier » le montre) : DCS part du coin haut
-    gauche du bureau entier. Relancer « Installer.bat », DCS fermé : il
-    propose de le ranger sous la fenêtre de DCS ;
+  - cet écran est à gauche du principal, plus haut ou plus bas que lui, ou
+    au-dessus du principal, dans Paramètres → Système → Écran
+    (« Identifier » le montre) : DCS part alors de lui. Relancer
+    « Installer.bat », DCS fermé : il propose de l'aligner en haut sur le
+    principal ;
+  - ou ce n'est pas l'écran principal de Windows : relancer
+    « Installer.bat » et donner le numéro de l'écran voulu pour DCS ;
   - ou l'écran virtuel a changé de définition ou de place, et un de vos
     écrans a pris la sienne : fermer DCS en laissant DCS Tablette ouvert,
     attendre que le diagnostic dise RÉPARÉ, puis relancer DCS — ou

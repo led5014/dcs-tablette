@@ -193,21 +193,21 @@ SERVEUR = {
         "copied to Saved Games\\DCS\\Scripts: they'll be used from the next mission",
     "Écran virtuel": "Virtual display",
     "Écrans de Windows": "Windows displays",
-    "rien à gauche ni au-dessus de l'écran principal":
-        "nothing to the left of or above the main display",
-    "Ou Paramètres → Système → Écran : les glisser sous l'écran principal (ou à droite de "
-    "l'écran virtuel), puis relancer DCS.":
-        "Or Settings → System → Display: drag them below the main display (or to the right of "
-        "the virtual display), then restart DCS.",
-    "rangés hors de la fenêtre de DCS : {ecrans}": "moved out of the DCS window: {ecrans}",
-    "{ecrans} pas rangés : {erreur}": "{ecrans} not moved: {erreur}",
-    "{ecrans} à gauche ou au-dessus de l'écran principal : DCS ouvre sa fenêtre à partir de "
-    "là":
-        "{ecrans} to the left of or above the main display: DCS opens its window from there",
-    "Quitter DCS : DCS Tablette les range tout seul, puis relancer DCS.":
-        "Quit DCS: DCS Tablette moves them by itself, then restart DCS.",
-    "Relancer Installer.bat (DCS fermé) : il propose de les ranger hors de la fenêtre de DCS.":
-        "Run Installer.bat again (DCS closed): it offers to move them out of the DCS window.",
+    "alignés en haut sur l'écran principal": "top-aligned with the main display",
+    "Ou Paramètres → Système → Écran : les glisser à gauche de l'écran principal, bords du "
+    "haut alignés, puis relancer DCS.":
+        "Or Settings → System → Display: drag them to the left of the main display, top edges "
+        "aligned, then restart DCS.",
+    "alignés en haut sur l'écran principal : {ecrans}":
+        "top-aligned with the main display: {ecrans}",
+    "{ecrans} pas alignés : {erreur}": "{ecrans} not aligned: {erreur}",
+    "{ecrans} décalés en hauteur par rapport à l'écran principal : DCS ouvre sa fenêtre à "
+    "partir d'eux":
+        "{ecrans} vertically offset from the main display: DCS opens its window from them",
+    "Quitter DCS : DCS Tablette les aligne tout seul, puis relancer DCS.":
+        "Quit DCS: DCS Tablette aligns them by itself, then restart DCS.",
+    "Relancer Installer.bat (DCS fermé) : il propose de les aligner sur l'écran principal.":
+        "Run Installer.bat again (DCS closed): it offers to align them with the main display.",
     "mode essai : écrans du cockpit en bas de la vue":
         "test mode: cockpit displays at the bottom of the view",
     "pas utilisé : DCS exporte avec « {nom} »": "not used: DCS exports with \"{nom}\"",
@@ -383,6 +383,7 @@ SERVEUR = {
     "à droite du principal": "right of the main display",
     "à droite du principal, décalé": "right of the main display, offset",
     "à gauche du principal": "left of the main display",
+    "à gauche du principal, décalé en hauteur": "left of the main display, vertically offset",
     "sous le principal": "below the main display",
     "sous le principal, décalé": "below the main display, offset",
     "au-dessus du principal": "above the main display",
@@ -454,6 +455,8 @@ SERVEUR = {
         "The virtual display is duplicated or disconnected: switching to \"Extend\" mode.",
     "Écran virtuel {ecran} déjà en place, {ou}.": "Virtual display {ecran} already in place, {ou}.",
     "Windows n'a pas gardé la position demandée": "Windows did not keep the requested position",
+    "cet écran n'est plus sur le bureau": "that display is no longer on the desktop",
+    "Windows n'a pas changé d'écran principal": "Windows did not change the main display",
     "Écran virtuel {ecran} non placé : {erreur}.": "Virtual display {ecran} not placed: {erreur}.",
     "À régler dans Paramètres → Système → Écran : {voulu}.":
         "To set in Settings → System → Display: {voulu}.",
@@ -553,36 +556,41 @@ SERVEUR = {
     "La tablette peut les prendre là où ils sont, sans toucher à vos écrans ni à DCS.":
         "The tablet can take them where they are, without touching your displays or DCS.",
     "Garder votre configuration ? [O/n] ": "Keep your monitor setup? [Y/n] ",
-    "DCS s'affichera sur l'écran principal de Windows ({largeur}×{hauteur}, {frequence} Hz) :":
-        "DCS will show on the Windows main display ({largeur}×{hauteur}, {frequence} Hz):",
-    "celui où « En faire mon écran principal » est coché dans Paramètres → Écran.":
-        "the one with \"Make this my main display\" checked in Settings → Display.",
-    "C'est bien l'écran où vous voulez DCS ? [O/n] ": "Is that the display you want DCS on? [Y/n] ",
+    "DCS s'affiche sur l'écran principal de Windows : aujourd'hui le n° {numero} de la liste.":
+        "DCS shows on the Windows main display: today no. {numero} in the list.",
+    "DCS s'affiche sur l'écran principal de Windows : aujourd'hui l'écran virtuel, que "
+    "personne ne regarde.":
+        "DCS shows on the Windows main display: today the virtual display, which nobody "
+        "looks at.",
+    "Sur quel écran voulez-vous DCS ? [{numero}] ": "Which display do you want DCS on? [{numero}] ",
+    "Sur quel écran voulez-vous DCS ? (son numéro) ":
+        "Which display do you want DCS on? (its number) ",
+    "  Le numéro d'un de vos écrans : {numeros}.": "  The number of one of your displays: {numeros}.",
+    "  DCS Tablette en fait l'écran principal de Windows : la barre des tâches y passe aussi.":
+        "  DCS Tablette makes it the Windows main display: the taskbar moves there too.",
+    "  Écran principal : {ecran}.": "  Main display: {ecran}.",
+    "  Écran principal inchangé : {erreur}.": "  Main display unchanged: {erreur}.",
     "Paramètres → Système → Écran : cliquer l'écran voulu pour DCS, cocher":
         "Settings → System → Display: click the display you want for DCS, check",
     "« En faire mon écran principal », puis relancer Installer.bat.":
         "\"Make this my main display\", then run Installer.bat again.",
-    "À gauche ou au-dessus de l'écran principal : {ecrans}.":
-        "To the left of or above the main display: {ecrans}.",
-    "DCS ouvre sa fenêtre au coin haut gauche du bureau entier : sa vue partirait":
-        "DCS opens its window at the top left corner of the whole desktop: its view would start",
+    "Décalés en hauteur par rapport à l'écran principal : {ecrans}.":
+        "Vertically offset from the main display: {ecrans}.",
+    "DCS ouvre alors sa fenêtre à partir de cet écran : sa vue partirait":
+        "DCS then opens its window from that display: its view would start",
     "de là, et les écrans du cockpit ne tomberaient plus à leur place.":
         "there, and the cockpit displays would no longer land in their place.",
-    "DCS Tablette peut ranger {ecrans} sous la fenêtre de DCS (la souris y passera par le "
-    "bas).":
-        "DCS Tablette can move {ecrans} below the DCS window (the mouse will get there from "
-        "the bottom).",
-    "DCS Tablette peut ranger {ecrans} à droite de la fenêtre de DCS (la souris y passera par "
-    "la droite).":
-        "DCS Tablette can move {ecrans} to the right of the DCS window (the mouse will get "
-        "there from the right).",
-    "  Ranger maintenant ? [O/n] ": "  Move now? [Y/n] ",
-    "  Écrans non rangés : {erreur}.": "  Displays not moved: {erreur}.",
-    "  Rangé : {ecrans}.": "  Moved: {ecrans}.",
-    "  À la main : Paramètres → Système → Écran, glisser cet écran sous le principal":
-        "  By hand: Settings → System → Display, drag that display below the main one",
-    "  (ou à droite de l'écran virtuel) : aucun écran à gauche ni au-dessus du principal.":
-        "  (or to the right of the virtual display): no display left of or above the main one.",
+    "DCS Tablette peut aligner leur bord du haut sur celui de l'écran principal (seule leur "
+    "place change).":
+        "DCS Tablette can align their top edge with the main display's (only their position "
+        "changes).",
+    "  Aligner maintenant ? [O/n] ": "  Align now? [Y/n] ",
+    "  Écrans non alignés : {erreur}.": "  Displays not aligned: {erreur}.",
+    "  Aligné : {ecrans}.": "  Aligned: {ecrans}.",
+    "  À la main : Paramètres → Système → Écran, glisser cet écran à gauche du":
+        "  By hand: Settings → System → Display, drag that display to the left of the",
+    "  principal, son bord du haut exactement aligné sur celui du principal.":
+        "  main one, its top edge exactly aligned with the main display's.",
     "{etape}/{etapes}  Écran virtuel": "{etape}/{etapes}  Virtual display",
     "  Sans écran pour eux, la tablette marche quand même en mode essai : les":
         "  Without a display for them, the tablet still works in test mode: the",
