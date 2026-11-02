@@ -48,8 +48,7 @@ D'où viennent les numéros, et ce qui reste à confirmer :
   (`aircraft_modules/*.lua`), recoupés avec les extractions des `devices.lua`
   et `clickabledata.lua` des modules (DCSAutoMate). À confirmer au premier vol
   de chacun :
-  - zones d'export de l'OH-58D (`LEFT_MFCD` / `RIGHT_MFCD` d'après le forum
-    DCS, sans confirmation d'ED) ;
+  - repères des boutons de l'OH-58D (voir plus bas) ;
   - position B1 (menu) en bas à gauche des MPD de l'Apache, déduite de l'ordre
     des arguments 3D ;
   - place des boutons autour des MPD du F-15E (sens antihoraire depuis le
@@ -61,6 +60,24 @@ D'où viennent les numéros, et ce qui reste à confirmer :
   - F-15E : seulement la place avant (la place arrière partage les zones
     d'export sans qu'on sache ce qui s'y dessine) ; CH-47F : pas d'écran tant
     qu'on ne sait pas lequel des cinq MFD sort dans `RIGHT_MFCD`.
+- OH-58D, MFD en 4:3 (02/11/2026, photo de la tablette en 1.11.1 : haut des
+  pages coupé, image étirée, bords rognés ; B1–B4 pas en face de leurs
+  onglets). Zones natives `LEFT_MFCD` / `RIGHT_MFCD`
+  (`Cockpit/MFDs/Indicator/initLMFD.lua` et `initRMFD.lua`, relevé du
+  forum) ; 4:3 d'après le modèle Helios « OH58D » (500 × 375) et les
+  pilotes du forum (752 × 576), qui signalent le même haut coupé dans une
+  zone carrée. « Tablette DCS » garde ses carrés pour tous, et donne au
+  Kiowa deux zones 4:3 l'une sous l'autre (960 × 720 sur un second écran
+  2560 × 1440) dans `reconfigure_for_unit`, que DCS appelle en entrant dans
+  chaque appareil (exemple commenté dans `Config/MonitorSetup/3Cameras.lua`
+  de DCS). Les écrans à une autre forme viennent de `Ecran.aspect`
+  (`appareils.formes`) : le JF-17, en portrait, en profite aussi. La
+  relecture (`ecrans_dcs.lire_zones`) rejoue le fichier pour l'appareil
+  piloté (`PontDCS.dernier_appareil`), y compris ceux de Helios
+  (`if unit_type == … or false then … return end`). Un fichier d'avant,
+  tout en carrés, est récrit par le diagnostic, DCS fermé. Cadre : 4 boutons
+  en bas, 5 sur les côtés ; repères mesurés sur la photo, corrigés de la
+  zone carrée — à affiner sur une photo en 4:3.
 - C-130J-30 (01/11/2026, d'après la capture d'un pilote en vol, en mode
   essai) : le module dessine de lui-même dans `LEFT_MFCD` (PFD),
   `CENTER_MFCD` (SYSTEM STATUS) et `RIGHT_MFCD` (moteurs et ACAWS), rien dans
@@ -242,7 +259,8 @@ Depuis le code :
    - ou une prise HDMI factice.
 4. **Configuration d'écrans de DCS**, DCS fermé :
    `.venv\Scripts\python.exe scripts\configurer_ecrans_dcs.py --second-ecran`.
-   Écrit « Tablette DCS » (une seule configuration pour tous les appareils) et
+   Écrit « Tablette DCS » (une seule configuration pour tous les appareils,
+   zones à leur forme pour ceux dont les écrans ne sont pas carrés) et
    la sélectionne dans `options.lua` avec la résolution qui couvre les deux
    écrans, en fenêtré.
 5. **Lancer** : double-cliquer `launch_tablette.bat`. La fenêtre affiche
@@ -317,8 +335,9 @@ cadrans, et la page redemande les siens quand elle change.
   l'image rognée (`app.vu_par_la_tablette`), la page fait une case par
   bouton centrée sur son libellé, des vides entre (`app.js`, `pistes`).
   Vérifié sur une image dessinée aux positions des scripts : 1,4 px d'écart
-  au plus sur un écran de 373 px. F-16C, OH-58D : modules absents du poste,
-  boutons également répartis, à caler sur une capture.
+  au plus sur un écran de 373 px. OH-58D : calé sur une photo de la
+  tablette, à affiner. F-16C : module absent du poste, boutons également
+  répartis, à caler sur une capture.
 - **Appuis** : rien d'écrit sur l'image quand l'appui passe (retour de vol :
   « T1 enfoncé » masquait le bas de l'écran) ; un refus et le cran de
   luminosité s'affichent 1,8 s.

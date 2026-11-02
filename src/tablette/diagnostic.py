@@ -30,8 +30,9 @@ from typing import Callable, Dict, List, Optional, Sequence, Tuple
 from . import VERSION
 from .config import PORT_WEB, adresses_locales
 from .mise_a_jour import numero
-from .ecrans_dcs import (NOM_AFFICHE, NOM_FICHIER, PasDExport, fichier_actif, lire_zones,
-                         options_affichage, plein_ecran, regler_options)
+from .appareils import formes
+from .ecrans_dcs import (NOM_AFFICHE, NOM_FICHIER, PasDExport, a_leur_forme, fichier_actif,
+                         lire_zones, options_affichage, plein_ecran, regler_options)
 from .installation import (LIGNE, configuration_existante, configurer_ecrans, dcs_ouvert, genants,
                            dcs_regle, installer_scripts, lire_choix, mode_essai, premiere_fois,
                            scripts_a_jour, support_ecrans)
@@ -298,18 +299,26 @@ class Diagnostic:
         ou = Texte("en bas de la vue") if essai else Texte("sur le second écran")
         fichier = self.saved_games / "Config" / "MonitorSetup" / NOM_FICHIER
         try:
-            zones = lire_zones(fichier.read_text(encoding="utf-8", errors="replace"),
-                               *resolution)
+            texte = fichier.read_text(encoding="utf-8", errors="replace")
         except OSError:
-            zones = {}
+            texte = ""
+        zones = lire_zones(texte, *resolution)
+        sur_l_ecran = bool(zones) and all(_dans(z, ecran) for z in zones.values())
+        # Écrite par une version d'avant les zones par appareil : les écrans
+        # du Kiowa y sont carrés, étirés et coupés par DCS. Récrite comme une
+        # configuration qui ne tombe plus sur les écrans.
+        formees = a_leur_forme(texte, *resolution, formes())
         # Retouchée à la main et toujours sur l'écran : elle reste telle quelle.
-        if zones and all(_dans(z, ecran) for z in zones.values()):
+        if sur_l_ecran and formees:
             return Point(titre, OK, Texte("« {nom} » : {nombre} écrans {ou}", nom=NOM_AFFICHE,
                                           nombre=len(zones), ou=ou)), resolution
         if lance:
             # Réécrite DCS ouvert, la tablette refuserait toute capture jusqu'au
             # redémarrage de DCS (video.py) : on attend qu'il soit fermé.
-            return Point(titre, A_FAIRE, self._ne_tombe_plus(ecran, ecrans), (
+            pourquoi = (self._ne_tombe_plus(ecran, ecrans) if not sur_l_ecran else
+                        Texte("« {nom} » date d'avant les écrans qui ne sont pas carrés : "
+                              "ceux du Kiowa y sont étirés et coupés", nom=NOM_AFFICHE))
+            return Point(titre, A_FAIRE, pourquoi, (
                 Texte("Quitter DCS : DCS Tablette la récrit tout seul, puis relancer DCS."),)
             ), None
         complet, lignes = configurer_ecrans(self.saved_games, essai, ecrans, lambda: lance,

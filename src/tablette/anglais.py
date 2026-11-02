@@ -241,6 +241,9 @@ SERVEUR = {
     "fenêtre de DCS ({largeur}×{hauteur}) recouvre {recouverts}":
         "\"{nom}\" no longer fits the displays: the cockpit displays fall outside {ecran}, "
         "and the DCS window ({largeur}×{hauteur}) covers {recouverts}",
+    "« {nom} » date d'avant les écrans qui ne sont pas carrés : ceux du Kiowa y sont étirés "
+    "et coupés":
+        "\"{nom}\" predates non-square displays: the Kiowa's are stretched and cut off in it",
     "de l'écran principal ({largeur}×{hauteur})": "the main display ({largeur}×{hauteur})",
     "de l'écran virtuel ({largeur}×{hauteur})": "the virtual display ({largeur}×{hauteur})",
     "du second écran ({largeur}×{hauteur})": "the second display ({largeur}×{hauteur})",

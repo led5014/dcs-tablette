@@ -175,6 +175,12 @@ class PontDCS:
             return False
         return True
 
+    def dernier_appareil(self) -> Optional[str]:
+        """Le dernier appareil annoncé, même si DCS s'est tu depuis : celui
+        dont DCS a pris les zones d'export en y entrant (ecrans_dcs)."""
+        with self._verrou:
+            return self._dernier[0] if self._dernier else None
+
     def etat(self) -> Dict:
         with self._verrou:
             dernier = self._dernier

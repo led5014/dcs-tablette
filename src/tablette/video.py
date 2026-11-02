@@ -63,7 +63,10 @@ class Video:
     def __init__(self, saved_games: Path,
                  capturer: Optional[Callable[[Dict[str, Rect]], Optional[Copie]]] = None,
                  lancement: Optional[Callable[[], Optional[float]]] = None,
-                 horloge: Callable[[], float] = time.monotonic):
+                 horloge: Callable[[], float] = time.monotonic,
+                 appareil: Callable[[], Optional[str]] = lambda: None):
+        """`appareil` : nom DCS de l'appareil piloté, dont DCS a pris les
+        zones (Kiowa : en 4:3, pas dans les carrés des autres)."""
         if capturer is None or lancement is None:
             from . import capture           # Windows seulement : chargé à la demande
             capturer = capturer or capture.capturer_dcs
@@ -72,8 +75,10 @@ class Video:
         self._capturer = capturer
         self._lancement = lancement
         self._horloge = horloge
+        self._appareil = appareil
         self._verrou = threading.Lock()
-        self._zones: Optional[Tuple[float, Dict[str, Rect], Optional[str]]] = None
+        # (instant, appareil, zones, raison de n'en avoir aucune)
+        self._zones: Optional[Tuple[float, Optional[str], Dict[str, Rect], Optional[str]]] = None
         self._resolution: Optional[Tuple[int, int]] = None
         self._copie: Optional[Tuple[float, Optional[Copie]]] = None
         self._demandes: Dict[str, float] = {}
@@ -89,9 +94,11 @@ class Video:
     def _zones_actives(self, maintenant: float) -> Dict[str, Rect]:
         """Zones des écrans exportés, plus celle du kneeboard ; lève la raison
         si la configuration d'écrans de DCS n'en exporte aucun."""
-        if self._zones is None or maintenant - self._zones[0] > VALIDITE_ZONES_S:
+        appareil = self._appareil()
+        if (self._zones is None or maintenant - self._zones[0] > VALIDITE_ZONES_S
+                or self._zones[1] != appareil):
             try:
-                zones = zones_actives(self.saved_games)
+                zones = zones_actives(self.saved_games, appareil)
                 self._resolution = options_affichage(self.saved_games)[1:]
                 zones[KNEEBOARD] = zone_kneeboard(*self._resolution)
                 # Vu en vrai : la configuration réécrite pendant que DCS
@@ -102,10 +109,10 @@ class Video:
                     raise PasDExport(Texte("La configuration d'écrans a changé depuis le "
                                            "lancement de DCS, qui ne la relit qu'au "
                                            "démarrage : relance DCS."))
-                self._zones = (maintenant, zones, None)
+                self._zones = (maintenant, appareil, zones, None)
             except PasDExport as e:
-                self._zones = (maintenant, {}, message(e))
-        _, zones, raison = self._zones
+                self._zones = (maintenant, appareil, {}, message(e))
+        _, _, zones, raison = self._zones
         if raison:
             raise PasDImage(raison)
         return zones

@@ -40,6 +40,7 @@ from typing import Callable, Dict, List, Optional, Sequence, Tuple
 from . import VERSION
 from .capture import moniteurs
 from .config import BUREAU, dossier_windows
+from .appareils import formes
 from .ecrans_dcs import (NOM_AFFICHE, NOM_FICHIER, PasDExport, disposition, disposition_essai,
                          fichier_actif, generer, lire_zones, options_affichage,
                          plein_ecran, regler_options, retablir_options)
@@ -371,6 +372,7 @@ def configurer_ecrans(saved_games: Path, essai: bool = False,
         # La taille de l'ÉCRAN, pas celle réglée dans DCS : après un réglage
         # raté, la résolution de DCS ne dit plus où est le bas de la vue.
         zones = disposition_essai(pl, ph)
+        par_appareil = {nom: disposition_essai(pl, ph, forme) for nom, forme in formes().items()}
         description = "Essai : ecrans exportes en bas de l'ecran unique"
         resolution = (pl, ph)
     else:
@@ -390,13 +392,16 @@ def configurer_ecrans(saved_games: Path, essai: bool = False,
                       "l'installation.")]
         _, cote, zone, resolution = trouves[0]
         zones = disposition(zone, resolution)
+        par_appareil = {nom: disposition(zone, resolution, forme)
+                        for nom, forme in formes().items()}
         description = "Vue sur l'ecran principal, ecrans exportes sur le second" + (
             ", dessous" if cote == "dessous" else "")
 
     dossier = saved_games / "Config" / "MonitorSetup"
     dossier.mkdir(parents=True, exist_ok=True)
     fichier = dossier / NOM_FICHIER
-    texte = generer((0, 0, pl, ph), zones, description)
+    texte = generer((0, 0, pl, ph), zones, description,
+                    {nom: siennes for nom, siennes in par_appareil.items() if siennes})
     # Identique : on n'y touche pas. Réécrit pendant que DCS tourne, il
     # paraîtrait changé depuis son lancement, et la tablette refuserait de
     # capturer jusqu'au redémarrage de DCS (video.py) : c'est le cas d'une
@@ -413,6 +418,9 @@ def configurer_ecrans(saved_games: Path, essai: bool = False,
     for ancien in ANCIENS:                       # l'ancienne « Tablette Hornet »
         (dossier / ancien).unlink(missing_ok=True)
     lignes += [f"  {nom:12} x={x} y={y} {l}×{h}" for nom, (x, y, l, h) in zones.items()]
+    lignes += [f"  {nom:12} x={x} y={y} {l}×{h} ({appareil})"
+               for appareil, siennes in par_appareil.items()
+               for nom, (x, y, l, h) in siennes.items()]
 
     # Mise à jour : déjà choisie dans DCS, à la bonne résolution, en fenêtré,
     # rien à régler ni à relancer.

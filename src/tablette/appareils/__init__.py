@@ -62,9 +62,11 @@ class Ecran:
     # (module absent du poste de développement).
     reperes_x: Optional[Tuple[float, ...]] = None
     reperes_y: Optional[Tuple[float, ...]] = None
-    # Écran en portrait (JF-17 : 5 boutons en haut et en bas, 8 sur les
-    # côtés) : nombre de boutons des côtés, et largeur / hauteur du verre.
-    # None : autant que `par_cote`, écran carré.
+    # Écran qui n'est pas carré (JF-17 en portrait : 5 boutons en haut et en
+    # bas, 8 sur les côtés ; Kiowa en 4:3 : 4 en bas, 5 sur les côtés) :
+    # nombre de boutons des côtés, et largeur / hauteur du verre — la forme
+    # de sa zone d'export aussi (`formes`). None : autant que `par_cote`,
+    # écran carré.
     par_cote_y: Optional[int] = None
     aspect: Optional[float] = None
 
@@ -206,6 +208,18 @@ def viewports() -> List[str]:
             if ecran.viewport not in vus:
                 vus.append(ecran.viewport)
     return vus
+
+
+def formes() -> Dict[str, Dict[str, float]]:
+    """Les appareils dont un écran exporté n'est pas carré : nom DCS → zone →
+    largeur / hauteur de chacun de leurs écrans. Le fichier « Tablette DCS »
+    leur donne des zones à cette forme (ecrans_dcs.disposition)."""
+    resultat: Dict[str, Dict[str, float]] = {}
+    for profil in PROFILS:
+        if any(e.aspect for e in profil.ecrans):
+            for nom in profil.noms_dcs:
+                resultat[nom] = {e.viewport: e.aspect or 1.0 for e in profil.ecrans}
+    return resultat
 
 
 # --------------------------------------------------------------- Lua

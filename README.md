@@ -99,8 +99,10 @@ F-15E) : un retour est bienvenu.
 
 Sur le Hornet, l'Apache et l'A-10C, chaque bouton est en face du libellé que
 le module écrit sur l'écran (positions lues dans les scripts du module). Sur
-le F-16C et l'OH-58D, les boutons sont également répartis le long du cadre :
-une capture d'écran de leurs MFD permettra de les caler aussi.
+l'OH-58D, ils sont calés sur une photo de la tablette, et ses MFD, en 4:3,
+ont des zones à leur forme : plus d'image étirée ni de haut coupé. Sur le
+F-16C, les boutons sont également répartis le long du cadre : une capture
+d'écran de ses MFD permettra de les caler aussi.
 
 ## Installation
 

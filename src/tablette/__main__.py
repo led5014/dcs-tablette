@@ -90,7 +90,7 @@ def servir(local: bool, miroir: bool, mise_a_jour: bool = True, captures: bool =
             print(ligne)
     pont = PontDCS(cfg.port_ordres, cfg.port_etat)
     pont.demarrer()
-    video = Video(cfg.saved_games)
+    video = Video(cfg.saved_games, appareil=pont.dernier_appareil)
     affichage = AffichageKneeboard()      # kneeboard de DCS sur le PC ou la tablette
     diagnostic = Diagnostic(cfg.saved_games, pont, video, cfg.port_web, publiee=publiee)
     diagnostic.demarrer()

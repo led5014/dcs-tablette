@@ -19,7 +19,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from tablette import appareils, planche  # noqa: E402
-from tablette.appareils import a10c, ah64d, fa18c  # noqa: E402
+from tablette.appareils import a10c, ah64d, fa18c, oh58d  # noqa: E402
 
 RACINE = Path(__file__).resolve().parent.parent
 DCS = Path("C:/Program Files (x86)/Steam/steamapps/common/DCSWorld")
@@ -272,6 +272,37 @@ class TestContreLesScriptsDesModules(unittest.TestCase):
         # Libellés plus serrés que les boutons répartis : c'est ce qui décalait.
         self.assertGreater(ah64d.REPERES_X[0], 1 / 12 + 0.05)
 
+    def test_cadre_des_mfd_du_kiowa(self):
+        """Retour de vol (1.11.1) : verre carré, et B1–B4 répartis également
+        alors que le module écrit leurs onglets deux à gauche, deux à droite
+        (B3 tombait sous le vide, B4 sous MMS)."""
+        for ecran in oh58d.PROFIL.ecrans:
+            self.assertAlmostEqual(ecran.aspect, 4 / 3)
+            bas = sorted((b.rang, b.id) for b in ecran.boutons if b.cote == "bas")
+            self.assertEqual(bas, [(0, "B1"), (1, "B2"), (2, "B3"), (3, "B4")])
+            x = ecran.reperes_x
+            self.assertTrue(x[1] < 0.4 < 0.6 < x[2], x)                 # deux et deux
+            self.assertEqual(len(ecran.reperes_y), 5)
+            for cote in ("gauche", "droite"):
+                self.assertEqual(sorted(b.rang for b in ecran.boutons if b.cote == cote),
+                                 list(range(5)))
+
+    def test_reperes_a_la_mesure_des_cadres(self):
+        """Un repère par case du cadre : la page ignore sinon les repères."""
+        for profil in appareils.PROFILS:
+            for ecran in profil.ecrans:
+                for reperes, n in ((ecran.reperes_x, ecran.par_cote),
+                                   (ecran.reperes_y, ecran.par_cote_y or ecran.par_cote)):
+                    if reperes:
+                        self.assertEqual(len(reperes), n, (profil.id, ecran.id))
+                        self.assertEqual(list(reperes), sorted(reperes), (profil.id, ecran.id))
+                for b in ecran.boutons:
+                    if b.cote in ("haut", "bas"):
+                        self.assertLess(b.rang, ecran.par_cote, (profil.id, b.id))
+                    elif b.cote in ("gauche", "droite"):
+                        self.assertLess(b.rang, ecran.par_cote_y or ecran.par_cote,
+                                        (profil.id, b.id))
+
     def test_hornet(self):
         s = self.module("FA-18C")
         self.assertEqual(identifiants(s, "MDI_LEFT", "MDI_RIGHT", "AMPCD", "KNEEBOARD", "UFC"),
@@ -422,6 +453,72 @@ class TestConfigurationEcransDCS(unittest.TestCase):
                          {"LEFT_MFCD": (2560, 0, 720, 720), "RIGHT_MFCD": (3280, 0, 720, 720),
                           "CENTER_MFCD": (2560, 720, 720, 720), "TEDAC": (3280, 720, 720, 720)})
 
+    def test_zones_a_la_forme_des_ecrans_de_chaque_appareil(self):
+        """Retour de vol (1.11.1) : dans une zone carrée, DCS étire les MFD 4:3
+        du Kiowa et en coupe le haut. Ils ont leurs zones, l'un sous l'autre et
+        plus grands ; les autres appareils gardent leurs carrés."""
+        from tablette.ecrans_dcs import (a_leur_forme, disposition_essai,
+                                         disposition_second_ecran, generer, lire_zones)
+        formes = appareils.formes()
+        self.assertEqual(formes["OH58D"], {"LEFT_MFCD": 4 / 3, "RIGHT_MFCD": 4 / 3})
+        carres = disposition_second_ecran(2560, 1440, 2560, 1440)
+        kiowa = disposition_second_ecran(2560, 1440, 2560, 1440, formes["OH58D"])
+        self.assertEqual(kiowa, {"LEFT_MFCD": (2800, 0, 960, 720),
+                                 "RIGHT_MFCD": (2800, 720, 960, 720)})
+        for nom, (x, y, l, h) in disposition_second_ecran(2560, 1440, 2560, 1440,
+                                                          formes["JF-17"]).items():
+            self.assertAlmostEqual(l / h, 422 / 563, places=2)       # en portrait
+            self.assertTrue(carres[nom][0] <= x and x + l <= carres[nom][0] + 720, nom)
+        texte = generer((0, 0, 2560, 1440), carres, "test", {
+            nom: disposition_second_ecran(2560, 1440, 2560, 1440, f) for nom, f in formes.items()})
+        texte.encode("ascii")
+        self.assertEqual(lire_zones(texte, 5120, 1440, "OH58D"), kiowa)
+        self.assertEqual(lire_zones(texte, 5120, 1440, "FA-18C_hornet"), carres)
+        self.assertEqual(lire_zones(texte, 5120, 1440), carres)
+        self.assertTrue(a_leur_forme(texte, 5120, 1440, formes))
+        self.assertFalse(a_leur_forme(generer((0, 0, 2560, 1440), carres, "test"),
+                                      5120, 1440, formes))
+        # Essai : chacun dans son carré, en bas de la vue.
+        self.assertEqual(disposition_essai(2560, 1440, formes["OH58D"]),
+                         {"LEFT_MFCD": (0, 1020, 480, 360), "RIGHT_MFCD": (2080, 1020, 480, 360)})
+
+    def test_zones_par_appareil_ecrites_par_helios_ou_a_la_main(self):
+        """Helios écrit des blocs « if … or false then … return end », le forum
+        des if / elseif / else : relus comme DCS les rejoue pour l'appareil."""
+        from tablette.ecrans_dcs import lire_zones
+        helios = ("_  = function(p) return p end\nname = _('Helios')\n\n"
+                  "function reconfigure_for_unit(unit_type)\n"
+                  "  LEFT_MFCD = {\n    x = 0,\n    y = 0,\n    width = 600,\n"
+                  "    height = 600\n  }\n"
+                  '  if  unit_type == "OH58D" or false then\n'
+                  "    LEFT_MFCD = {\n      x = 100,\n      y = 0,\n      width = 800,\n"
+                  "      height = 600\n    }\n    return\n  end -- OH58D\n"
+                  '  if  unit_type == "FA-18C_hornet" or false then\n'
+                  "    RIGHT_MFCD = { x = 700, y = 0, width = 500, height = 500 }\n"
+                  "    return\n  end -- FA-18C_hornet\nend -- reconfigure_for_unit()\n\n"
+                  "Viewports = {\n  Center = {\n    x = 0,\n    y = 0,\n    width = 2560,\n"
+                  "    height = 1440\n  }\n}\n")
+        self.assertEqual(lire_zones(helios, 2560, 1440, "OH58D"),
+                         {"LEFT_MFCD": (100, 0, 800, 600)})
+        self.assertEqual(lire_zones(helios, 2560, 1440, "FA-18C_hornet"),
+                         {"LEFT_MFCD": (0, 0, 600, 600), "RIGHT_MFCD": (700, 0, 500, 500)})
+        self.assertEqual(lire_zones(helios, 2560, 1440), {"LEFT_MFCD": (0, 0, 600, 600)})
+        forum = ("RIGHT_MFCD = { x = 1; y = 1; width = 9; height = 9; }\n"
+                 "--[[ comme dans 3Cameras.lua :\nfunction reconfigure_for_unit(unit_type)\n"
+                 "     RIGHT_MFCD = nil\nend\n--]]\n"
+                 "function reconfigure_for_unit(unit_type)\n"
+                 'if unit_type == "A-10C" or unit_type == "A-10C_2" then\n'
+                 "LEFT_MFCD = { x = 10; y = 0; width = 825; height = 825; }\n"
+                 'elseif unit_type == "AH-64D_BLK_II" then\n'
+                 "TEDAC = { x = 2560; y = 280; width = 1620; height = 1400; }\n"
+                 "RIGHT_MFCD = nil\nelse\nCENTER_MFCD = RIGHT_MFCD\nend\nend\n")
+        self.assertEqual(lire_zones(forum, 4000, 1440, "A-10C_2"),
+                         {"LEFT_MFCD": (10, 0, 825, 825), "RIGHT_MFCD": (1, 1, 9, 9)})
+        self.assertEqual(lire_zones(forum, 4000, 1440, "AH-64D_BLK_II"),
+                         {"TEDAC": (2560, 280, 1620, 1400)})
+        self.assertEqual(lire_zones(forum, 4000, 1440, "F-16C_50"),
+                         {"RIGHT_MFCD": (1, 1, 9, 9), "CENTER_MFCD": (1, 1, 9, 9)})
+
     def test_dcs_regle_dans_options_lua_avec_une_copie(self):
         from tablette.ecrans_dcs import regler_options
         self.options("1camera")
@@ -445,12 +542,14 @@ class TestConfigurationEcransDCS(unittest.TestCase):
             largeur_totale = principal[0] + second[0]
             kx, ky, kl, kh = zone_kneeboard(largeur_totale, max(principal[1], second[1]))
             cadre = (kx - BANDEAU_KNEEBOARD, ky, kl + BANDEAU_KNEEBOARD, kh)
-            for nom, (x, y, l, h) in disposition_second_ecran(*principal, *second).items():
-                separes = (x + l <= cadre[0] or cadre[0] + cadre[2] <= x
-                           or y + h <= cadre[1] or cadre[1] + cadre[3] <= y)
-                self.assertTrue(separes, (principal, second, nom))
-                self.assertGreaterEqual(x, principal[0], nom)        # sur le second
-                self.assertLessEqual(x + l, largeur_totale, nom)
+            for forme in [None] + list(appareils.formes().values()):
+                for nom, (x, y, l, h) in disposition_second_ecran(*principal, *second,
+                                                                  forme).items():
+                    separes = (x + l <= cadre[0] or cadre[0] + cadre[2] <= x
+                               or y + h <= cadre[1] or cadre[1] + cadre[3] <= y)
+                    self.assertTrue(separes, (principal, second, nom, forme))
+                    self.assertGreaterEqual(x, principal[0], nom)        # sur le second
+                    self.assertLessEqual(x + l, largeur_totale, nom)
 
 
     def test_expressions_des_fichiers_livres_avec_dcs(self):
@@ -1051,6 +1150,7 @@ class TestVideo(unittest.TestCase):
         self.vue = (90, 90, 90)           # le reste de la fenêtre
         self.instant = 0.0
         self.lancement = None             # DCS « lancé » : heure, ou None
+        self.appareil = None              # celui que DCS pilote
 
     def tearDown(self):
         self.tmp.cleanup()
@@ -1075,12 +1175,30 @@ class TestVideo(unittest.TestCase):
             return decouper(fenetre, zones)
 
         return Video(self.saved, capturer=capturer, lancement=lambda: self.lancement,
-                     horloge=lambda: self.instant)
+                     horloge=lambda: self.instant, appareil=lambda: self.appareil)
 
     def decoder(self, donnees):
         import io
         self.assertEqual(donnees[:3], b"\xff\xd8\xff")
         return self.Image.open(io.BytesIO(donnees)).convert("RGB")
+
+    def test_zones_de_l_appareil_pilote(self):
+        """Le Kiowa a ses zones 4:3 (reconfigure_for_unit) : la capture prend
+        celles de l'appareil que DCS pilote, et suit quand il change."""
+        from tablette.ecrans_dcs import NOM_FICHIER, disposition_essai, generer
+        from tablette.video import PasDImage
+        forme = appareils.formes()["OH58D"]
+        (self.saved / "Config" / "MonitorSetup" / NOM_FICHIER).write_text(
+            generer((0, 0, 2560, 1440), disposition_essai(2560, 1440), "test",
+                    {"OH58D": disposition_essai(2560, 1440, forme)}), encoding="ascii")
+        video = self.video()
+        self.assertEqual(self.decoder(video.image("LEFT_MFCD")).size, (468, 468))
+        self.appareil, self.instant = "OH58D", 1.0
+        self.assertEqual(self.decoder(video.image("LEFT_MFCD")).size, (468, 352))
+        with self.assertRaises(PasDImage):
+            video.image("CENTER_MFCD")                 # le Kiowa n'en a pas
+        self.appareil, self.instant = "FA-18C_hornet", 2.0
+        self.assertEqual(self.decoder(video.image("LEFT_MFCD")).size, (468, 468))
 
     def test_ecran_decoupe_sans_le_liseré_du_cockpit(self):
         image = self.decoder(self.video().image("LEFT_MFCD"))
@@ -2675,6 +2793,9 @@ class FauxPont:
     def etat(self):
         return dict(self._etat)
 
+    def dernier_appareil(self):
+        return self._etat["appareil"]
+
 
 class TestDiagnostic(unittest.TestCase):
     """La console de diagnostic, sur un faux Saved Games/DCS et des écrans
@@ -2936,6 +3057,25 @@ class TestDiagnostic(unittest.TestCase):
         self.assertEqual(point.etat, "repare")
         for x, y, l, h in zones_actives(self.saved).values():
             self.assertTrue(2560 <= x and x + l <= 4480 and y + h <= 1080)
+
+    def test_configuration_d_avant_les_ecrans_du_kiowa_recrite(self):
+        """Écrite par la 1.11.1, tout en carrés : le Kiowa y est étiré et
+        coupé. Dit DCS ouvert, récrite DCS fermé, puis laissée en paix."""
+        from tablette.ecrans_dcs import a_leur_forme, disposition_second_ecran, generer
+        fichier = self.saved / "Config" / "MonitorSetup" / "tablette.lua"
+        ancienne = generer((0, 0, 2560, 1440), disposition_second_ecran(2560, 1440, 2560, 1440),
+                           "Vue sur l'ecran principal, ecrans exportes sur le second")
+        fichier.write_text(ancienne, encoding="ascii")
+        self.lance = True
+        point = self.points()["Écrans de DCS"]
+        self.assertEqual(point.etat, "a_faire")
+        self.assertIn("Kiowa", point.detail)
+        self.assertIn("Quitter DCS", point.solution[0])
+        self.assertEqual(lire(fichier), ancienne)
+        self.lance = False
+        self.assertEqual(self.points()["Écrans de DCS"].etat, "repare")
+        self.assertTrue(a_leur_forme(lire(fichier), 5120, 1440, appareils.formes()))
+        self.assertEqual(self.points()["Écrans de DCS"].etat, "ok")
 
     def test_configuration_retouchee_a_la_main_gardee(self):
         fichier = self.saved / "Config" / "MonitorSetup" / "tablette.lua"

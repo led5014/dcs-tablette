@@ -95,7 +95,7 @@ def create_app(cfg: Optional[Config] = None, pont: Optional[PontDCS] = None,
     le serveur le met, les tests parlent à « testserver »."""
     cfg = cfg or Config()
     pont = pont or PontDCS(cfg.port_ordres, cfg.port_etat)
-    video = video or Video(cfg.saved_games)
+    video = video or Video(cfg.saved_games, appareil=pont.dernier_appareil)
     affichage = affichage or AffichageKneeboard()
     if dossier_dcs is None:
         from .capture import dossier_dcs    # Windows seulement : chargé à la demande

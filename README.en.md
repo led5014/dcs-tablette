@@ -98,8 +98,10 @@ F-15E displays): feedback is welcome.
 
 On the Hornet, the Apache and the A-10C, each button sits right across from
 the label the module draws on the display (positions read from the module's
-scripts). On the F-16C and the OH-58D, the buttons are evenly spaced along
-the frame: a screenshot of their MFDs would let us line them up too.
+scripts). On the OH-58D, they are lined up from a photo of the tablet, and
+its 4:3 MFDs get viewports of their own shape: no more stretched image or
+cut-off top. On the F-16C, the buttons are evenly spaced along the frame: a
+screenshot of its MFDs would let us line them up too.
 
 ## Installation
 

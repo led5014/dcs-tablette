@@ -82,8 +82,8 @@ def _cadre_jf17(u: int, l: int, r: int, d: int):
 # JF-17 : un seul appareil MFCD = 47 pour les trois écrans, chacun ses
 # numéros. Écrans en portrait, environ 422 × 563 (modèle Helios « DEKA_JF-17 »).
 # DCS cherche JF17_LEFT_MFCD puis LEFT_MFCD (deux arguments) : les zones
-# génériques suffisent. Comment DCS dessine un écran en portrait dans la zone
-# carrée de « Tablette DCS » n'est pas vérifié : à regarder au premier vol.
+# génériques suffisent. « Tablette DCS » leur donne cette forme en portrait
+# (appareils.formes), comme Helios : pas encore vu en vol.
 _JF17 = dict(par_cote=5, par_cote_y=8, aspect=422 / 563)
 JF17 = Profil(
     id="jf17",
