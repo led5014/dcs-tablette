@@ -286,6 +286,11 @@ class TestContreLesScriptsDesModules(unittest.TestCase):
             for cote in ("gauche", "droite"):
                 self.assertEqual(sorted(b.rang for b in ecran.boutons if b.cote == cote),
                                  list(range(5)))
+            self.assertEqual(ecran.rognage, 0)          # le module écrit jusqu'au bord
+        # Image entière : les repères arrivent à la page tels quels.
+        from tablette.app import vu_par_la_tablette
+        mfd = vu_par_la_tablette(oh58d.PROFIL.description())["ecrans"][0]
+        self.assertEqual(mfd["reperes_x"], list(oh58d.PROFIL.ecrans[0].reperes_x))
 
     def test_reperes_a_la_mesure_des_cadres(self):
         """Un repère par case du cadre : la page ignore sinon les repères."""
@@ -1234,7 +1239,9 @@ class TestVideo(unittest.TestCase):
 
     def test_zones_de_l_appareil_pilote(self):
         """Le Kiowa a ses zones 4:3 (reconfigure_for_unit) : la capture prend
-        celles de l'appareil que DCS pilote, et suit quand il change."""
+        celles de l'appareil que DCS pilote, et suit quand il change. Image
+        du Kiowa entière : photo en 1.12.0, rognée, elle perdait la première
+        lettre de ses libellés et le haut de sa ligne du haut."""
         from tablette.ecrans_dcs import NOM_FICHIER, disposition_essai, generer
         from tablette.video import PasDImage
         forme = appareils.formes()["OH58D"]
@@ -1244,7 +1251,7 @@ class TestVideo(unittest.TestCase):
         video = self.video()
         self.assertEqual(self.decoder(video.image("LEFT_MFCD")).size, (468, 468))
         self.appareil, self.instant = "OH58D", 1.0
-        self.assertEqual(self.decoder(video.image("LEFT_MFCD")).size, (468, 352))
+        self.assertEqual(self.decoder(video.image("LEFT_MFCD")).size, (480, 360))
         with self.assertRaises(PasDImage):
             video.image("CENTER_MFCD")                 # le Kiowa n'en a pas
         self.appareil, self.instant = "FA-18C_hornet", 2.0

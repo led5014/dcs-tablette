@@ -19,6 +19,7 @@ from typing import Callable, Dict, Optional, Tuple
 from PIL import Image
 
 from . import filtres
+from .appareils import ROGNAGE, profil_pour
 from .copie import Copie, Rect, dans, zone_temoin
 from .ecrans_dcs import (PasDExport, fichier_actif, options_affichage, zone_kneeboard,
                          zones_actives)
@@ -33,11 +34,6 @@ DEMANDE_RECENTE_S = 1.0          # un écran réclamé depuis moins longtemps es
 VALIDITE_ZONES_S = 2.0           # options.lua n'est relu qu'une fois toutes les 2 s
 SEUIL_NOIR = 8                   # luminosité max sous laquelle une image est noire
 GARDE_JPEG_S = 2.0               # une image réglée qui n'a pas resservi depuis est oubliée
-# DCS dessine les écrans du Hornet arrondis (rayon ≈ 1/6 du côté, mesuré) et
-# laisse un liseré du cockpit sur les bords : on le rogne. Rogner davantage
-# couperait les libellés des boutons, collés au bord ; les coins arrondis
-# sont masqués par la page, qui arrondit l'écran comme le vrai.
-ROGNAGE = 0.012
 
 
 class PasDImage(Exception):
@@ -53,9 +49,10 @@ def _noire(image: Image.Image) -> bool:
     return all(maxi < SEUIL_NOIR for _, maxi in image.getextrema())
 
 
-def _rognee(zone: Rect) -> Rect:
+def _rognee(zone: Rect, rognage: float = ROGNAGE) -> Rect:
+    """La zone sans le liseré que DCS laisse autour de l'écran (appareils.ROGNAGE)."""
     x, y, l, h = zone
-    mx, my = round(l * ROGNAGE), round(h * ROGNAGE)
+    mx, my = round(l * rognage), round(h * rognage)
     return (x + mx, y + my, l - 2 * mx, h - 2 * my)
 
 
@@ -127,7 +124,10 @@ class Video:
             if (maintenant - instant < FRAICHEUR_S and copie is not None
                     and (nom in copie.ecrans or not dans(zones[nom], copie.taille))):
                 return instant, copie
-        voulues = {n: (_rognee(z) if n != KNEEBOARD else z) for n, z in zones.items()
+        # Rognées comme le veut l'appareil piloté : le Kiowa, pas du tout.
+        profil = profil_pour(self._zones[1] if self._zones else None)
+        voulues = {n: (_rognee(z, profil.rognage(n)) if n != KNEEBOARD else z)
+                   for n, z in zones.items()
                    if maintenant - self._demandes.get(n, -1e9) < DEMANDE_RECENTE_S}
         self._copie = (maintenant, self._capturer(voulues))
         instant, copie = self._copie

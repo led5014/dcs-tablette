@@ -77,7 +77,11 @@ D'où viennent les numéros, et ce qui reste à confirmer :
   (`if unit_type == … or false then … return end`). Un fichier d'avant,
   tout en carrés, est récrit par le diagnostic, DCS fermé. Cadre : 4 boutons
   en bas, 5 sur les côtés ; repères mesurés sur la photo, corrigés de la
-  zone carrée — à affiner sur une photo en 4:3.
+  zone carrée, bons sur la photo en 4:3 (1.12.0). Cette photo-là montrait
+  encore la première lettre des libellés de gauche et la moitié de la ligne
+  du haut coupées, comme en carré : les 1,2 % rognés sur chaque bord pour le
+  liseré du Hornet (`appareils.ROGNAGE`). `Ecran.rognage` = 0 pour le Kiowa,
+  dont le module écrit jusqu'au bord.
 - C-130J-30 (01/11/2026, d'après la capture d'un pilote en vol, en mode
   essai) : le module dessine de lui-même dans `LEFT_MFCD` (PFD),
   `CENTER_MFCD` (SYSTEM STATUS) et `RIGHT_MFCD` (moteurs et ACAWS), rien dans
@@ -337,6 +341,12 @@ cadrans, et la page redemande les siens quand elle change.
 - **Coins des écrans** : `arrondi` de chaque `Ecran` ; 0,17 mesuré sur les
   DDI du Hornet, 0,02 ailleurs tant que rien n'est mesuré (l'écran de
   l'Apache est quasi carré).
+- **Image entière dans le verre** : `object-fit: contain` sur la toile. Le
+  verre n'a pas tout à fait la forme que calcule `construireCadre` (marges
+  et bordures en %, mesuré 1,361 au lieu de 4:3 sur le Kiowa en 1280 × 800) ;
+  l'image garde ses proportions, avec au plus un liseré noir d'1 % sur deux
+  bords, au lieu d'être étirée. Vérifié en 1280 × 800, 1340 × 620 et
+  1024 × 768, deux MFD et un seul : les quatre bords de l'image visibles.
 - **Boutons en face des libellés** (retour de vol, 30/10/2026 : sur
   l'Apache, ceux des bouts tombaient à côté) : `reperes_x` / `reperes_y` de
   chaque `Ecran`, là où le module écrit les libellés, lus dans ses scripts —

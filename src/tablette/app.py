@@ -22,13 +22,13 @@ from fastapi import Body, Cookie, Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, Response
 
 from . import VERSION, appareils, filtres, instruments, langues, planche
-from .appareils import Profil
+from .appareils import ROGNAGE, Profil
 from .config import Config
 from .dcs import PontDCS
 from .kneeboard import lire_page, lister_carnets, trouver
 from .langues import Texte, dans, raison
 from .miroir import AffichageKneeboard
-from .video import KNEEBOARD, ROGNAGE, PasDImage, Video
+from .video import KNEEBOARD, PasDImage, Video
 
 WEB_DIR = Path(__file__).resolve().parent / "web"
 
@@ -75,11 +75,13 @@ def hote_permis(hote: str) -> bool:
 
 def vu_par_la_tablette(description: Dict) -> Dict:
     """Les repères des libellés, en fraction de l'image que la tablette
-    montre : celle de DCS rognée de ROGNAGE sur chaque bord (video.py)."""
+    montre : celle de DCS rognée sur chaque bord du `rognage` de l'écran
+    (video.py)."""
     for ecran in description["ecrans"]:
+        r = ecran.get("rognage", ROGNAGE)
         for cle in ("reperes_x", "reperes_y"):
             if ecran.get(cle):
-                ecran[cle] = [round((f - ROGNAGE) / (1 - 2 * ROGNAGE), 4) for f in ecran[cle]]
+                ecran[cle] = [round((f - r) / (1 - 2 * r), 4) for f in ecran[cle]]
     return description
 
 

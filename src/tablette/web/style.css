@@ -272,13 +272,16 @@ body.en-kneeboard #modes { opacity: .45; }
 .ecran-retour.erreur { color: var(--ambre); }
 
 /* L'image de DCS remplit l'écran ; les textes d'attente s'effacent, seul le
-   retour d'appui reste, discret, en bas. */
+   retour d'appui reste, discret, en bas. Entière et à ses proportions : le
+   verre n'a pas tout à fait la forme voulue (marges et bordures en %, ±2 %
+   mesurés sur le Kiowa), l'image n'est ni étirée ni coupée pour autant. */
 .video {
   position: absolute;
   top: 0;
   left: 0;
   width: 100%;
   height: 100%;
+  object-fit: contain;
   display: none;
   pointer-events: none;
 }

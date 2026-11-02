@@ -26,6 +26,12 @@ from ..langues import FRANCAIS, Texte, dans
 
 COTES = ("gauche", "haut", "droite", "bas")
 
+# DCS dessine les écrans du Hornet arrondis (rayon ≈ 1/6 du côté, mesuré) et
+# laisse un liseré du cockpit sur les bords : le serveur le rogne (video.py).
+# Rogner davantage couperait les libellés des boutons, collés au bord ; les
+# coins arrondis sont masqués par la page, qui arrondit l'écran comme le vrai.
+ROGNAGE = 0.012
+
 
 @dataclass(frozen=True)
 class Bouton:
@@ -54,6 +60,11 @@ class Ecran:
     # presque droits — l'écran de l'Apache est quasi carré, et arrondir sans
     # l'avoir mesuré rognerait des symboles.
     arrondi: float = 0.02
+    # Ce que le serveur rogne sur chaque bord de l'image, en fraction du
+    # côté (ROGNAGE). 0 là où le module écrit jusqu'au bord : rogné, le
+    # Kiowa perdait la première lettre de ses libellés et le haut de sa
+    # ligne du haut (photo de la tablette en 1.12.0).
+    rognage: float = ROGNAGE
     # Où le module écrit le libellé de chaque bouton, en fraction de l'image
     # exportée : de gauche à droite pour les rangées du haut et du bas, de
     # haut en bas pour les côtés, un par rang. La tablette centre chaque
@@ -105,6 +116,10 @@ class Profil:
     def ecran(self, id_: str) -> Optional[Ecran]:
         return next((e for e in self.ecrans if e.id == id_), None)
 
+    def rognage(self, viewport: str) -> float:
+        """Ce que le serveur rogne sur l'image de la zone `viewport`."""
+        return next((e.rognage for e in self.ecrans if e.viewport == viewport), ROGNAGE)
+
     def arguments_lus(self) -> Tuple[int, ...]:
         """Les arguments que le script Lua envoie : ceux du profil, plus la
         position de chaque interrupteur des cadres."""
@@ -128,7 +143,7 @@ class Profil:
             "panneaux": list(self.panneaux),
             "ecrans": [{"id": e.id, "libelle": dans(e.libelle, langue), "par_cote": e.par_cote,
                         "par_cote_y": e.par_cote_y, "aspect": e.aspect,
-                        "arrondi": e.arrondi,
+                        "arrondi": e.arrondi, "rognage": e.rognage,
                         "reperes_x": list(e.reperes_x) if e.reperes_x else None,
                         "reperes_y": list(e.reperes_y) if e.reperes_y else None,
                         "boutons": [{"id": b.id, "cote": b.cote, "rang": b.rang,

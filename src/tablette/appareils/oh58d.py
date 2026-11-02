@@ -27,7 +27,13 @@ PAGE 1 et HVR (retour de vol : boutons pas en face des libellés) :
 - sur les côtés, les libellés L1–L5 et R1–R5 ne descendent pas aussi près
   des bords que des boutons également répartis.
 Zone encore carrée sur cette photo, image étirée et rognée : repères
-corrigés de ce rognage, à affiner sur une photo en 4:3.
+corrigés de ce rognage. Bons sur la photo suivante, en 1.12.0.
+
+Pas de rognage : le module écrit jusqu'au bord de l'image. Sur les deux
+photos, en carré puis en 4:3, il manquait autant : la première lettre des
+libellés de gauche (SEND ROUTE, NAV ALIGN), le bord droit (VID OFF), la
+moitié de la ligne du haut — les 1,2 % que le serveur rogne sur chaque bord
+pour le liseré du cockpit du Hornet.
 """
 from ..instruments import HELICO_KT
 from . import Bouton, Ecran, Profil
@@ -46,8 +52,8 @@ def _cadre_mfd():
 
 
 _CADRE = _cadre_mfd()
-# Quatre boutons en bas, cinq sur les côtés, verre 4:3.
-_MFD = dict(par_cote=4, par_cote_y=5, aspect=4 / 3,
+# Quatre boutons en bas, cinq sur les côtés, verre 4:3, image entière.
+_MFD = dict(par_cote=4, par_cote_y=5, aspect=4 / 3, rognage=0.0,
             reperes_x=(0.11, 0.255, 0.71, 0.86),
             reperes_y=(0.17, 0.345, 0.515, 0.685, 0.86))
 
