@@ -134,19 +134,29 @@ Installation et mise à jour les plus simples possible (demande du
   de Windows 11 ignorerait « réduite ». `tenir_a_jour` le pose une fois aux
   installations d'avant la 1.11.0 (`demarrage` dans installation.json) :
   retiré à la main, il ne revient pas ;
-- DCS ouvre sa fenêtre au coin haut gauche du bureau ENTIER, pas du
-  principal : relevé sur les photos du même pilote (« Identifier » : son
-  écran 2 à gauche du principal, la vue de DCS partie sur lui ; l'écran
-  virtuel était bien à droite). `installation.genants` repère les écrans
-  réels à gauche ou au-dessus du principal, `rangement` dit où les mettre
-  (sous la fenêtre de DCS, ou à droite si l'écran des écrans du cockpit
-  est dessous ; leur place seulement), `ecran_virtuel.ranger` les y met.
-  Jamais sans accord : l'installation demande, et retient `ranger` dans
-  installation.json ; avec lui, le point « Écrans de Windows » du
-  diagnostic (et l'ouverture de Windows) les range de nouveau, DCS fermé.
-  Sans, il dit de relancer Installer.bat. Avec plusieurs écrans réels,
-  l'installation dit aussi sur lequel DCS s'affichera (le principal de
-  Windows) et s'arrête si ce n'est pas le bon ;
+- un écran à gauche du principal mais décalé en hauteur fait partir la
+  fenêtre de DCS de lui. Photos du même pilote (« Identifier » : son écran
+  2 à gauche du principal, un peu plus bas, la vue de DCS partie sur lui),
+  puis essai avec lui le 02/11/2026 : écran débranché, ou remonté bords du
+  haut alignés, DCS revient sur le principal ; redescendu, DCS repart.
+  (La 1.11.0 croyait que DCS partait du coin haut gauche du bureau entier
+  et rangeait l'écran SOUS le principal : abandonné, et rien ne prouve
+  qu'un écran dessous ne gêne pas aussi.) `installation.genants` repère
+  les écrans réels à gauche décalés en hauteur, ou au-dessus du principal ;
+  `rangement` aligne leur bord du haut sur celui du principal, du même
+  côté (au-dessus : à gauche), sans chevauchement ni changement d'ordre ;
+  `ecran_virtuel.ranger` les y met. Jamais sans accord : l'installation
+  demande, et retient `ranger` dans installation.json ; avec lui, le point
+  « Écrans de Windows » du diagnostic (et l'ouverture de Windows) les
+  réaligne, DCS fermé. Sans, il dit de relancer Installer.bat ;
+- avec plusieurs écrans réels (ou l'écran virtuel en principal),
+  l'installation demande sur lequel mettre DCS, par son numéro dans « Vos
+  écrans », chaque écran nommé par son modèle (`noms_des_ecrans`,
+  QueryDisplayConfig : EnumDisplayDevices ne dit que « Generic PnP
+  Monitor »). Un autre que le principal en devient le principal
+  (`ecran_virtuel.rendre_principal` : lui en (0, 0) avec
+  CDS_SET_PRIMARY, les autres décalés d'autant) ; si Windows refuse,
+  l'installation s'arrête et dit quoi cocher ;
 - la mise à jour se fait sans question (`mise_a_jour.appliquer`) : la
   question O/n de la 1.5.0 à la 1.8.0 (15 s pour répondre) passait le plus
   souvent sans réponse, DCS Tablette lancé puis laissé derrière DCS ;

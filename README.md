@@ -113,9 +113,11 @@ d'écran de ses MFD permettra de les caler aussi.
    est construit à partir de ce dépôt (`scripts/construire_tablette.py`).
 3. Répondre aux questions de la fenêtre. Elle affiche d'abord vos écrans et
    vos réglages de DCS, puis fait le reste en tenant compte de ce que vous
-   avez déjà. Si votre configuration d'écrans de DCS exporte déjà les écrans
-   du cockpit (vrais MFD, Helios…), elle propose de la garder : la tablette
-   les prend là où ils sont.
+   avez déjà. Avec plusieurs écrans, elle demande sur lequel vous voulez DCS
+   (Entrée : l'écran principal actuel), et en fait l'écran principal de
+   Windows si besoin. Si votre configuration d'écrans de DCS exporte déjà
+   les écrans du cockpit (vrais MFD, Helios…), elle propose de la garder : la
+   tablette les prend là où ils sont.
 
    1. **Écran virtuel.** DCS dessine les écrans exportés sur un écran : sans
       second écran, ils recouvrent la vue. S'il n'y a pas d'écran virtuel,
@@ -128,10 +130,11 @@ d'écran de ses MFD permettra de les caler aussi.
       aucun de vos écrans), à la même définition et à la même fréquence :
       rien à régler dans Paramètres → Écran. Un de vos écrans n'est utilisé
       que si vous dites que c'est une prise HDMI factice ; sans aucune place
-      libre, elle propose le mode essai. Un de vos écrans à **gauche** (ou
-      au-dessus) du principal ? DCS ouvre sa fenêtre au coin haut gauche du
-      bureau entier et partirait de lui : elle propose de le ranger sous la
-      fenêtre de DCS, et s'en souvient si Windows le remet à gauche.
+      libre, elle propose le mode essai. Un de vos écrans à **gauche** du
+      principal, plus haut ou plus bas que lui (ou au-dessus du principal) ?
+      DCS ouvrirait sa fenêtre à partir de lui : elle propose d'aligner son
+      bord du haut sur celui du principal, et s'en souvient si Windows le
+      décale de nouveau.
    2. **Scripts** de la tablette dans `Saved Games\DCS\Scripts`.
    3. **Écrans de DCS** : configuration « Tablette DCS », résolution des deux
       écrans, fenêtré. Si DCS est ouvert, la fenêtre attend qu'on le ferme.

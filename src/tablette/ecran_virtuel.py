@@ -39,7 +39,7 @@ import zipfile
 from ctypes import wintypes
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, List, Optional, Sequence, Tuple
+from typing import Callable, Dict, List, Optional, Sequence, Tuple
 from xml.etree import ElementTree
 
 from .langues import FRANCAIS, Texte, dans, pc
@@ -94,6 +94,7 @@ class Ecran:
     principal: bool = False
     actif: bool = True        # sur le bureau : ni dupliqué, ni déconnecté
     modes: Tuple[Mode, ...] = ()
+    modele: str = ""          # « LG ULTRAGEAR » (noms_des_ecrans), si Windows le dit
 
     @property
     def virtuel(self) -> bool:
@@ -102,8 +103,10 @@ class Ecran:
 
     @property
     def texte(self) -> Texte:
-        """L'écran en clair, dans les messages : traduisible, lui."""
-        return Texte("« {carte} » ({largeur}×{hauteur}, {frequence} Hz)", carte=self.carte,
+        """L'écran en clair, dans les messages : traduisible, lui. Le modèle
+        de l'écran réel plutôt que la carte, la même pour tous ses écrans."""
+        nom = self.carte if self.virtuel or not self.modele else self.modele
+        return Texte("« {carte} » ({largeur}×{hauteur}, {frequence} Hz)", carte=nom,
                      largeur=self.largeur, hauteur=self.hauteur, frequence=self.frequence)
 
     def __str__(self) -> str:
@@ -209,7 +212,8 @@ def planifier(ecrans: Sequence[Ecran]) -> Tuple[Optional[Placement], List[str]]:
               ecrans=[e.texte for e in genants]),
         Texte("dessous de l'écran principal : la fenêtre de DCS les couvrirait, ils resteraient "
               "noirs."),
-        # Ni à gauche ni au-dessus du principal : DCS partirait de cet écran.
+        # Ni au-dessus du principal, ni à sa gauche décalé : DCS partirait de cet
+        # écran (installation.genants).
         Texte("Paramètres → Système → Écran : glisser celui du dessous à droite de l'autre,"),
         Texte("puis relancer Installer.bat. Ou, pour essayer sans : Installer.bat --essai.")]
 
@@ -238,7 +242,9 @@ def decrire(ecrans: Sequence[Ecran]) -> List[str]:
                 ou = (Texte("à droite du principal, décalé") if decale
                       else Texte("à droite du principal"))
             elif e.x + e.largeur <= px:
-                ou = Texte("à gauche du principal")
+                # Décalé, DCS partirait de lui (installation.genants).
+                ou = (Texte("à gauche du principal, décalé en hauteur") if e.y != py
+                      else Texte("à gauche du principal"))
             elif e.y >= py + ph:
                 ou = Texte("sous le principal, décalé") if decale else Texte("sous le principal")
             elif e.y + e.hauteur <= py:
@@ -327,6 +333,46 @@ class SHELLEXECUTEINFOW(ctypes.Structure):
                 ("hProcess", wintypes.HANDLE)]
 
 
+class LUID(ctypes.Structure):
+    _fields_ = [("LowPart", wintypes.DWORD), ("HighPart", wintypes.LONG)]
+
+
+class DISPLAYCONFIG_PATH_INFO(ctypes.Structure):
+    # La source (sortie de la carte), puis la cible (l'écran), à plat.
+    _fields_ = [("sourceAdapterId", LUID), ("sourceId", ctypes.c_uint32),
+                ("sourceModeInfoIdx", ctypes.c_uint32), ("sourceStatusFlags", ctypes.c_uint32),
+                ("targetAdapterId", LUID), ("targetId", ctypes.c_uint32),
+                ("targetModeInfoIdx", ctypes.c_uint32), ("outputTechnology", ctypes.c_uint32),
+                ("rotation", ctypes.c_uint32), ("scaling", ctypes.c_uint32),
+                ("refreshNumerator", ctypes.c_uint32), ("refreshDenominator", ctypes.c_uint32),
+                ("scanLineOrdering", ctypes.c_uint32), ("targetAvailable", wintypes.BOOL),
+                ("targetStatusFlags", ctypes.c_uint32), ("flags", ctypes.c_uint32)]
+
+
+class DISPLAYCONFIG_MODE_INFO(ctypes.Structure):
+    # Le détail du mode (union de 48 octets) ne sert pas ici.
+    _fields_ = [("infoType", ctypes.c_uint32), ("id", ctypes.c_uint32), ("adapterId", LUID),
+                ("detail", ctypes.c_byte * 48)]
+
+
+class DISPLAYCONFIG_DEVICE_INFO_HEADER(ctypes.Structure):
+    _fields_ = [("type", ctypes.c_uint32), ("size", ctypes.c_uint32), ("adapterId", LUID),
+                ("id", ctypes.c_uint32)]
+
+
+class DISPLAYCONFIG_SOURCE_DEVICE_NAME(ctypes.Structure):
+    _fields_ = [("header", DISPLAYCONFIG_DEVICE_INFO_HEADER),
+                ("viewGdiDeviceName", wintypes.WCHAR * 32)]
+
+
+class DISPLAYCONFIG_TARGET_DEVICE_NAME(ctypes.Structure):
+    _fields_ = [("header", DISPLAYCONFIG_DEVICE_INFO_HEADER), ("flags", ctypes.c_uint32),
+                ("outputTechnology", ctypes.c_uint32), ("edidManufactureId", ctypes.c_uint16),
+                ("edidProductCodeId", ctypes.c_uint16), ("connectorInstance", ctypes.c_uint32),
+                ("monitorFriendlyDeviceName", wintypes.WCHAR * 64),
+                ("monitorDevicePath", wintypes.WCHAR * 128)]
+
+
 ATTACHE_AU_BUREAU = 0x1
 PRINCIPAL = 0x4
 MIROIR = 0x8
@@ -337,7 +383,11 @@ DM_PELSWIDTH = 0x80000
 DM_PELSHEIGHT = 0x100000
 DM_DISPLAYFREQUENCY = 0x400000
 CDS_UPDATEREGISTRY = 0x1
+CDS_SET_PRIMARY = 0x10
 CDS_NORESET = 0x10000000
+QDC_ONLY_ACTIVE_PATHS = 0x2
+NOM_DE_LA_SORTIE = 1                   # DISPLAYCONFIG_DEVICE_INFO_GET_SOURCE_NAME
+NOM_DE_L_ECRAN = 2                     # DISPLAYCONFIG_DEVICE_INFO_GET_TARGET_NAME
 SDC_TOPOLOGY_EXTEND = 0x4
 SDC_APPLY = 0x80
 SEE_MASK_NOCLOSEPROCESS = 0x40
@@ -371,6 +421,39 @@ def _reglage(user32, nom: str, rang: int) -> Optional[DEVMODEW]:
     return m if user32.EnumDisplaySettingsExW(nom, rang, ctypes.byref(m), 0) else None
 
 
+def noms_des_ecrans() -> Dict[str, str]:
+    """Le modèle de chaque écran du bureau (« LG ULTRAGEAR »), par nom de
+    sortie (\\\\.\\DISPLAY1) : EnumDisplayDevices ne dit souvent que « Generic
+    PnP Monitor », et deux écrans d'une même carte s'y ressemblent. Vide si
+    Windows ne le dit pas."""
+    try:
+        user32 = ctypes.WinDLL("user32")
+        nb_chemins, nb_modes = ctypes.c_uint32(), ctypes.c_uint32()
+        if user32.GetDisplayConfigBufferSizes(QDC_ONLY_ACTIVE_PATHS, ctypes.byref(nb_chemins),
+                                              ctypes.byref(nb_modes)) != 0:
+            return {}
+        chemins = (DISPLAYCONFIG_PATH_INFO * nb_chemins.value)()
+        modes = (DISPLAYCONFIG_MODE_INFO * nb_modes.value)()
+        if user32.QueryDisplayConfig(QDC_ONLY_ACTIVE_PATHS, ctypes.byref(nb_chemins), chemins,
+                                     ctypes.byref(nb_modes), modes, None) != 0:
+            return {}
+        noms = {}
+        for chemin in chemins[:nb_chemins.value]:
+            sortie = DISPLAYCONFIG_SOURCE_DEVICE_NAME()
+            sortie.header.type, sortie.header.size = NOM_DE_LA_SORTIE, ctypes.sizeof(sortie)
+            sortie.header.adapterId, sortie.header.id = chemin.sourceAdapterId, chemin.sourceId
+            ecran = DISPLAYCONFIG_TARGET_DEVICE_NAME()
+            ecran.header.type, ecran.header.size = NOM_DE_L_ECRAN, ctypes.sizeof(ecran)
+            ecran.header.adapterId, ecran.header.id = chemin.targetAdapterId, chemin.targetId
+            if (user32.DisplayConfigGetDeviceInfo(ctypes.byref(sortie)) == 0
+                    and user32.DisplayConfigGetDeviceInfo(ctypes.byref(ecran)) == 0
+                    and ecran.monitorFriendlyDeviceName):
+                noms[sortie.viewGdiDeviceName] = ecran.monitorFriendlyDeviceName
+        return noms
+    except (AttributeError, OSError):
+        return {}
+
+
 def lister() -> List[Ecran]:
     """Les écrans que Windows connaît, sur le bureau ou non, en pixels réels.
 
@@ -379,6 +462,7 @@ def lister() -> List[Ecran]:
     déconnecté, qu'il faut remettre sur le bureau.
     """
     user32 = _user32()
+    noms = noms_des_ecrans()
     ecrans = []
     rang = 0
     while (carte := _peripherique(user32, None, rang)) is not None:
@@ -402,7 +486,8 @@ def lister() -> List[Ecran]:
                      r.dmDisplayFrequency) if r is not None else (0, 0, 0, 0, 0))
         ecrans.append(Ecran(carte.DeviceName, carte.DeviceString, ident, *position,
                             principal=bool(carte.StateFlags & PRINCIPAL),
-                            actif=actif and r is not None, modes=tuple(sorted(modes))))
+                            actif=actif and r is not None, modes=tuple(sorted(modes)),
+                            modele=noms.get(carte.DeviceName, "")))
     return ecrans
 
 
@@ -433,18 +518,22 @@ def appliquer(placement: Placement) -> Optional[str]:
                                         code=code)
 
 
-def deplacer(places: Sequence[Tuple[Ecran, int, int]]) -> Optional[str]:
-    """Range des écrans réels, avec l'accord du pilote : leur place seulement,
-    jamais leur définition ni leur fréquence ; enregistré (il y restera au
-    redémarrage). Rend la raison d'un refus de Windows, ou None."""
+def deplacer(places: Sequence[Tuple[Ecran, int, int]],
+             principal: Optional[Ecran] = None) -> Optional[str]:
+    """Déplace des écrans, avec l'accord du pilote : leur place seulement,
+    jamais leur définition ni leur fréquence ; `principal`, placé en (0, 0),
+    devient l'écran principal. Enregistré (il y restera au redémarrage). Rend
+    la raison d'un refus de Windows, ou None."""
     user32 = _user32()
     for ecran, x, y in places:
         m = DEVMODEW()
         m.dmSize = ctypes.sizeof(m)
         m.dmFields = DM_POSITION
         m.dmPositionX, m.dmPositionY = x, y
-        code = user32.ChangeDisplaySettingsExW(ecran.nom, ctypes.byref(m), None,
-                                               CDS_UPDATEREGISTRY | CDS_NORESET, None)
+        drapeaux = CDS_UPDATEREGISTRY | CDS_NORESET
+        if principal is not None and ecran.nom == principal.nom:
+            drapeaux |= CDS_SET_PRIMARY
+        code = user32.ChangeDisplaySettingsExW(ecran.nom, ctypes.byref(m), None, drapeaux, None)
         if code != 0:
             return Texte("Windows refuse ce réglage (code {code})", code=code)
     code = user32.ChangeDisplaySettingsExW(None, None, None, 0, None)
@@ -452,12 +541,42 @@ def deplacer(places: Sequence[Tuple[Ecran, int, int]]) -> Optional[str]:
                                         code=code)
 
 
+def places_si_principal(ecrans: Sequence[Ecran], choisi: Ecran) -> List[Tuple[Ecran, int, int]]:
+    """Où va chaque écran du bureau quand `choisi` devient le principal :
+    Windows le veut en (0, 0), les autres décalés d'autant, la disposition
+    ne change pas. Lui d'abord, comme Windows l'attend."""
+    actifs = [e for e in ecrans if e.actif]
+    return sorted(((e, e.x - choisi.x, e.y - choisi.y) for e in actifs),
+                  key=lambda p: p[0].nom != choisi.nom)
+
+
+def rendre_principal(choisi: Ecran, lister: Callable[[], List[Ecran]] = lister,
+                     deplacer: Callable[..., Optional[str]] = deplacer,
+                     attendre: Callable[[float], None] = time.sleep) -> Optional[str]:
+    """`choisi` devient l'écran principal de Windows, celui où DCS s'affiche :
+    à l'installation, sur le choix du pilote. Rend la raison d'un échec, ou
+    None."""
+    ecrans = lister()
+    actuel = next((e for e in ecrans if e.nom == choisi.nom and e.actif), None)
+    if actuel is None:
+        return Texte("cet écran n'est plus sur le bureau")
+    if actuel.principal:
+        return None
+    erreur = deplacer(places_si_principal(ecrans, actuel), principal=actuel)
+    if erreur is None:
+        attendre(1)
+        if not any(e.nom == choisi.nom and e.principal for e in lister()):
+            erreur = Texte("Windows n'a pas changé d'écran principal")
+    return erreur
+
+
 def ranger(lister: Callable[[], List[Ecran]] = lister,
            deplacer: Callable[[Sequence[Tuple[Ecran, int, int]]], Optional[str]] = deplacer,
            attendre: Callable[[float], None] = time.sleep) -> Optional[str]:
-    """Les écrans réels à gauche ou au-dessus du principal rangés hors de la
-    fenêtre de DCS (installation.rangement), une fois que le pilote a dit
-    oui. Rend la raison d'un échec, ou None (rien à ranger compris)."""
+    """Les écrans réels décalés en hauteur à gauche du principal, ou
+    au-dessus, alignés sur son bord du haut (installation.rangement), une
+    fois que le pilote a dit oui. Rend la raison d'un échec, ou None (rien à
+    aligner compris)."""
     from .installation import rangement           # la règle des places, une seule fois
     actifs = [e for e in lister() if e.actif]
     places = []

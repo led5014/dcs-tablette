@@ -23,9 +23,11 @@ INSTALLATION
      your DCS settings, then does the rest based on what you already
      have:
 
-     Several displays? It says which one DCS will show on: the Windows
-     main display. If that's not the right one, it stops and tells you how
-     to choose the main display.
+     Several displays? DCS shows on the Windows main display. It asks
+     which one you want DCS on, by its number in the list of your displays
+     (named by their model): Enter keeps the current main display. Another
+     number, and it makes that one the Windows main display (the taskbar
+     moves there too).
 
      Your DCS monitor setup already exports the cockpit displays (real
      MFDs, Helios, touchscreen…)?
@@ -53,13 +55,12 @@ INSTALLATION
            HDMI dummy plug nobody looks at.
          - No room left (monitors on the right AND below): it offers test
            mode, or tells you which monitor to move.
-         - One of your displays to the LEFT of (or above) the main one: DCS
-           opens its window at the top left corner of the whole desktop,
-           its view would start from that display. It offers to move it
-           below the DCS window (the mouse then gets there from the
-           bottom): answer Y. Only its position changes, and the choice is
-           kept: if Windows puts it back on the left, DCS Tablette moves it
-           again, with DCS closed.
+         - One of your displays to the LEFT of the main one, higher or lower
+           than it (or a display above the main one): DCS then opens its
+           window from that display. It offers to align its top edge with
+           the main display's: answer Y. Only its position changes, it stays
+           on the left, and the choice is kept: if Windows offsets it again,
+           DCS Tablette aligns it again, with DCS closed.
      2/3 Tablet scripts
          Two scripts copied to Saved Games\DCS\Scripts, one line added to
          Export.lua (a copy of the old one is kept next to it). Tacview,
@@ -170,9 +171,10 @@ repaired safely is repaired automatically, and you are told:
   - virtual display moved by a Windows or graphics driver update: put back
     in place;
   - monitor setup no longer matching the displays: rewritten;
-  - display to the left of or above the main one: moved below the DCS
-    window, with DCS closed, if you agreed to it during installation
-    (otherwise, the diagnostics tell you to run "Installer.bat" again);
+  - display to the left of the main one but vertically offset (or above
+    the main one): top-aligned with the main display, with DCS closed, if
+    you agreed to it during installation (otherwise, the diagnostics tell
+    you to run "Installer.bat" again);
   - DCS switched back to full screen, or to another monitor setup: set
     back, once DCS is closed (it rewrites its settings on exit).
 Nothing is ever installed without asking: for a missing virtual display,
@@ -188,9 +190,9 @@ cockpit displays would no longer land on the virtual display.
 To prevent this, "DCS Tablette (écrans)", in the Windows Startup folder,
 puts everything back at every sign-in, before you start DCS: it waits for
 the virtual display, puts it back (right of the main display, or below if
-one of your displays takes the right), moves a display that came back to
-the left of the main one below the DCS window (if you agreed to it during
-installation), then sets "Tablette DCS" and the DCS resolution. No window,
+one of your displays takes the right), top-aligns again a left display that
+Windows offset (if you agreed to it during installation), then sets
+"Tablette DCS" and the DCS resolution. No window,
 a few seconds; the displays may flicker once if something had to be put
 back. It never touches DCS while it is running.
 
@@ -294,10 +296,9 @@ B. Place the virtual display (Settings → System → Display)
    If one of your monitors is already to the right of the main one, put
    the virtual display BELOW it instead, LEFT edges level. The DCS window
    must not cover any of your monitors.
-   6. No display to the LEFT of or ABOVE the main one: DCS opens its window
-      at the top left corner of the whole desktop, it would start from that
-      display. Drag any such display below the main one (or to the right of
-      the virtual display).
+   6. A display to the LEFT of the main one: TOP edges exactly level with
+      the main one. Higher or lower, or a display ABOVE the main one, and
+      DCS opens its window from that display.
 
 C. Tablet scripts
    "Installer.bat" always does this, even when the rest fails.
@@ -332,10 +333,12 @@ dot on the tablet. They say what is missing and how to fix it.
   puts it back by itself; quit DCS and start it again. If it can't, the
   diagnostics say why.
 - DCS shows on another of your displays:
-  - that display is to the left of (or above) the main one in Settings →
-    System → Display ("Identify" shows it): DCS starts from the top left
-    corner of the whole desktop. Run "Installer.bat" again, with DCS
-    closed: it offers to move it below the DCS window;
+  - that display is to the left of the main one, higher or lower than it,
+    or above the main one, in Settings → System → Display ("Identify"
+    shows it): DCS then starts from it. Run "Installer.bat" again, with
+    DCS closed: it offers to top-align it with the main display;
+  - or it isn't the Windows main display: run "Installer.bat" again and
+    give the number of the display you want DCS on;
   - or the virtual display changed resolution or position, and one of
     your displays took its place: close DCS with DCS Tablette left open,
     wait until the diagnostics say FIXED, then start DCS again — or
