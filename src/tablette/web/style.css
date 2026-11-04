@@ -577,6 +577,74 @@ body.en-kneeboard #modes { opacity: .45; }
   font-size: max(12px, calc(var(--taille) * .06));
 }
 
+/* ---------------------------------------------------------------- ICP et DED (F-16) */
+
+.icp {
+  grid-template-rows: 4fr 1.15fr 4.3fr;
+  gap: 3%;
+  padding: 3%;
+  background: linear-gradient(160deg, #353a3c, var(--cadre) 40%, #24282a);
+  border: 1px solid var(--cadre-bord);
+  border-radius: 3%;
+}
+/* 24 colonnes à chasse fixe (≈ 0,6 em chacune) dans la largeur du panneau. */
+.ded {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 0 3%;
+  font-size: calc(var(--taille) * .057);
+  line-height: 1.22;
+}
+.ded .inverse {
+  background: var(--vert-lcd);
+  color: #050a06;
+  text-shadow: none;
+}
+/* Sans DED : la raison, en clair, à la place des lignes ; le verre ne se
+   grise pas, elle doit se lire. */
+.ded.sans-donnees { opacity: 1; }
+.ded-raison {
+  color: #9fc7a8;
+  text-shadow: none;
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 8%;
+  font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-size: max(11px, calc(var(--taille) * .04));
+  line-height: 1.4;
+  text-align: center;
+  white-space: normal;
+}
+.ded-raison:empty { display: none; }
+.icp-haut {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 2%;
+}
+.icp-haut .touche { font-size: max(9px, calc(var(--taille) * .036)); }
+.icp-clavier {
+  display: grid;
+  grid-template-columns: 0.8fr repeat(4, 1fr) 0.2fr repeat(3, 0.85fr);
+  grid-template-rows: repeat(3, 1fr);
+  gap: 5% 2.2%;
+  min-height: 0;
+}
+.touche.chiffre {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  line-height: 1.05;
+}
+.touche.chiffre .lettre { margin-left: .2em; font-size: .6em; color: #aab3b7; }
+.touche.chiffre .fonction { font-size: max(7px, .5em); color: #aab3b7; }
+.touche.bascule, .touche.dobber { font-size: max(9px, calc(var(--taille) * .034)); }
+
 /* ---------------------------------------------------------------- IFEI */
 
 .ifei {

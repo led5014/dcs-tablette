@@ -10,7 +10,7 @@ l'appareil piloté dans DCS.
 | Appareil | Écrans en image + boutons | En plus | Pages du kneeboard depuis l'iPad |
 |---|---|---|---|
 | F/A-18C Hornet | DDI G, DDI D, AMPCD (20 PB) | UFC tactile, IFEI, instruments de secours, voyants | oui |
-| F-16C Viper | MFD G, MFD D (20 OSB) | — | non (touches [ et ]) |
+| F-16C Viper | MFD G, MFD D (20 OSB) | ICP tactile, DED | non (touches [ et ]) |
 | AH-64D Apache | MPD G, MPD D (T/R/B/L + FCR, WPN, TSD, VID, COM, A/C, *), TEDAC (image) | siège Pilote / CPG à choisir | oui |
 | OH-58D Kiowa | MFD G (copilote), MFD D (pilote) : L1–L5, R1–R5, B1–B4, INIT | — | oui |
 | A-10C / A-10C II | MFCD G, MFCD D (20 OSB) | — | oui |
@@ -60,6 +60,31 @@ D'où viennent les numéros, et ce qui reste à confirmer :
   - F-15E : seulement la place avant (la place arrière partage les zones
     d'export sans qu'on sache ce qui s'y dessine) ; CH-47F : pas d'écran tant
     qu'on ne sait pas lequel des cinq MFD sort dans `RIGHT_MFCD`.
+- F-16C, ICP et DED (04/11/2026, demande : « l'UFC des différents
+  appareils, sur le F-16 par exemple »). L'ICP est l'UFC du F-16 : appareil
+  17, commandes 3002–3019 (chiffres, COM1, COM2, IFF, LIST, ENTR, RCL, A-A,
+  A-G) relevées dans DCS-BIOS et recoupées avec l'énumération `ufcCommands`
+  de Helios. Le dobber (RTN, SEQ, UP, DN, 3032–3035) et la bascule ▲▼ du DED
+  (3030–3031) sont des commutateurs à ressort : une commande par côté,
+  poussée à -1 ou +1, relâchée à 0 (`defineSpringloaded_3PosTumb` de
+  DCS-BIOS). `Profil.ressorts` les porte ; le script Lua les accepte à leur
+  seule valeur ou à 0, et les relâche au bout de 5 s comme les boutons.
+  Le DED n'a pas de zone d'export : son texte arrive par
+  `list_indication(6)`, en morceaux nommés sans position. La place de chacun,
+  page par page, est la table `F_16C_DED.lua` de DCS-BIOS (~1 000 morceaux,
+  ~80 pages), sous GPL-3.0 : incompatible avec la licence MIT du dépôt, elle
+  n'y est pas copiée. `ded.TableDED` la télécharge au premier `/api/ded`
+  (DCS-BIOS v0.11.8, par son commit, SHA-256 vérifié), la garde dans
+  `%LOCALAPPDATA%\DCS-Tablette\F_16C_DED-v0.11.8.lua` et la lit comme une
+  donnée (`ded.table_lua`, un analyseur de constructeur de table, rien
+  d'exécuté). Hors ligne : nouvel essai par minute, le DED dit pourquoi, le
+  clavier marche. La page affichée n'est pas exportée : `Gabarit.page` prend
+  celle qui reconnaît le plus de morceaux présents, la plus petite à égalité.
+  Vérifié sur la vraie table avec une page STPT fabriquée ; **pas encore vu
+  en vol** : à confirmer, la page reconnue sur chaque écran du DED, les
+  caractères spéciaux du module (la flèche ↕ de « IncDecSymbol », le degré),
+  et les astérisques, que la table met en vidéo inverse. Changer de version
+  de DCS-BIOS : `_COMMIT`, `VERSION_BIOS` et `EMPREINTE` ensemble.
 - OH-58D, MFD en 4:3 (02/11/2026, photo de la tablette en 1.11.1 : haut des
   pages coupé, image étirée, bords rognés ; B1–B4 pas en face de leurs
   onglets). Zones natives `LEFT_MFCD` / `RIGHT_MFCD`
@@ -319,8 +344,8 @@ cadrans, et la page redemande les siens quand elle change.
 ## Sur l'iPad
 
 - **Dispositions** (barre du haut), selon l'appareil : deux écrans, un écran
-  seul, UFC + IFEI, Secours, « 3 écrans », « Planche » (tous les écrans et
-  panneaux). La page essaie chaque façon de répartir les panneaux en rangées
+  seul, UFC + IFEI, ICP (avec le DED), Secours, « 3 écrans », « Planche »
+  (tous les écrans et panneaux). La page essaie chaque façon de répartir les panneaux en rangées
   sur la place réelle (téléphone, tablette, PC, portrait ou paysage) et ne
   propose un regroupement que si chaque panneau y garde sa largeur de
   confort (`CONFORT` dans `web/app.js`) ; un écran seul, l'UFC et le Secours

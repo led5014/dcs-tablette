@@ -7,8 +7,9 @@ finger. The page adapts by itself to the aircraft you fly in DCS and to the
 size of the screen: one or two displays on a phone, three or the whole
 panel on a large screen.
 
-No Python to install. In flight, nothing goes over the internet: everything
-stays on the PC and your home Wi-Fi.
+No Python to install. In flight, nothing goes over the internet (except,
+once, the F-16 DED table, the first time the DED is shown): everything stays
+on the PC and your home Wi-Fi.
 
 
 INSTALLATION

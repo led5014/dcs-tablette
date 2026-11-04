@@ -13,7 +13,7 @@
   Pour les appareils dont le profil le prévoit, il envoie aussi ce que la
   tablette redessine elle-même, faute de zone d'export pour ces éléments :
   - "ind <n>\n<texte>" : le texte d'un indicateur (list_indication), à
-    chaque changement — l'UFC et l'IFEI du Hornet ;
+    chaque changement — l'UFC et l'IFEI du Hornet, le DED du F-16 ;
   - "arg <n>=<v> …" : la position d'aiguilles et l'état de voyants
     (get_argument_value du tableau de bord).
 
@@ -295,10 +295,21 @@ local function traiter(message, maintenant)
     if positions[c][v] then jouer(d, c, v) end
     return
   end
+  -- Bouton : enfoncé à 1. Commutateur à ressort (dobber du F-16) : poussé à
+  -- sa valeur, -1 ou 1, selon le côté. Les deux reviennent à 0 au relâchement.
+  local ressorts = profil.ressorts and profil.ressorts[d]
   local boutons = profil.boutons and profil.boutons[d]
-  if not (boutons and boutons[c]) or (v ~= 0 and v ~= 1) then return end
+  local appui
+  if ressorts and ressorts[c] then
+    appui = ressorts[c]
+  elseif boutons and boutons[c] then
+    appui = 1
+  else
+    return
+  end
+  if v ~= 0 and v ~= appui then return end
   local cle = d .. ":" .. c
-  if v == 1 then
+  if v ~= 0 then
     enfonces[cle] = { d, c, maintenant }
   else
     enfonces[cle] = nil

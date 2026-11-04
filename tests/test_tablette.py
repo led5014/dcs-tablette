@@ -2711,6 +2711,249 @@ end
         self.assertEqual(resultat, "50 3002 1 | 50 3002 0")
 
 
+class TestIcpEtDedDuF16(unittest.TestCase):
+    """L'ICP du F-16 et son DED, refait d'après la table de DCS-BIOS — ici une
+    table écrite pour le test, dans la même forme : la vraie n'est pas livrée
+    (GPL), et le test ne va pas sur internet."""
+
+    TABLE = '''module("F_16C_DED", package.seeall)
+
+--- @type { [string]: TextDisplayItem[] }
+local F_16C_DED = {
+	["STPT LABEL"] = {
+		{ alignment = "LFT", pages = { "STPT" }, id = "STPT LABEL", x = 7, y = 1 },
+	},
+	["STPT NUMBER"] = {
+		{ alignment = "LFT", pages = { "STPT" }, id = "STPT NUMBER", x = 13, y = 1 },
+	},
+	["STPT NUMBER_inv"] = {
+		{ alignment = "LFT", color = "i", pages = { "STPT" }, id = "STPT NUMBER_inv", x = 13, y = 1 },
+	},
+	-- Le même morceau à deux places, selon la page.
+	["Value"] = {
+		{ alignment = "LFT", pages = { "STPT" }, id = "Value", x = 9, y = 2 },
+		{ alignment = "RGHT", pages = { "CRUS", "TIME" }, id = "Value", x = 24, y = 3 },
+	},
+	["CRUS LABEL"] = {
+		{ pages = { "CRUS" }, id = "CRUS LABEL", x = 1, y = 1 },
+	},
+	["Hors ecran"] = {
+		{ pages = { "STPT" }, id = "Hors ecran", x = 23, y = 6, flag = true },
+	},
+}
+
+return F_16C_DED
+'''
+
+    def setUp(self):
+        from tablette import ded
+        self.ded = ded
+        self.tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.fichier = Path(self.tmp.name) / "F_16C_DED-test.lua"
+        self.empreinte = __import__("hashlib").sha256(self.TABLE.encode()).hexdigest()
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def texte(self, lignes):
+        return "".join("".join(t for t, _ in l) for l in lignes)
+
+    # ------------------------------------------------------------ la table
+
+    def test_table_lua_lue_sans_rien_executer(self):
+        t = self.ded.table_lua('-- { pas ici\nx = { a = 1, ["b c"] = "d\\"e", { 2, true }, '
+                               '[3] = nil; f = -1.5 }')
+        self.assertEqual(t, {"a": 1, "b c": 'd"e', 1: [2, True], 3: None, "f": -1.5})
+        for illisible in ('x = { os.exit() }', 'x = { a = 1', 'rien'):
+            with self.assertRaises(ValueError):
+                self.ded.table_lua(illisible)
+
+    def test_le_ded_place_chaque_morceau(self):
+        g = self.ded.Gabarit.lire(self.TABLE)
+        self.assertEqual(len(g.places), 6)
+        stpt = g.ecran({"STPT LABEL": "STPT", "STPT NUMBER_inv": "  5", "Value": "N 41",
+                        "Hors ecran": "X", "Inconnu": "?"})
+        self.assertEqual(stpt["page"], "STPT")
+        lignes = stpt["lignes"]
+        self.assertEqual([len(self.texte([l])) for l in lignes], [24] * 5)
+        # Vidéo inverse sur tout le morceau, espaces compris.
+        self.assertEqual(lignes[0], [["      STPT  ", False], ["  5", True], [" " * 9, False]])
+        self.assertEqual(self.texte([lignes[1]]), "        N 41            ")
+        # Une autre page : « Value » change de place, aligné à droite.
+        crus = g.ecran({"CRUS LABEL": "CRUS", "Value": "250KT"})
+        self.assertEqual(crus["page"], "CRUS")
+        self.assertEqual(self.texte([crus["lignes"][2]]), " " * 19 + "250KT")
+        # Un espace n'efface pas ce qu'un autre morceau a écrit.
+        recouvert = g.ecran({"STPT NUMBER": "9", "STPT LABEL": "STPT      "})
+        self.assertEqual(self.texte([recouvert["lignes"][0]]), "      STPT  9           ")
+        self.assertEqual(g.ecran({})["page"], None)
+
+    # ------------------------------------------------------------ le téléchargement
+
+    def ouvrir(self, contenu, appels):
+        class Reponse(io.BytesIO):
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_):
+                return False
+
+        def ouvrir(requete, timeout):
+            appels.append(requete.full_url)
+            if isinstance(contenu, Exception):
+                raise contenu
+            return Reponse(contenu)
+        return ouvrir
+
+    def attendre(self, table):
+        for _ in range(200):
+            g = table.gabarit()
+            if g is not None or not table._fil.is_alive() and table._erreur:
+                return g
+            time.sleep(0.01)
+        self.fail("chargement jamais fini")
+
+    def test_telechargee_une_fois_verifiee_puis_gardee(self):
+        from unittest import mock
+        appels = []
+        with mock.patch.object(self.ded, "EMPREINTE", self.empreinte):
+            table = self.ded.TableDED(self.fichier, self.ouvrir(self.TABLE.encode(), appels))
+            self.assertIsNone(table.gabarit())              # la page n'attend pas
+            self.assertIn("téléchargement", str(table.raison()))
+            self.assertIsNotNone(self.attendre(table))
+            self.assertEqual(appels, [self.ded.URL])
+            self.assertEqual(self.fichier.read_text(encoding="utf-8"), self.TABLE)
+            # Relancé : le fichier gardé suffit.
+            ailleurs = self.ded.TableDED(self.fichier, self.ouvrir(b"", appels))
+            self.assertIsNotNone(self.attendre(ailleurs))
+            self.assertEqual(len(appels), 1)
+        # Une version fixée : celle d'un commit, pas d'une branche qui bouge.
+        self.assertTrue(self.ded.URL.startswith(
+            f"https://raw.githubusercontent.com/DCS-Skunkworks/dcs-bios/{self.ded._COMMIT}/"))
+
+    def test_une_autre_table_est_refusee_et_rien_n_est_garde(self):
+        appels = []
+        table = self.ded.TableDED(self.fichier, self.ouvrir(self.TABLE.encode(), appels))
+        self.assertIsNone(self.attendre(table))         # empreinte de la vraie table
+        self.assertIn("empreinte différente", str(table.raison()))
+        self.assertFalse(self.fichier.exists())
+        # Pas un essai par image : le suivant attend une minute.
+        table.gabarit()
+        time.sleep(0.05)
+        self.assertEqual(len(appels), 1)
+
+    def test_hors_ligne_le_ded_dit_pourquoi(self):
+        table = self.ded.TableDED(self.fichier, self.ouvrir(OSError("pas de réseau"), []))
+        self.assertIsNone(self.attendre(table))
+        self.assertIn("pas de réseau", str(table.raison()))
+        self.assertIn("le clavier marche", str(table.raison()))
+
+    def test_la_vraie_table_si_elle_est_deja_la(self):
+        """Celle que le serveur a téléchargée sur ce PC : la forme de la
+        version fixée, et la page STPT bien placée."""
+        fichier = self.ded.fichier_table()
+        if not fichier.exists():
+            self.skipTest("table du DED pas encore téléchargée sur ce poste")
+        donnees = fichier.read_bytes()
+        self.assertEqual(__import__("hashlib").sha256(donnees).hexdigest(), self.ded.EMPREINTE)
+        g = self.ded.Gabarit.lire(donnees.decode("utf-8"))
+        self.assertGreater(len(g.places), 900)
+        e = g.ecran({"STEERPOINT LABEL": "STPT", "STEERPOINT NUMBER": "  1",
+                     "STEERPOINT Latitude": "LAT", "STEERPOINT Latitude Value": "N 41"})
+        self.assertEqual(e["page"], "STPT")
+        self.assertEqual(self.texte([e["lignes"][0]]).rstrip(), "      STPT    1")
+        self.assertEqual(self.texte([e["lignes"][1]]).rstrip(), "   LAT  N 41")
+
+    # ------------------------------------------------------------ l'ICP
+
+    def test_liste_blanche_touches_et_ressorts(self):
+        from tablette.appareils import f16c
+        lua = appareils.lua_appareils().split('["F-16C_50"]')[1].split('\n  },')[0]
+        self.assertIn("[17] = { [3002] = true", lua)
+        self.assertIn("[17] = { [3030] = 1, [3031] = -1, [3032] = -1, [3033] = 1, [3034] = 1, "
+                      "[3035] = -1 }", lua)
+        self.assertIn("textes = { 6 }", lua)
+        self.assertEqual(sorted(f16c.TOUCHES_ICP.values()), list(range(3002, 3020)))
+        hornet = appareils.lua_appareils().split('["FA-18C_hornet"]')[1].split('\n  },')[0]
+        self.assertNotIn("[17] = {", hornet)
+
+    def client(self, appareil="F-16C_50", texte=None, table=None):
+        from fastapi.testclient import TestClient
+
+        from tablette.app import create_app
+        from tablette.config import Config
+        pont = FauxPont(connecte=True, appareil=appareil)
+        self.envois = []
+        pont.appuyer = lambda *a: self.envois.append(a) or True
+        pont.texte = lambda n: texte if n == 6 else None
+        table = table or self.ded.TableDED(self.fichier, self.ouvrir(OSError("hors ligne"), []))
+        return TestClient(create_app(Config(saved_games=Path(self.tmp.name)), pont,
+                                     dossier_dcs=lambda: None, table_ded=table))
+
+    def test_api_touches_et_cotes_du_dobber(self):
+        c = self.client()
+        self.assertEqual(c.get("/api/profil").json()["panneaux"], ["icp"])
+        c.post("/api/icp", json={"touche": "ENTR", "enfonce": True})
+        c.post("/api/icp", json={"touche": "RTN", "enfonce": True})
+        c.post("/api/icp", json={"touche": "RTN", "enfonce": False})
+        c.post("/api/icp", json={"touche": "INC", "enfonce": True})
+        self.assertEqual(self.envois, [(17, 3016, True, 1), (17, 3032, True, -1),
+                                       (17, 3032, False, -1), (17, 3030, True, 1)])
+        self.assertEqual(c.post("/api/icp", json={"touche": "WX"}).status_code, 404)
+        # Hornet piloté, F-16 choisi à la main : rien ne part.
+        c = self.client("FA-18C_hornet")
+        c.cookies.set("tablette_appareil", "f16c")
+        self.assertEqual(c.post("/api/icp", json={"touche": "1", "enfonce": True})
+                         .status_code, 409)
+        c.cookies.clear()
+        self.assertEqual(c.get("/api/ded").status_code, 404)        # pas de DED au Hornet
+        self.assertEqual(self.envois, [])
+
+    def test_api_ded(self):
+        from unittest import mock
+        texte = ("-----------------------------------------\nSTPT LABEL\nSTPT\n"
+                 "-----------------------------------------\nSTPT NUMBER\n  1\n")
+        with mock.patch.object(self.ded, "EMPREINTE", self.empreinte):
+            self.fichier.write_bytes(self.TABLE.encode())
+            table = self.ded.TableDED(self.fichier, self.ouvrir(OSError("hors ligne"), []))
+            self.attendre(table)
+            d = self.client(texte=texte, table=table).get("/api/ded").json()
+            self.assertEqual(self.texte(d["ded"]["lignes"]).rstrip(), "      STPT    1")
+            self.assertIsNone(d["raison"])
+            muet = self.client(texte=None, table=table).get("/api/ded").json()
+            self.assertEqual((muet["ded"], muet["raison"]),
+                             (None, "DED : en attente de DCS (F-16 en vol)."))
+        # Table absente : le DED dit pourquoi.
+        sans = self.client(texte=texte).get("/api/ded").json()
+        self.assertIsNone(sans["ded"])
+        self.assertIn("DCS-BIOS", sans["raison"])
+
+    @unittest.skipUnless(LUA_DCS.exists(), "moteur Lua de DCS absent")
+    def test_le_script_lua_tient_le_dobber_de_son_cote(self):
+        prelude = FAUX_DCS.replace('Name = "Christen Eagle II"', 'Name = "F-16C_50"') + r'''
+RECUS = { "17 3032 1", "17 3032 -1", "17 3016 -1", "17 3016 1", "17 3033 1" }
+JOUES = {}
+package.preload["socket"] = function()
+  return { gettime = function() return HORLOGE end, udp = function()
+    return { settimeout = function() end, setsockname = function() return 1 end,
+             receive = function() return table.remove(RECUS, 1) end, close = function() end,
+             sendto = function(_, m) ENVOYES[#ENVOYES + 1] = m end } end }
+end
+function GetDevice(n)
+  return { performClickableAction = function(_, c, v) JOUES[#JOUES + 1] = n .. " " .. c .. " " .. v end,
+           get_argument_value = function() return 0 end }
+end
+''' + appareils.lua_appareils()
+        resultat = executer_lua(prelude, SCRIPT_LUA,
+                                "LuaExportStart(); LuaExportBeforeNextFrame(); "
+                                "HORLOGE = 10; LuaExportBeforeNextFrame(); "
+                                "RESULTAT = table.concat(JOUES, ' | ')")
+        # RTN à +1 et ENTR à -1 refusés ; tenus plus de 5 s, tous relâchés.
+        joues = resultat.split(" | ")
+        self.assertEqual(joues[:3], ["17 3032 -1", "17 3016 1", "17 3033 1"])
+        self.assertEqual(sorted(joues[3:]), ["17 3016 0", "17 3032 0", "17 3033 0"])
+
+
 class TestReglagesDesEcrans(unittest.TestCase):
     """Luminosité, contraste, netteté, définition et filtres réglés écran par
     écran sur la tablette, appliqués par le PC avant la compression."""

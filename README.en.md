@@ -32,6 +32,12 @@ showing it: iPad, Android tablet, phone, browser on another PC.
   aircraft's data turns them off, and the tablet tells you so.
 - **Hornet front panel** redrawn: touch UFC, IFEI, standby instruments,
   warning lights.
+- **F-16 ICP and DED**: the ICP keypad (override buttons, digits, RCL, ENTR,
+  ▲▼, RTN / SEQ / UP / DN dobber) and the DED redrawn above it, using the
+  [DCS-BIOS](https://github.com/DCS-Skunkworks/dcs-bios) table that says
+  where each piece of text goes. That table is GPL-licensed and doesn't ship
+  with DCS Tablette: it downloads it the first time the DED is shown (pinned
+  version, checked by its SHA-256 checksum), then keeps it.
 - **Kneeboard**: the pages for the aircraft you fly, read straight from the
   files and sharp at any size — current mission (single or multiplayer),
   module pages, your own, the map's charts — plus the DCS kneeboard, live.
@@ -43,8 +49,9 @@ showing it: iPad, Android tablet, phone, browser on another PC.
   tablet in landscape, the whole panel on a large screen — and rearranges
   itself when you rotate it.
 
-No Python to install, nothing over the internet in flight: the server runs
-on the PC, and the iPad connects to it over your home Wi-Fi.
+No Python to install, nothing over the internet in flight (except, once,
+the F-16 DED table): the server runs on the PC, and the iPad connects to it
+over your home Wi-Fi.
 
 ## Download
 
@@ -56,7 +63,7 @@ a `README.txt` (in French: `LISEZ-MOI.txt`) covering what follows.
 **Updating: nothing to do.** On launch, DCS Tablette checks whether a newer
 version exists and updates itself, without asking: verified download
 (SHA-256), its files replaced, restart — your settings stay, DCS can stay
-open. That is its only request to the internet, at launch;
+open. That is its only request to the internet on each launch;
 `--sans-mise-a-jour` turns it off. From 1.5.0 to 1.8.0, it asked "Mettre à jour
 maintenant ?" ("Update now?"): answer O (yes) one last time. From an
 older version, extract the zip over the old folder one last time.
@@ -66,7 +73,7 @@ older version, extract the zip over the old folder one last time.
 | Aircraft | Displays + buttons | Also |
 |---|---|---|
 | F/A-18C Hornet | Left DDI, right DDI, AMPCD | touch UFC, IFEI, standby instruments, warning lights |
-| F-16C Viper | Left MFD, right MFD | — |
+| F-16C Viper | Left MFD, right MFD | touch ICP, DED |
 | AH-64D Apache | Left MPD, right MPD (+ FCR, WPN, TSD…), TEDAC (display only) | Pilot / CPG seat |
 | OH-58D Kiowa | Left MFD, right MFD | — |
 | A-10C / A-10C II | Left MFCD, right MFCD | — |
@@ -91,10 +98,11 @@ head-down display that repeats the HUD (DUBL position) or shows the tactical
 situation (TACT): the module sends it to the RIGHT_MFCD viewport of
 "Tablette DCS" by itself, nothing to set up.
 
-Button numbers for the F-16C, OH-58D, AV-8B, F-15E, JF-17 and Ka-50 come
-from [DCS-BIOS](https://github.com/DCS-Skunkworks/dcs-bios) and still need
-confirming in flight (especially button placement around the JF-17 and
-F-15E displays): feedback is welcome.
+Button numbers for the F-16C (MFDs and ICP), OH-58D, AV-8B, F-15E, JF-17
+and Ka-50 come from [DCS-BIOS](https://github.com/DCS-Skunkworks/dcs-bios)
+and still need confirming in flight (especially button placement around the
+JF-17 and F-15E displays, and the F-16C DED: the page it recognizes, special
+characters such as the ↕ arrow): feedback is welcome.
 
 On the Hornet, the Apache and the A-10C, each button sits right across from
 the label the module draws on the display (positions read from the module's

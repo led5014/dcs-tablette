@@ -21,8 +21,8 @@ from urllib.parse import quote
 from fastapi import Body, Cookie, Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, Response
 
-from . import VERSION, appareils, filtres, instruments, langues, planche
-from .appareils import ROGNAGE, Profil
+from . import VERSION, appareils, ded, filtres, instruments, langues, planche
+from .appareils import ROGNAGE, Profil, f16c
 from .config import Config
 from .dcs import PontDCS
 from .kneeboard import lire_page, lister_carnets, trouver
@@ -89,16 +89,19 @@ def create_app(cfg: Optional[Config] = None, pont: Optional[PontDCS] = None,
                video: Optional[Video] = None,
                affichage: Optional[AffichageKneeboard] = None,
                dossier_dcs: Optional[Callable[[], Optional[Path]]] = None,
-               diagnostic=None, controle_hote: bool = False) -> FastAPI:
+               diagnostic=None, controle_hote: bool = False,
+               table_ded: Optional[ded.TableDED] = None) -> FastAPI:
     """`affichage` : partagé avec le miroir du kneeboard sur le PC.
     `dossier_dcs` : où DCS est installé (pages des modules et des cartes).
     `diagnostic` : la console de diagnostic (diagnostic.py), lancée à côté.
     `controle_hote` : refuser les noms d'hôte inconnus (voir `hote_permis`) ;
-    le serveur le met, les tests parlent à « testserver »."""
+    le serveur le met, les tests parlent à « testserver ».
+    `table_ded` : la table du DED du F-16, téléchargée au premier besoin."""
     cfg = cfg or Config()
     pont = pont or PontDCS(cfg.port_ordres, cfg.port_etat)
     video = video or Video(cfg.saved_games, appareil=pont.dernier_appareil)
     affichage = affichage or AffichageKneeboard()
+    table_ded = table_ded or ded.TableDED()
     if dossier_dcs is None:
         from .capture import dossier_dcs    # Windows seulement : chargé à la demande
     app = FastAPI(title="DCS Tablette")
@@ -360,6 +363,44 @@ def create_app(cfg: Optional[Config] = None, pont: Optional[PontDCS] = None,
         envoye = pont.appuyer(planche.UFC, planche.TOUCHES_UFC[touche], enfonce)
         if enfonce:
             journal.info("UFC %s", touche)
+        return {"envoye": envoye}
+
+    @app.get("/api/ded")
+    def lecture_ded(choix: Optional[str] = Cookie(None, alias=CHOIX),
+                    langue: str = Depends(langue_de)) -> Dict:
+        """Le DED du F-16 tel que DCS le montre. `ded` None tant qu'il ne
+        peut pas l'être, et `raison` le dit : table pas encore téléchargée
+        (la première demande la fait venir), ou DCS muet."""
+        avec_panneau("icp", choix, langue)
+        gabarit = table_ded.gabarit()
+        if gabarit is None:
+            return {"ded": None, "raison": table_ded.raison().dans(langue)}
+        texte = pont.texte(ded.IND_DED)
+        if texte is None:
+            return {"ded": None, "raison": Texte("DED : en attente de DCS (F-16 en vol).").dans(
+                langue)}
+        return {"ded": gabarit.ecran(planche.lire_indication(texte)), "raison": None}
+
+    @app.post("/api/icp")
+    def touche_icp(corps: Optional[Dict] = None,
+                   choix: Optional[str] = Cookie(None, alias=CHOIX),
+                   langue: str = Depends(langue_de)) -> Dict:
+        """Une touche de l'ICP du F-16, ou un côté d'un de ses commutateurs à
+        ressort (RTN, SEQ, UP, DN, ▲▼ du DED) : enfoncé puis relâché, comme
+        les écrans."""
+        garde_fou(avec_panneau("icp", choix, langue), langue)
+        corps = corps or {}
+        touche = str(corps.get("touche"))
+        if touche in f16c.TOUCHES_ICP:
+            commande, sens = f16c.TOUCHES_ICP[touche], 1
+        elif touche in f16c.RESSORTS_ICP:
+            commande, sens = f16c.RESSORTS_ICP[touche]
+        else:
+            raise refus(404, Texte("touche inconnue"), langue)
+        enfonce = bool(corps.get("enfonce"))
+        envoye = pont.appuyer(f16c.ICP, commande, enfonce, sens)
+        if enfonce:
+            journal.info("ICP %s", touche)
         return {"envoye": envoye}
 
     @app.post("/api/kneeboard/dcs/page")

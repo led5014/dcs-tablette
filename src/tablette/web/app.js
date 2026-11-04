@@ -4,7 +4,7 @@
 //
 // Tout se construit d'après le profil de l'appareil piloté (/api/profil) :
 // les cadres et leurs boutons, les panneaux redessinés (UFC, IFEI, secours du
-// Hornet), les dispositions proposées. Changer d'avion dans DCS reconstruit
+// Hornet ; ICP et DED du F-16), les dispositions proposées. Changer d'avion dans DCS reconstruit
 // la page.
 //
 // Un bouton reste enfoncé dans le cockpit tant que le doigt est posé : la
@@ -28,7 +28,7 @@ const BORD = 0.62;                  // épaisseur de la couronne de boutons, en 
 // ou à l'œil (boutons d'un cadre sous ~28 px de haut, touches de l'UFC sous
 // ~40 px, voyants illisibles). Une disposition à plusieurs panneaux n'est
 // proposée que si chacun l'atteint sur l'écran où la page est ouverte.
-const CONFORT = { cadre: 280, ufc: 290, ifei: 200, secours: 520, secoursEtroit: 330,
+const CONFORT = { cadre: 280, ufc: 290, icp: 300, ifei: 200, secours: 520, secoursEtroit: 330,
   instruments: 450 };
 
 // --------------------------------------------------------------- langue
@@ -226,6 +226,9 @@ function calculerDispositions(p) {
   }
   if (p.panneaux.includes('ufc')) {
     liste.push({ id: 'ufc', libelle: 'UFC', ids: ['ufc', 'ifei'], toujours: true });
+  }
+  if (p.panneaux.includes('icp')) {
+    liste.push({ id: 'icp', libelle: 'ICP', ids: ['icp'], toujours: true });
   }
   if (p.panneaux.includes('secours')) {
     liste.push({ id: 'secours', libelle: tr('Secours'), ids: ['secours'], toujours: true });
@@ -893,6 +896,95 @@ function construireUfc() {
   return p;
 }
 
+// --------------------------------------------------------------- ICP et DED (F-16)
+
+function toucheIcp(touche, libelle, classe = 'touche', aria = null) {
+  const el = element('button', classe, libelle);
+  if (aria) el.setAttribute('aria-label', aria);
+  brancherAppui(el, (enfonce) => enFile('/api/icp', { touche, enfonce }));
+  return el;
+}
+
+// Le DED en haut, comme le bloc-notes de l'UFC ; dessous l'ICP : touches
+// de priorité, clavier (chiffre et fonction de chaque touche), bascule ▲▼ du
+// DED à gauche, « dobber » à droite (RTN, SEQ, UP, DN).
+function construireIcp() {
+  const p = element('div', 'panneau icp');
+  p.formes = [{ ratio: 0.95, classe: '', confort: CONFORT.icp }];
+  const ecranDed = element('div', 'lcd ded');
+  const lignes = [];
+  for (let i = 0; i < 5; i += 1) {
+    lignes.push(element('div', 'ded-ligne'));
+    ecranDed.append(lignes[i]);
+  }
+  const raison = element('div', 'ded-raison');
+  ecranDed.append(raison);
+
+  const haut = element('div', 'icp-haut');
+  for (const [t, l] of [['COM1', 'COM1'], ['COM2', 'COM2'], ['IFF', 'IFF'], ['LIST', 'LIST'],
+    ['AA', 'A-A'], ['AG', 'A-G']]) haut.append(toucheIcp(t, l));
+
+  const clavier = element('div', 'icp-clavier');
+  const place = (el, colonne, rangee) => {
+    el.style.gridColumn = String(colonne);
+    el.style.gridRow = String(rangee);
+    clavier.append(el);
+  };
+  const fonctions = ['M-SEL', 'T-ILS', 'ALOW', '', 'STPT', 'CRUS', 'TIME', 'MARK', 'FIX', 'A-CAL'];
+  const lettres = ['', '', 'N', '', 'W', '', 'E', '', 'S', ''];
+  const chiffre = (n) => {
+    const el = toucheIcp(String(n), '', 'touche chiffre', `${n} ${fonctions[n]}`.trim());
+    const haut = element('span', 'haut', String(n));
+    if (lettres[n]) haut.append(element('span', 'lettre', lettres[n]));
+    el.append(haut, element('span', 'fonction', fonctions[n]));
+    return el;
+  };
+  [1, 2, 3].forEach((n, i) => place(chiffre(n), 2 + i, 1));
+  [4, 5, 6].forEach((n, i) => place(chiffre(n), 2 + i, 2));
+  [7, 8, 9, 0].forEach((n, i) => place(chiffre(n), 2 + i, 3));
+  place(toucheIcp('RCL', 'RCL'), 5, 1);
+  place(toucheIcp('ENTR', 'ENTR'), 5, 2);
+  place(toucheIcp('INC', '▲', 'touche bascule', tr('DED : incrément')), 1, 1);
+  place(toucheIcp('DEC', '▼', 'touche bascule', tr('DED : décrément')), 1, 3);
+  place(toucheIcp('UP', 'UP', 'touche dobber'), 8, 1);
+  place(toucheIcp('RTN', 'RTN', 'touche dobber'), 7, 2);
+  place(toucheIcp('SEQ', 'SEQ', 'touche dobber'), 9, 2);
+  place(toucheIcp('DN', 'DN', 'touche dobber'), 8, 3);
+
+  p.append(ecranDed, haut, clavier);
+  // Le clavier marche sans le DED (table pas encore là, DCS muet) : seul
+  // l'écran se grise, avec la raison.
+  p.maj = (d) => {
+    const ded = d && d.ded;
+    ecranDed.classList.toggle('sans-donnees', !ded);
+    raison.textContent = ded ? '' : (d && d.raison) || tr('Serveur injoignable');
+    lignes.forEach((ligne, i) => {
+      ligne.textContent = '';
+      for (const [texte, inverse] of (ded ? ded.lignes[i] : [])) {
+        ligne.append(inverse ? element('span', 'inverse', texte) : document.createTextNode(texte));
+      }
+    });
+  };
+  return p;
+}
+
+async function boucleDed(gen) {
+  while (gen === generation) {
+    if (!ecranAffiche('icp')) {
+      await attendre(300);
+      continue;
+    }
+    let d = null;
+    try {
+      const r = await fetch('/api/ded', { cache: 'no-store' });
+      if (r.ok) d = await r.json();
+    } catch { /* serveur injoignable : DED grisé */ }
+    if (gen !== generation) return;
+    if (panneaux.has('icp')) panneaux.get('icp').maj(d);
+    await attendre(PERIODE_PLANCHE_MS);
+  }
+}
+
 // --------------------------------------------------------------- IFEI
 
 function construireIfei() {
@@ -1281,7 +1373,11 @@ async function chargerProfil() {
   if (p.panneaux.includes('ufc')) panneaux.set('ufc', construireUfc());
   if (p.panneaux.includes('ifei')) panneaux.set('ifei', construireIfei());
   if (p.panneaux.includes('secours')) panneaux.set('secours', construireSecours());
-  if (p.panneaux.length) bouclePlanche(generation);
+  if (['ufc', 'ifei', 'secours'].some((id) => p.panneaux.includes(id))) bouclePlanche(generation);
+  if (p.panneaux.includes('icp')) {
+    panneaux.set('icp', construireIcp());
+    boucleDed(generation);
+  }
   panneaux.set('instruments', construireInstruments(cadransVol));
   boucleInstruments(generation);
 

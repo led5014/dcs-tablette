@@ -74,6 +74,16 @@ SERVEUR = {
     "Kneeboard caché dans DCS": "Kneeboard hidden in DCS",
     "page introuvable": "page not found",
     "page disparue": "page gone",
+    "DED : en attente de DCS (F-16 en vol).": "DED: waiting for DCS (F-16 in flight).",
+
+    # ------------------------------------------------------------ ded.py
+    "DED : téléchargement de sa table (DCS-BIOS)…": "DED: downloading its table (DCS-BIOS)…",
+    "DED : table de DCS-BIOS non téléchargée ({raison}). Nouvel essai dans une minute ; le "
+    "clavier marche.":
+        "DED: DCS-BIOS table not downloaded ({raison}). Retrying in a minute; the keypad "
+        "works.",
+    "ce n'est pas la table attendue (empreinte différente)":
+        "not the expected table (different checksum)",
 
     # ------------------------------------------------------------ appareils/
     "Autre appareil": "Other aircraft",
@@ -753,6 +763,8 @@ PAGE = {
     # ------------------------------------------------------------ UFC, secours, instruments
     "{molette} : cran suivant": "{molette}: next step",
     "{molette} : cran précédent": "{molette}: previous step",
+    "DED : incrément": "DED: increment",
+    "DED : décrément": "DED: decrement",
     "VITESSE {unite}": "AIRSPEED {unite}",
     "ALTITUDE {unite}": "ALTITUDE {unite}",
     "HORIZON": "ATTITUDE",

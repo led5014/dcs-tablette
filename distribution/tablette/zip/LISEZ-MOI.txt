@@ -7,7 +7,8 @@ boutons sous le doigt. La page s'adapte toute seule à l'appareil piloté dans
 DCS et à la taille de l'écran : un ou deux écrans sur un téléphone, trois ou
 toute la planche sur un grand écran.
 
-Pas de Python à installer. En vol, rien ne passe par internet : tout reste
+Pas de Python à installer. En vol, rien ne passe par internet (sauf, une
+seule fois, la table du DED du F-16, au premier DED affiché) : tout reste
 sur le PC et le Wi-Fi de la maison.
 
 

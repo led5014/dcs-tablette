@@ -20,8 +20,9 @@ petit script à part (cmd + robocopy, livrés avec Windows), qui attend que
 DCS Tablette soit fermé, copie, puis le relance. Les chemins lui passent par
 l'environnement : rien à échapper, accents compris.
 
-Seul moment où DCS Tablette parle à internet : cette demande, au lancement,
-4 secondes au plus — hors ligne, il démarre comme avant. Un téléchargement
+DCS Tablette ne parle à internet que pour cette demande, au lancement,
+4 secondes au plus — hors ligne, il démarre comme avant —, et une seule
+fois pour la table du DED du F-16 (ded.py), au premier DED affiché. Un téléchargement
 raté ne remplace rien : il démarre à sa version, et le diagnostic de la
 tablette signale la nouvelle tant qu'elle n'est pas installée.
 `--sans-mise-a-jour` supprime la demande.

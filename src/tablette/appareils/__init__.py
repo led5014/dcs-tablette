@@ -2,7 +2,7 @@
 
 Un profil dit quels écrans DCS exporte en image (et sous quel nom de zone),
 quels boutons les entourent avec leurs numéros, et ce qui s'y ajoute (UFC,
-IFEI, instruments du Hornet). Le serveur choisit le profil d'après le nom
+IFEI, instruments du Hornet ; ICP et DED du F-16). Le serveur choisit le profil d'après le nom
 que le script Lua lit dans DCS (LoGetSelfData().Name) : la page se
 reconstruit d'elle-même quand on change d'avion.
 
@@ -98,9 +98,12 @@ class Profil:
     ecrans: Tuple[Ecran, ...] = ()
     sieges: Tuple[str, ...] = ()       # vide : une seule place
     kneeboard: Optional[int] = None    # appareil des commandes de page, s'il est sûr
-    panneaux: Tuple[str, ...] = ()     # panneaux redessinés : "ufc", "ifei", "secours"
+    panneaux: Tuple[str, ...] = ()     # panneaux redessinés : "ufc", "ifei", "secours", "icp"
     # Autres boutons enfoncés puis relâchés (UFC…), par appareil.
     touches: Dict[int, FrozenSet[int]] = field(default_factory=dict)
+    # Commutateurs à ressort (dobber du F-16) : appareil → commande → valeur
+    # qui le pousse de ce côté (-1 ou 1) ; relâché, il revient à 0.
+    ressorts: Dict[int, Dict[int, int]] = field(default_factory=dict)
     # Molettes à crans : appareil → commande → valeur d'un cran.
     molettes: Dict[int, Dict[int, float]] = field(default_factory=dict)
     textes: Tuple[int, ...] = ()       # indicateurs envoyés en texte (list_indication)
@@ -272,6 +275,11 @@ def lua_appareils() -> str:
                 f"\n      [{a}] = {{ " + ", ".join(f"[{c}] = {_ensemble((0, 1))}" for c in sorted(cs))
                 + " },"
                 for a, cs in sorted(positions.items())) + "\n    },",
+            # Commutateurs à ressort : tenus à leur valeur, relâchés à 0.
+            "    ressorts = {" + "".join(
+                f"\n      [{a}] = {{ " + ", ".join(f"[{c}] = {v}" for c, v in sorted(r.items()))
+                + " },"
+                for a, r in sorted(profil.ressorts.items())) + "\n    },",
             "    molettes = {" + "".join(
                 f"\n      [{a}] = {{ " + ", ".join(f"[{c}] = {v:g}" for c, v in sorted(m.items()))
                 + " },"

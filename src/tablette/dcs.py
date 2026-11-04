@@ -7,8 +7,9 @@
 - Retour : le script annonce chaque seconde l'appareil piloté. Faute
   d'annonce depuis `SILENCE_S`, DCS est considéré absent — on ne prétend
   pas savoir ce qui se passe dans un cockpit qu'on n'entend plus. Dans un
-  Hornet, il envoie aussi le texte de l'UFC et de l'IFEI (« ind ») et la
-  position des aiguilles et des voyants (« arg ») : périmés au même délai.
+  Hornet, il envoie aussi le texte de l'UFC et de l'IFEI (« ind » ; le DED
+  dans un F-16) et la position des aiguilles et des voyants (« arg ») :
+  périmés au même délai.
   Et pour tout appareil, 20 fois par seconde, les données de vol (« vol ») :
   vitesse, altitude, assiette, cap, moteur… pour les instruments analogiques.
 """
@@ -152,9 +153,10 @@ class PontDCS:
             return {}
         return dict(valeurs)
 
-    def appuyer(self, appareil: int, commande: int, enfonce: bool) -> bool:
-        """Envoie l'ordre ; faux seulement si l'envoi lui-même a échoué."""
-        return self._envoyer(f"{appareil} {commande} {1 if enfonce else 0}")
+    def appuyer(self, appareil: int, commande: int, enfonce: bool, sens: int = 1) -> bool:
+        """Envoie l'ordre ; faux seulement si l'envoi lui-même a échoué.
+        `sens` : -1 pour le côté d'un commutateur à ressort poussé à -1."""
+        return self._envoyer(f"{appareil} {commande} {sens if enfonce else 0}")
 
     def kneeboard(self, ouvert: bool) -> bool:
         """Affiche ou cache le kneeboard de DCS (le coup d'œil, touche K)."""

@@ -11,6 +11,8 @@ TABLETTE_APPAREILS = {
     },
     positions = {
     },
+    ressorts = {
+    },
     molettes = {
       [25] = { [3033] = 0.2, [3034] = 0.2 },
     },
@@ -20,15 +22,19 @@ TABLETTE_APPAREILS = {
   },
   ["F-16C_50"] = {
     boutons = {
+      [17] = { [3002] = true, [3003] = true, [3004] = true, [3005] = true, [3006] = true, [3007] = true, [3008] = true, [3009] = true, [3010] = true, [3011] = true, [3012] = true, [3013] = true, [3014] = true, [3015] = true, [3016] = true, [3017] = true, [3018] = true, [3019] = true },
       [24] = { [3001] = true, [3002] = true, [3003] = true, [3004] = true, [3005] = true, [3006] = true, [3007] = true, [3008] = true, [3009] = true, [3010] = true, [3011] = true, [3012] = true, [3013] = true, [3014] = true, [3015] = true, [3016] = true, [3017] = true, [3018] = true, [3019] = true, [3020] = true },
       [25] = { [3001] = true, [3002] = true, [3003] = true, [3004] = true, [3005] = true, [3006] = true, [3007] = true, [3008] = true, [3009] = true, [3010] = true, [3011] = true, [3012] = true, [3013] = true, [3014] = true, [3015] = true, [3016] = true, [3017] = true, [3018] = true, [3019] = true, [3020] = true },
     },
     positions = {
     },
+    ressorts = {
+      [17] = { [3030] = 1, [3031] = -1, [3032] = -1, [3033] = 1, [3034] = 1, [3035] = -1 },
+    },
     molettes = {
     },
     pages = { },
-    textes = {  },
+    textes = { 6 },
     arguments = {  },
   },
   ["AH-64D_BLK_II"] = {
@@ -39,6 +45,8 @@ TABLETTE_APPAREILS = {
       [45] = { [3001] = true, [3002] = true, [3003] = true, [3004] = true, [3005] = true, [3006] = true, [3007] = true, [3008] = true, [3009] = true, [3010] = true, [3011] = true, [3012] = true, [3013] = true, [3014] = true, [3015] = true, [3016] = true, [3017] = true, [3018] = true, [3019] = true, [3020] = true, [3021] = true, [3022] = true, [3023] = true, [3024] = true, [3025] = true, [3026] = true, [3027] = true, [3028] = true, [3029] = true, [3030] = true, [3031] = true },
     },
     positions = {
+    },
+    ressorts = {
     },
     molettes = {
     },
@@ -53,6 +61,8 @@ TABLETTE_APPAREILS = {
     },
     positions = {
     },
+    ressorts = {
+    },
     molettes = {
     },
     pages = { [51] = { [3001] = true, [3002] = true } },
@@ -65,6 +75,8 @@ TABLETTE_APPAREILS = {
       [3] = { [3001] = true, [3002] = true, [3003] = true, [3004] = true, [3005] = true, [3006] = true, [3007] = true, [3008] = true, [3009] = true, [3010] = true, [3011] = true, [3012] = true, [3013] = true, [3014] = true, [3015] = true, [3016] = true, [3017] = true, [3018] = true, [3019] = true, [3020] = true },
     },
     positions = {
+    },
+    ressorts = {
     },
     molettes = {
     },
@@ -79,6 +91,8 @@ TABLETTE_APPAREILS = {
     },
     positions = {
     },
+    ressorts = {
+    },
     molettes = {
     },
     pages = { [100] = { [3001] = true, [3002] = true } },
@@ -91,6 +105,8 @@ TABLETTE_APPAREILS = {
       [27] = { [3224] = true, [3225] = true, [3226] = true, [3227] = true, [3228] = true, [3229] = true, [3230] = true, [3231] = true, [3232] = true, [3233] = true, [3234] = true, [3235] = true, [3236] = true, [3237] = true, [3238] = true, [3239] = true, [3240] = true, [3241] = true, [3242] = true, [3243] = true },
     },
     positions = {
+    },
+    ressorts = {
     },
     molettes = {
     },
@@ -106,6 +122,8 @@ TABLETTE_APPAREILS = {
     },
     positions = {
     },
+    ressorts = {
+    },
     molettes = {
     },
     pages = { [100] = { [3001] = true, [3002] = true } },
@@ -117,6 +135,8 @@ TABLETTE_APPAREILS = {
       [47] = { [3238] = true, [3239] = true, [3240] = true, [3241] = true, [3242] = true, [3244] = true, [3245] = true, [3246] = true, [3247] = true, [3248] = true, [3249] = true, [3250] = true, [3251] = true, [3252] = true, [3253] = true, [3254] = true, [3255] = true, [3256] = true, [3257] = true, [3258] = true, [3259] = true, [3262] = true, [3263] = true, [3264] = true, [3265] = true, [3266] = true, [3271] = true, [3272] = true, [3273] = true, [3274] = true, [3275] = true, [3277] = true, [3278] = true, [3279] = true, [3280] = true, [3281] = true, [3282] = true, [3283] = true, [3284] = true, [3285] = true, [3286] = true, [3287] = true, [3288] = true, [3289] = true, [3290] = true, [3291] = true, [3292] = true, [3293] = true, [3294] = true, [3295] = true, [3296] = true, [3297] = true, [3304] = true, [3305] = true, [3306] = true, [3307] = true, [3308] = true, [3310] = true, [3311] = true, [3312] = true, [3313] = true, [3314] = true, [3315] = true, [3316] = true, [3317] = true, [3318] = true, [3319] = true, [3320] = true, [3321] = true, [3322] = true, [3323] = true, [3324] = true, [3325] = true, [3326] = true, [3327] = true, [3328] = true, [3329] = true, [3330] = true },
     },
     positions = {
+    },
+    ressorts = {
     },
     molettes = {
     },
@@ -130,6 +150,8 @@ TABLETTE_APPAREILS = {
     },
     positions = {
     },
+    ressorts = {
+    },
     molettes = {
     },
     pages = { [100] = { [3001] = true, [3002] = true } },
@@ -142,6 +164,8 @@ TABLETTE_APPAREILS = {
     },
     positions = {
     },
+    ressorts = {
+    },
     molettes = {
     },
     pages = { [100] = { [3001] = true, [3002] = true } },
@@ -153,6 +177,8 @@ TABLETTE_APPAREILS = {
     },
     positions = {
     },
+    ressorts = {
+    },
     molettes = {
     },
     pages = { [68] = { [3001] = true, [3002] = true } },
@@ -163,6 +189,8 @@ TABLETTE_APPAREILS = {
     boutons = {
     },
     positions = {
+    },
+    ressorts = {
     },
     molettes = {
     },
@@ -176,6 +204,8 @@ TABLETTE_APPAREILS = {
     positions = {
       [50] = { [3002] = { [0] = true, [1] = true } },
     },
+    ressorts = {
+    },
     molettes = {
     },
     pages = { [59] = { [3001] = true, [3002] = true } },
@@ -186,6 +216,8 @@ TABLETTE_APPAREILS = {
     boutons = {
     },
     positions = {
+    },
+    ressorts = {
     },
     molettes = {
     },
@@ -198,6 +230,8 @@ TABLETTE_APPAREILS = {
     },
     positions = {
     },
+    ressorts = {
+    },
     molettes = {
     },
     pages = { },
@@ -208,6 +242,8 @@ TABLETTE_APPAREILS = {
     boutons = {
     },
     positions = {
+    },
+    ressorts = {
     },
     molettes = {
     },
@@ -220,6 +256,8 @@ TABLETTE_APPAREILS = {
     },
     positions = {
     },
+    ressorts = {
+    },
     molettes = {
     },
     pages = { },
@@ -230,6 +268,8 @@ TABLETTE_APPAREILS = {
     boutons = {
     },
     positions = {
+    },
+    ressorts = {
     },
     molettes = {
     },
@@ -242,6 +282,8 @@ TABLETTE_APPAREILS = {
     },
     positions = {
     },
+    ressorts = {
+    },
     molettes = {
     },
     pages = { },
@@ -252,6 +294,8 @@ TABLETTE_APPAREILS = {
     boutons = {
     },
     positions = {
+    },
+    ressorts = {
     },
     molettes = {
     },
@@ -264,6 +308,8 @@ TABLETTE_APPAREILS = {
     },
     positions = {
     },
+    ressorts = {
+    },
     molettes = {
     },
     pages = { },
@@ -274,6 +320,8 @@ TABLETTE_APPAREILS = {
     boutons = {
     },
     positions = {
+    },
+    ressorts = {
     },
     molettes = {
     },
@@ -286,6 +334,8 @@ TABLETTE_APPAREILS = {
     },
     positions = {
     },
+    ressorts = {
+    },
     molettes = {
     },
     pages = { },
@@ -296,6 +346,8 @@ TABLETTE_APPAREILS = {
     boutons = {
     },
     positions = {
+    },
+    ressorts = {
     },
     molettes = {
     },
@@ -308,6 +360,8 @@ TABLETTE_APPAREILS = {
     },
     positions = {
     },
+    ressorts = {
+    },
     molettes = {
     },
     pages = { },
@@ -318,6 +372,8 @@ TABLETTE_APPAREILS = {
     boutons = {
     },
     positions = {
+    },
+    ressorts = {
     },
     molettes = {
     },
@@ -330,6 +386,8 @@ TABLETTE_APPAREILS = {
     },
     positions = {
     },
+    ressorts = {
+    },
     molettes = {
     },
     pages = { },
@@ -340,6 +398,8 @@ TABLETTE_APPAREILS = {
     boutons = {
     },
     positions = {
+    },
+    ressorts = {
     },
     molettes = {
     },
@@ -352,6 +412,8 @@ TABLETTE_APPAREILS = {
     },
     positions = {
     },
+    ressorts = {
+    },
     molettes = {
     },
     pages = { },
@@ -362,6 +424,8 @@ TABLETTE_APPAREILS = {
     boutons = {
     },
     positions = {
+    },
+    ressorts = {
     },
     molettes = {
     },
@@ -374,6 +438,8 @@ TABLETTE_APPAREILS = {
     },
     positions = {
     },
+    ressorts = {
+    },
     molettes = {
     },
     pages = { },
@@ -384,6 +450,8 @@ TABLETTE_APPAREILS = {
     boutons = {
     },
     positions = {
+    },
+    ressorts = {
     },
     molettes = {
     },
@@ -396,6 +464,8 @@ TABLETTE_APPAREILS = {
     },
     positions = {
     },
+    ressorts = {
+    },
     molettes = {
     },
     pages = { },
@@ -406,6 +476,8 @@ TABLETTE_APPAREILS = {
     boutons = {
     },
     positions = {
+    },
+    ressorts = {
     },
     molettes = {
     },
@@ -418,6 +490,8 @@ TABLETTE_APPAREILS = {
     },
     positions = {
     },
+    ressorts = {
+    },
     molettes = {
     },
     pages = { },
@@ -428,6 +502,8 @@ TABLETTE_APPAREILS = {
     boutons = {
     },
     positions = {
+    },
+    ressorts = {
     },
     molettes = {
     },
@@ -440,6 +516,8 @@ TABLETTE_APPAREILS = {
     },
     positions = {
     },
+    ressorts = {
+    },
     molettes = {
     },
     pages = { },
@@ -450,6 +528,8 @@ TABLETTE_APPAREILS = {
     boutons = {
     },
     positions = {
+    },
+    ressorts = {
     },
     molettes = {
     },
@@ -462,6 +542,8 @@ TABLETTE_APPAREILS = {
     },
     positions = {
     },
+    ressorts = {
+    },
     molettes = {
     },
     pages = { },
@@ -472,6 +554,8 @@ TABLETTE_APPAREILS = {
     boutons = {
     },
     positions = {
+    },
+    ressorts = {
     },
     molettes = {
     },
@@ -484,6 +568,8 @@ TABLETTE_APPAREILS = {
     },
     positions = {
     },
+    ressorts = {
+    },
     molettes = {
     },
     pages = { },
@@ -494,6 +580,8 @@ TABLETTE_APPAREILS = {
     boutons = {
     },
     positions = {
+    },
+    ressorts = {
     },
     molettes = {
     },
@@ -506,6 +594,8 @@ TABLETTE_APPAREILS = {
     },
     positions = {
     },
+    ressorts = {
+    },
     molettes = {
     },
     pages = { [100] = { [3001] = true, [3002] = true } },
@@ -516,6 +606,8 @@ TABLETTE_APPAREILS = {
     boutons = {
     },
     positions = {
+    },
+    ressorts = {
     },
     molettes = {
     },
@@ -528,6 +620,8 @@ TABLETTE_APPAREILS = {
     },
     positions = {
     },
+    ressorts = {
+    },
     molettes = {
     },
     pages = { [100] = { [3001] = true, [3002] = true } },
@@ -538,6 +632,8 @@ TABLETTE_APPAREILS = {
     boutons = {
     },
     positions = {
+    },
+    ressorts = {
     },
     molettes = {
     },
@@ -550,6 +646,8 @@ TABLETTE_APPAREILS = {
     },
     positions = {
     },
+    ressorts = {
+    },
     molettes = {
     },
     pages = { [100] = { [3001] = true, [3002] = true } },
@@ -560,6 +658,8 @@ TABLETTE_APPAREILS = {
     boutons = {
     },
     positions = {
+    },
+    ressorts = {
     },
     molettes = {
     },
@@ -572,6 +672,8 @@ TABLETTE_APPAREILS = {
     },
     positions = {
     },
+    ressorts = {
+    },
     molettes = {
     },
     pages = { [100] = { [3001] = true, [3002] = true } },
@@ -582,6 +684,8 @@ TABLETTE_APPAREILS = {
     boutons = {
     },
     positions = {
+    },
+    ressorts = {
     },
     molettes = {
     },
@@ -594,6 +698,8 @@ TABLETTE_APPAREILS = {
     },
     positions = {
     },
+    ressorts = {
+    },
     molettes = {
     },
     pages = { [100] = { [3001] = true, [3002] = true } },
@@ -604,6 +710,8 @@ TABLETTE_APPAREILS = {
     boutons = {
     },
     positions = {
+    },
+    ressorts = {
     },
     molettes = {
     },
@@ -616,6 +724,8 @@ TABLETTE_APPAREILS = {
     },
     positions = {
     },
+    ressorts = {
+    },
     molettes = {
     },
     pages = { },
@@ -626,6 +736,8 @@ TABLETTE_APPAREILS = {
     boutons = {
     },
     positions = {
+    },
+    ressorts = {
     },
     molettes = {
     },
@@ -638,6 +750,8 @@ TABLETTE_APPAREILS = {
     },
     positions = {
     },
+    ressorts = {
+    },
     molettes = {
     },
     pages = { },
@@ -648,6 +762,8 @@ TABLETTE_APPAREILS = {
     boutons = {
     },
     positions = {
+    },
+    ressorts = {
     },
     molettes = {
     },
@@ -660,6 +776,8 @@ TABLETTE_APPAREILS = {
     },
     positions = {
     },
+    ressorts = {
+    },
     molettes = {
     },
     pages = { },
@@ -670,6 +788,8 @@ TABLETTE_APPAREILS = {
     boutons = {
     },
     positions = {
+    },
+    ressorts = {
     },
     molettes = {
     },
@@ -682,6 +802,8 @@ TABLETTE_APPAREILS = {
     },
     positions = {
     },
+    ressorts = {
+    },
     molettes = {
     },
     pages = { },
@@ -692,6 +814,8 @@ TABLETTE_APPAREILS = {
     boutons = {
     },
     positions = {
+    },
+    ressorts = {
     },
     molettes = {
     },
@@ -704,6 +828,8 @@ TABLETTE_APPAREILS = {
     },
     positions = {
     },
+    ressorts = {
+    },
     molettes = {
     },
     pages = { },
@@ -714,6 +840,8 @@ TABLETTE_APPAREILS = {
     boutons = {
     },
     positions = {
+    },
+    ressorts = {
     },
     molettes = {
     },
@@ -726,6 +854,8 @@ TABLETTE_APPAREILS = {
     },
     positions = {
     },
+    ressorts = {
+    },
     molettes = {
     },
     pages = { },
@@ -736,6 +866,8 @@ TABLETTE_APPAREILS = {
     boutons = {
     },
     positions = {
+    },
+    ressorts = {
     },
     molettes = {
     },
@@ -748,6 +880,8 @@ TABLETTE_APPAREILS = {
     },
     positions = {
     },
+    ressorts = {
+    },
     molettes = {
     },
     pages = { },
@@ -758,6 +892,8 @@ TABLETTE_APPAREILS = {
     boutons = {
     },
     positions = {
+    },
+    ressorts = {
     },
     molettes = {
     },
@@ -770,6 +906,8 @@ TABLETTE_APPAREILS = {
     },
     positions = {
     },
+    ressorts = {
+    },
     molettes = {
     },
     pages = { },
@@ -780,6 +918,8 @@ TABLETTE_APPAREILS = {
     boutons = {
     },
     positions = {
+    },
+    ressorts = {
     },
     molettes = {
     },
@@ -792,6 +932,8 @@ TABLETTE_APPAREILS = {
     },
     positions = {
     },
+    ressorts = {
+    },
     molettes = {
     },
     pages = { },
@@ -803,6 +945,8 @@ TABLETTE_APPAREILS = {
     },
     positions = {
     },
+    ressorts = {
+    },
     molettes = {
     },
     pages = { },
@@ -813,6 +957,8 @@ TABLETTE_APPAREILS = {
     boutons = {
     },
     positions = {
+    },
+    ressorts = {
     },
     molettes = {
     },

@@ -31,6 +31,13 @@ l'affiche : iPad, tablette Android, téléphone, navigateur d'un autre PC.
   l'export de son propre appareil les coupe, la tablette le dit.
 - **Planche avant du Hornet** redessinée : UFC tactile, IFEI, instruments de
   secours, voyants.
+- **ICP et DED du F-16** : le clavier de l'ICP (touches de priorité,
+  chiffres, RCL, ENTR, ▲▼, dobber RTN / SEQ / UP / DN) et le DED redessiné
+  au-dessus, d'après la table de
+  [DCS-BIOS](https://github.com/DCS-Skunkworks/dcs-bios) qui dit où chaque
+  texte s'écrit. Cette table, sous licence GPL, n'est pas livrée avec DCS
+  Tablette : il la télécharge la première fois que le DED s'affiche
+  (version fixée, vérifiée par son empreinte SHA-256), puis la garde.
 - **Kneeboard** : les pages de l'avion piloté lues directement dans les
   fichiers, nettes à toute taille — mission en cours (solo ou multijoueur),
   pages du module, les vôtres, planches de la carte — et celui de DCS en
@@ -42,8 +49,9 @@ l'affiche : iPad, tablette Android, téléphone, navigateur d'un autre PC.
   sur un téléphone, trois sur une tablette en paysage, toute la planche sur
   un grand écran — et se réarrange quand on la fait pivoter.
 
-Pas de Python à installer, rien sur internet en vol : le serveur tourne sur
-le PC, l'iPad s'y connecte par le Wi-Fi de la maison.
+Pas de Python à installer, rien sur internet en vol (sauf, une seule fois, la
+table du DED du F-16) : le serveur tourne sur le PC, l'iPad s'y connecte par
+le Wi-Fi de la maison.
 
 ## Télécharger
 
@@ -56,7 +64,7 @@ Le zip contient `DCS-Tablette.exe`, `Installer.bat`, `Desinstaller.bat` et un
 existe une version plus récente et se met à jour tout seul, sans rien
 demander : téléchargement vérifié (SHA-256), remplacement de ses fichiers,
 relance — vos réglages restent, DCS peut rester ouvert. Seule demande faite
-à internet, au lancement ; `--sans-mise-a-jour` la supprime. De la 1.5.0 à
+à internet à chaque lancement ; `--sans-mise-a-jour` la supprime. De la 1.5.0 à
 la 1.8.0, il demandait « Mettre à jour maintenant ? » : répondre O une
 dernière fois. Depuis une version plus ancienne, extraire une dernière fois
 le zip à la place de l'ancien dossier.
@@ -66,7 +74,7 @@ le zip à la place de l'ancien dossier.
 | Appareil | Écrans + boutons | En plus |
 |---|---|---|
 | F/A-18C Hornet | DDI G, DDI D, AMPCD | UFC tactile, IFEI, secours, voyants |
-| F-16C Viper | MFD G, MFD D | — |
+| F-16C Viper | MFD G, MFD D | ICP tactile, DED |
 | AH-64D Apache | MPD G, MPD D (+ FCR, WPN, TSD…), TEDAC en image | siège Pilote / CPG |
 | OH-58D Kiowa | MFD G, MFD D | — |
 | A-10C / A-10C II | MFCD G, MFCD D | — |
@@ -91,11 +99,12 @@ tête basse qui recopie le HUD (position DUBL) ou montre la situation tactique
 (TACT) : le module l'envoie de lui-même dans la zone RIGHT_MFCD de « Tablette
 DCS », rien à régler.
 
-Les numéros des boutons du F-16C, de l'OH-58D, de l'AV-8B, du F-15E, du
-JF-17 et du Ka-50 viennent de
+Les numéros des boutons du F-16C (MFD et ICP), de l'OH-58D, de l'AV-8B, du
+F-15E, du JF-17 et du Ka-50 viennent de
 [DCS-BIOS](https://github.com/DCS-Skunkworks/dcs-bios) et restent à confirmer
 en vol (surtout la place des boutons autour des écrans du JF-17 et du
-F-15E) : un retour est bienvenu.
+F-15E, et le DED du F-16C : la page reconnue, les caractères spéciaux comme
+la flèche ↕) : un retour est bienvenu.
 
 Sur le Hornet, l'Apache et l'A-10C, chaque bouton est en face du libellé que
 le module écrit sur l'écran (positions lues dans les scripts du module). Sur

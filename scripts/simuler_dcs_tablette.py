@@ -3,10 +3,12 @@
 Joue le rôle de `DCS-Tablette-Export.lua` : annonce un appareil chaque
 seconde (le Hornet par défaut), envoie ses données de vol (un virage à
 droite en montée, qui fait vivre les instruments) et affiche chaque ordre
-reçu de la tablette.
+reçu de la tablette. En F-16, il envoie aussi une page STPT du DED, dont la
+bascule ▲▼ de l'ICP change le numéro.
 
     .venv\\Scripts\\python.exe scripts\\simuler_dcs_tablette.py
     .venv\\Scripts\\python.exe scripts\\simuler_dcs_tablette.py AH-64D_BLK_II
+    .venv\\Scripts\\python.exe scripts\\simuler_dcs_tablette.py F-16C_50
 
 À ne pas lancer en même temps que DCS : les deux voudraient le même port.
 """
@@ -18,7 +20,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from tablette.appareils import profil_pour  # noqa: E402
+from tablette import ded  # noqa: E402
+from tablette.appareils import f16c, profil_pour  # noqa: E402
 from tablette.config import PORT_ETAT, PORT_ORDRES  # noqa: E402
 
 
@@ -31,6 +34,10 @@ def decrire(profil, appareil: int, commande: int) -> str:
                     return f"{ecran.libelle} {bouton.id}"
     if appareil == profil.kneeboard:
         return "kneeboard page"
+    if profil is f16c.PROFIL and appareil == f16c.ICP:
+        noms = {**{c: t for t, c in f16c.TOUCHES_ICP.items()},
+                **{c: t for t, (c, _) in f16c.RESSORTS_ICP.items()}}
+        return f"ICP {noms.get(commande, commande)}"
     return f"appareil {appareil} commande {commande}"
 
 
@@ -49,6 +56,22 @@ def vol(t: float) -> str:
     return "vol " + " ".join(f"{cle}={v:.4f}" for cle, v in valeurs.items())
 
 
+def page_stpt(numero: int) -> str:
+    """Une page STPT du DED, comme list_indication(6) la donne : des
+    morceaux nommés, sans leur place (ded.py la retrouve)."""
+    champs = {
+        "STEERPOINT LABEL": "STPT", "STEERPOINT NUMBER": f"{numero:3d}",
+        "STEERPOINT NUMBER Asteriscs_lhs": "*", "STEERPOINT NUMBER Asteriscs_rhs": "*",
+        "STEERPOINT SEQUENCE": "AUTO",
+        "STEERPOINT Latitude": "LAT", "STEERPOINT Latitude Value": f"N 41°{30 + numero:02d}.123'",
+        "STEERPOINT Longitude": "LNG", "STEERPOINT Longitude Value": "E 041°36.457'",
+        "STEERPOINT Elevation": "ELEV", "STEERPOINT Elevation Value": "   125FT",
+        "STEERPOINT Time over current STP": "TOS", "STEERPOINT TOS Value": "00:00:00",
+    }
+    return "".join(f"-----------------------------------------\n{nom}\n{valeur}\n"
+                   for nom, valeur in champs.items())
+
+
 def main() -> None:
     # Sortie redirigée dans un fichier : Windows l'écrirait en cp1252, sans « → ».
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -61,16 +84,23 @@ def main() -> None:
     print(f"DCS simulé : {nom} ({profil.libelle}), ordres attendus sur le port {PORT_ORDRES}")
     prochaine_annonce = 0.0
     debut = time.monotonic()
+    stpt = 1
     while True:
         if time.monotonic() >= prochaine_annonce:
             envoi.sendto(f"etat {nom}".encode(), ("127.0.0.1", PORT_ETAT))
             prochaine_annonce = time.monotonic() + 1.0
+        if profil is f16c.PROFIL:
+            envoi.sendto(f"ind {ded.IND_DED}\n{page_stpt(stpt)}".encode(),
+                         ("127.0.0.1", PORT_ETAT))
         envoi.sendto(vol(time.monotonic() - debut).encode(), ("127.0.0.1", PORT_ETAT))
         try:
             donnees, _ = ecoute.recvfrom(64)
         except socket.timeout:
             continue
         appareil, commande, valeur = donnees.decode("ascii").split()
+        if profil is f16c.PROFIL and int(appareil) == f16c.ICP and valeur != "0":
+            sens = {f16c.RESSORTS_ICP["INC"][0]: 1, f16c.RESSORTS_ICP["DEC"][0]: -1}
+            stpt = max(1, stpt + sens.get(int(commande), 0))
         print(f"{decrire(profil, int(appareil), int(commande))} → {valeur}", flush=True)
 
 
