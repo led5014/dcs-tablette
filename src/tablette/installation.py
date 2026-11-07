@@ -1,9 +1,9 @@
 r"""Installation dans DCS : les scripts Lua, la ligne d'Export.lua, les écrans.
 
-Sert à l'exécutable (`DCS-Tablette.exe installer`, `desinstaller`) comme aux
-scripts du dépôt (`scripts/installer_dcs.py`, `scripts/configurer_ecrans_dcs.py`).
-Les fonctions rendent les lignes à afficher au lieu de les imprimer : les
-tests les lisent, la console les recopie.
+Sert à l'exécutable (`DCS-Tablette.exe installer`, `desinstaller`) comme au
+code source (`python -m tablette installer`). Les fonctions rendent les lignes
+à afficher au lieu de les imprimer : les tests les lisent, la console les
+recopie.
 
 Ce qui est touché, et rien d'autre :
 - l'écran virtuel (ecran_virtuel.py) : installé s'il manque et si le pilote

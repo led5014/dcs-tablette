@@ -123,7 +123,7 @@ D'où viennent les numéros, et ce qui reste à confirmer :
 
 Ajouter un appareil : un fichier dans `src/tablette/appareils/`, l'entrée dans
 `PROFILS`, puis `scripts\generer_lua_appareils.py` (la liste blanche du script
-Lua en dépend) et `scripts\installer_dcs.py`.
+Lua en dépend) et `python -m tablette installer`.
 
 ## Installation
 
@@ -315,8 +315,9 @@ Depuis le code :
 
 1. **Python** et ce dépôt : `.venv` avec FastAPI, uvicorn, Pillow (voir
    `requirements.txt`). Rien d'autre à installer côté tablette.
-2. **Scripts Lua dans DCS** : `.venv\Scripts\python.exe scripts\installer_dcs.py`.
-   Copie `DCS-Tablette-Export.lua` et `DCS-Tablette-Appareils.lua` dans
+2. **Installer** : `.venv\Scripts\python.exe -m tablette installer` (avec
+   `PYTHONPATH=src`), la même installation que l'exécutable, sans la copie du
+   programme ni les raccourcis. Elle copie `DCS-Tablette-Export.lua` et `DCS-Tablette-Appareils.lua` dans
    `Saved Games\DCS\Scripts` et ajoute la ligne qui les charge à `Export.lua`,
    après une copie de l'original. Tacview, SRS et les autres restent intacts.
    `Saved Games\DCS.openbeta` à la place quand c'est celui dont DCS se sert :
@@ -332,9 +333,8 @@ Depuis le code :
      principal), à la même fréquence, **à droite** du principal et aligné en
      haut ;
    - ou une prise HDMI factice.
-4. **Configuration d'écrans de DCS**, DCS fermé :
-   `.venv\Scripts\python.exe scripts\configurer_ecrans_dcs.py --second-ecran`.
-   Écrit « Tablette DCS » (une seule configuration pour tous les appareils,
+4. **Configuration d'écrans de DCS**, DCS fermé : faite par la même commande.
+   Elle écrit « Tablette DCS » (une seule configuration pour tous les appareils,
    zones à leur forme pour ceux dont les écrans ne sont pas carrés) et
    la sélectionne dans `options.lua` avec la résolution qui couvre les deux
    écrans, en fenêtré.
@@ -345,7 +345,7 @@ Depuis le code :
    d'accueil » pour l'avoir en plein écran. Verrouillage automatique sur
    « Jamais » pendant le vol.
 
-Sans second écran, `configurer_ecrans_dcs.py` sans option pose les écrans en
+Sans second écran, `python -m tablette installer --essai` pose les écrans en
 bas de la vue : pour essayer, pas pour voler.
 
 ## Instruments de base, pour tout appareil
