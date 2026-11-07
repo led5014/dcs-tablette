@@ -350,6 +350,15 @@ def mode_essai(saved_games: Path) -> Optional[bool]:
     return re.search(r"^Description\s*=\s*'Essai", texte, re.M) is not None
 
 
+def mode_installe(choix: Dict, saved_games: Path) -> Tuple[str, bool]:
+    """Le mode choisi à l'installation (`lire_choix`) et si un écran réel a
+    été accepté comme support. Installé avant que le choix soit retenu (1.4
+    et avant) : le mode se lit dans « Tablette DCS », et un écran réel déjà
+    en place était pris d'office, il le reste."""
+    mode = choix.get("mode") or ("essai" if mode_essai(saved_games) else "second_ecran")
+    return mode, bool(choix.get("physique", not choix))
+
+
 def configurer_ecrans(saved_games: Path, essai: bool = False,
                       ecrans: Optional[Sequence[Sequence]] = None,
                       ouvert: Callable[[], bool] = dcs_ouvert,
