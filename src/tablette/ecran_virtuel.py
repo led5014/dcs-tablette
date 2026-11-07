@@ -43,7 +43,7 @@ from typing import Callable, Dict, List, Optional, Sequence, Tuple
 from xml.etree import ElementTree
 
 from .disposition import Moniteur, chevauche, rangement, supports
-from .langues import FRANCAIS, Texte, dans, pc
+from .langues import Texte, pc
 
 Mode =Tuple[int, int, int]           # largeur, hauteur, fréquence
 
@@ -784,8 +784,9 @@ def remettre(reparer: bool = True, physique: bool = False,
     `physique` : le pilote a choisi à l'installation un écran réel (prise
     HDMI factice) ; il fait l'affaire.
 
-    Rend (« ok », « repare », « a_faire » ou « manque »), ce qu'on a vu ou
-    fait, et la marche à suivre.
+    Rend (« ok », « repare », « a_faire », « manque », ou « absent » quand
+    il n'y a pas d'écran virtuel du tout), ce qu'on a vu ou fait, et la
+    marche à suivre.
     """
     ecrans = lister()
     placement, raisons = planifier(ecrans)
@@ -796,7 +797,7 @@ def remettre(reparer: bool = True, physique: bool = False,
         if deja is not None:
             return "ok", Texte("pas d'écran virtuel : {ecran}, choisi à l'installation",
                                ecran=deja[0].texte), []
-        return "manque", Texte("aucun : les écrans du cockpit iraient sur la vue"), [
+        return "absent", Texte("aucun : les écrans du cockpit iraient sur la vue"), [
             Texte("Lancer Installer.bat : il propose de l'installer (répondre O) et le place.")
         ] + MANUEL[1:3]
     if placement is None:
@@ -810,10 +811,18 @@ def remettre(reparer: bool = True, physique: bool = False,
     lignes: List[str] = []
     if preparer(lignes.append, lambda question: None, lister, etendre, appliquer,
                 attendre=attendre):
-        # Cherchée dans le texte français, la référence, quelle que soit la langue.
-        return "repare", next((l for l in lignes if " placé : " in dans(l, FRANCAIS)),
+        # La ligne qui dit où il est placé, reconnue à sa phrase modèle.
+        modele = _place(p).francais
+        return "repare", next((l for l in lignes if getattr(l, "francais", None) == modele),
                               lignes[-1]), []
     return "manque", lignes[-2] if len(lignes) > 1 else lignes[-1], lignes[-1:]
+
+
+def _place(p: Placement) -> Texte:
+    """Ce que `preparer` dit une fois l'écran virtuel placé ; `remettre` le
+    reprend comme détail du diagnostic."""
+    return Texte("Écran virtuel « {carte} » placé : {voulu}.", carte=p.ecran.carte,
+                 voulu=p.voulu)
 
 
 def preparer(afficher: Callable[[str], None], demander: Callable[[str], Optional[str]],
@@ -909,8 +918,7 @@ def preparer(afficher: Callable[[str], None], demander: Callable[[str], Optional
                        erreur=erreur))
         afficher(Texte("À régler dans Paramètres → Système → Écran : {voulu}.", voulu=p.voulu))
         return None
-    afficher(Texte("Écran virtuel « {carte} » placé : {voulu}.", carte=p.ecran.carte,
-                   voulu=p.voulu))
+    afficher(_place(p))
     if p.cote == "dessous":
         afficher(Texte("(Un écran occupe déjà la droite du principal : l'écran virtuel va "
                        "dessous.)"))

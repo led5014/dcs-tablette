@@ -3358,7 +3358,7 @@ class TestDiagnostic(unittest.TestCase):
     def test_ecran_reel_pris_seulement_s_il_a_ete_donne(self):
         self.choix = {"mode": "second_ecran", "physique": False}
         self.ecrans = [(0, 0, 2560, 1440, True, False), (2560, 0, 2560, 1440, False, False)]
-        self.virtuel = ("manque", "aucun : les écrans du cockpit iraient sur la vue", [])
+        self.virtuel = ("absent", "aucun : les écrans du cockpit iraient sur la vue", [])
         point = self.points()["Écrans de DCS"]
         # Pas pris pour les écrans du cockpit ; mais sous la fenêtre de DCS,
         # réglée pour l'écran virtuel d'avant : c'est à régler.
@@ -3691,7 +3691,7 @@ class TestRemettreEcranVirtuel(unittest.TestCase):
 
     def test_absent_rien_n_est_installe(self):
         (etat, _, solution), appels = self.remettre([[PRINCIPAL]])
-        self.assertEqual((etat, appels), ("manque", []))
+        self.assertEqual((etat, appels), ("absent", []))
         self.assertIn("Installer.bat", solution[0])
 
     def test_refuse_par_windows(self):
