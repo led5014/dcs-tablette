@@ -15,8 +15,6 @@ from ..instruments import OTAN
 from . import Ecran, Profil, couronne_horaire, reperes
 from ..langues import Texte
 
-DOSSIER_KNEEBOARD = "FA-18C_hornet"
-
 _PB = tuple((str(pb), 3010 + pb) for pb in range(1, 21))
 _CADRE = couronne_horaire(5, "gauche", _PB)
 

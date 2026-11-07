@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import re
 from bisect import bisect_right
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Dict, List, Optional, Sequence
 
 # --------------------------------------------------------------- écrans texte
 

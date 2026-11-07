@@ -35,7 +35,7 @@ from .appareils import formes
 from .ecrans_dcs import (NOM_AFFICHE, NOM_FICHIER, PasDExport, a_leur_forme, fichier_actif,
                          lire_zones, options_affichage, plein_ecran, regler_options)
 from .installation import (LIGNE, configuration_existante, configurer_ecrans, dcs_ouvert, genants,
-                           dcs_regle, installer_scripts, lire_choix, mode_essai, premiere_fois,
+                           dcs_regle, installer_scripts, lire_choix, mode_installe, premiere_fois,
                            scripts_a_jour, support_ecrans)
 from .langues import FRANCAIS, Texte, dans, message, pc
 
@@ -610,11 +610,7 @@ class Diagnostic:
                                 (Texte("Lancer Installer.bat pour l'installer."),)))
         elif points[0].etat == OK:
             choix = self._choix()
-            # Installé avant que le choix soit retenu (1.4 et avant) : un écran
-            # réel déjà en place était pris d'office, il le reste.
-            physique = bool(choix.get("physique", not choix))
-            mode = choix.get("mode") or ("essai" if mode_essai(self.saved_games)
-                                         else "second_ecran")
+            mode, physique = mode_installe(choix, self.saved_games)
             essai = mode == "essai"
             points.append(self._sur(Texte("Scripts dans DCS"), lambda: self._scripts(lance)))
             if mode == "existante":
@@ -658,9 +654,6 @@ class Diagnostic:
     def tablette_vue(self, adresse: str) -> None:
         """Appelé à chaque demande d'état de la page : une tablette est là."""
         self._tablette = (adresse, self._horloge())
-
-    def relancer(self) -> None:
-        self._reveil.set()
 
     # ------------------------------------------------------------ en fond
 
@@ -722,9 +715,7 @@ def remettre_au_demarrage(saved_games: Path, journal: Path,
 
     Ce qui a été vu et fait va dans `journal` : pas de fenêtre pour le dire.
     Rend 0 si les écrans sont en place, 1 sinon."""
-    voulu = choix()
-    physique = bool(voulu.get("physique", not voulu))
-    mode = voulu.get("mode") or ("essai" if mode_essai(saved_games) else "second_ecran")
+    mode, physique = mode_installe(choix(), saved_games)
     if mode == "second_ecran" and not physique:
         if ecrans is None:
             from .ecran_virtuel import moniteurs as ecrans

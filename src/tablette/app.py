@@ -15,7 +15,7 @@ import json
 import logging
 import socket
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Annotated, Callable, Dict, List, Optional, Tuple
 from urllib.parse import quote
 
 from fastapi import Body, Cookie, Depends, FastAPI, HTTPException, Request
@@ -36,8 +36,8 @@ WEB_DIR = Path(__file__).resolve().parent / "web"
 # côté PC, où l'on voit que la tablette a bien parlé.
 journal = logging.getLogger("tablette")
 
-# Même raison que pour DCS Debrief : servie en local, la page n'a rien à
-# gagner au cache, et un app.js périmé face à un index.html à jour casse.
+# Servie en local, la page n'a rien à gagner au cache, et un app.js périmé
+# face à un index.html à jour casse.
 _SANS_CACHE = {"Cache-Control": "no-cache, must-revalidate"}
 
 PAGE_SUIVANTE, PAGE_PRECEDENTE = 3001, 3002     # communes à tous les kneeboards
@@ -52,6 +52,12 @@ def langue_de(requete: Request) -> str:
     """La langue de la tablette qui demande."""
     return langues.de_la_tablette(requete.cookies.get(langues.COOKIE),
                                   requete.headers.get("accept-language"))
+
+
+# Ce que chaque route reçoit de la tablette qui demande : sa langue, et
+# l'appareil choisi dans son menu (None : automatique).
+Langue = Annotated[str, Depends(langue_de)]
+Choix = Annotated[Optional[str], Cookie(alias=CHOIX)]
 
 
 def refus(code: int, texte: Texte, langue: str) -> HTTPException:
@@ -184,9 +190,8 @@ def create_app(cfg: Optional[Config] = None, pont: Optional[PontDCS] = None,
         return profil
 
     @app.get("/api/etat")
-    def etat(requete: Request, kneeboard: Optional[str] = None,
-             choix: Optional[str] = Cookie(None, alias=CHOIX),
-             langue: str = Depends(langue_de)) -> Dict:
+    def etat(requete: Request, langue: Langue, kneeboard: Optional[str] = None,
+             choix: Choix = None) -> Dict:
         """État de DCS et profil actif. `kneeboard` (pc ou tablette) : où la
         tablette veut le kneeboard de DCS ; elle le redit à chaque appel. Sur
         la tablette, on dit en plus s'il est ouvert dans DCS, pour qu'elle
@@ -209,7 +214,7 @@ def create_app(cfg: Optional[Config] = None, pont: Optional[PontDCS] = None,
                 "problemes": diagnostic.etat()["problemes"] if diagnostic else 0}
 
     @app.get("/api/diagnostic")
-    def lire_diagnostic(langue: str = Depends(langue_de)) -> Dict:
+    def lire_diagnostic(langue: Langue) -> Dict:
         """Le dernier résultat de la console de diagnostic, sans revérifier,
         dans la langue de la tablette."""
         if diagnostic is None:
@@ -217,8 +222,7 @@ def create_app(cfg: Optional[Config] = None, pont: Optional[PontDCS] = None,
         return dans(diagnostic.etat(), langue)
 
     @app.post("/api/diagnostic")
-    def verifier_diagnostic(corps: Dict = Body(...),
-                            langue: str = Depends(langue_de)) -> Dict:
+    def verifier_diagnostic(langue: Langue, corps: Dict = Body(...)) -> Dict:
         """Bouton « Vérifier » : tout revérifier maintenant, et réessayer ce
         qu'on avait renoncé à réparer tout seul. Corps JSON exigé : une page
         d'un autre site ne peut pas en envoyer sans que le navigateur le
@@ -229,8 +233,7 @@ def create_app(cfg: Optional[Config] = None, pont: Optional[PontDCS] = None,
         return dans(diagnostic.etat(), langue)
 
     @app.get("/api/disposition")
-    def disposition_ecrans(choix: Optional[str] = Cookie(None, alias=CHOIX),
-                           langue: str = Depends(langue_de)) -> Dict:
+    def disposition_ecrans(langue: Langue, choix: Choix = None) -> Dict:
         """Le schéma du diagnostic : écrans de Windows, fenêtre de DCS, zones
         exportées et kneeboard, à l'échelle, ce qui pose problème marqué
         (apercu.py). Les zones de l'appareil piloté, ou choisi sur la
@@ -253,20 +256,17 @@ def create_app(cfg: Optional[Config] = None, pont: Optional[PontDCS] = None,
         return dans(resultat, langue)
 
     @app.get("/api/profils")
-    def profils(langue: str = Depends(langue_de)) -> List[Dict]:
+    def profils(langue: Langue) -> List[Dict]:
         """Les appareils du menu de la tablette, par ordre alphabétique."""
         liste = [{"id": p.id, "libelle": dans(p.libelle, langue)} for p in appareils.PROFILS]
         return sorted(liste, key=lambda p: p["libelle"].casefold())
 
     @app.get("/api/profil")
-    def description_profil(choix: Optional[str] = Cookie(None, alias=CHOIX),
-                           langue: str = Depends(langue_de)) -> Dict:
+    def description_profil(langue: Langue, choix: Choix = None) -> Dict:
         return vu_par_la_tablette(actif(choix)[0].description(langue))
 
     @app.post("/api/bouton")
-    def bouton(corps: Optional[Dict] = None,
-               choix: Optional[str] = Cookie(None, alias=CHOIX),
-               langue: str = Depends(langue_de)) -> Dict:
+    def bouton(langue: Langue, corps: Optional[Dict] = None, choix: Choix = None) -> Dict:
         """Un appui ou un relâchement sur le cadre d'un écran. La page envoie
         les deux : le bouton reste enfoncé dans le cockpit tant que le doigt
         est posé. `siege` choisit l'appareil des modules à deux places."""
@@ -306,10 +306,9 @@ def create_app(cfg: Optional[Config] = None, pont: Optional[PontDCS] = None,
         return {"envoye": envoye}
 
     @app.get("/api/video/{ecran_id}")
-    def image_ecran(ecran_id: str, lum: int = 0, contraste: int = 0, nettete: int = 0,
-                    definition: int = filtres.DEFINITION_NORMALE, filtre: str = "",
-                    choix: Optional[str] = Cookie(None, alias=CHOIX),
-                    langue: str = Depends(langue_de)) -> Response:
+    def image_ecran(ecran_id: str, langue: Langue, lum: int = 0, contraste: int = 0,
+                    nettete: int = 0, definition: int = filtres.DEFINITION_NORMALE,
+                    filtre: str = "", choix: Choix = None) -> Response:
         """Dernière image de l'écran. La page en redemande une dès qu'elle a
         affiché la précédente : le débit suit ce que l'iPad absorbe, sans
         file d'images en retard. Les autres paramètres : réglages de la
@@ -337,8 +336,7 @@ def create_app(cfg: Optional[Config] = None, pont: Optional[PontDCS] = None,
         return Response(contenu, media_type="image/jpeg", headers=entetes)
 
     @app.get("/api/planche")
-    def lecture_planche(choix: Optional[str] = Cookie(None, alias=CHOIX),
-                        langue: str = Depends(langue_de)) -> Dict:
+    def lecture_planche(langue: Langue, choix: Choix = None) -> Dict:
         """UFC, IFEI, instruments et voyants tels que DCS les montre ; None
         pour ce que DCS n'a pas envoyé depuis quelques secondes."""
         avec_panneau("ufc", choix, langue)
@@ -356,8 +354,7 @@ def create_app(cfg: Optional[Config] = None, pont: Optional[PontDCS] = None,
         return planche.cadrans()
 
     @app.get("/api/instruments")
-    def lire_instruments(choix: Optional[str] = Cookie(None, alias=CHOIX),
-                         langue: str = Depends(langue_de)) -> Dict:
+    def lire_instruments(langue: Langue, choix: Choix = None) -> Dict:
         """Les instruments analogiques, pour tout appareil (instruments.py).
         `interdit` : le serveur multijoueur coupe l'export de son appareil."""
         vol, interdit = pont.vol()
@@ -366,13 +363,11 @@ def create_app(cfg: Optional[Config] = None, pont: Optional[PontDCS] = None,
                 "instruments": instruments.lecture(vol, inst, langue)}
 
     @app.get("/api/instruments/cadrans")
-    def cadrans_instruments(choix: Optional[str] = Cookie(None, alias=CHOIX)) -> Dict:
+    def cadrans_instruments(choix: Choix = None) -> Dict:
         return instruments.cadrans(instruments_actifs(choix))
 
     @app.post("/api/ufc")
-    def touche_ufc(corps: Optional[Dict] = None,
-                   choix: Optional[str] = Cookie(None, alias=CHOIX),
-                   langue: str = Depends(langue_de)) -> Dict:
+    def touche_ufc(langue: Langue, corps: Optional[Dict] = None, choix: Choix = None) -> Dict:
         """Une touche de l'UFC (appui puis relâchement, comme les écrans), ou
         un cran de molette de canal COMM : {"touche": "COMM1", "sens": ±1}."""
         garde_fou(avec_panneau("ufc", choix, langue), langue)
@@ -395,8 +390,7 @@ def create_app(cfg: Optional[Config] = None, pont: Optional[PontDCS] = None,
         return {"envoye": envoye}
 
     @app.get("/api/ded")
-    def lecture_ded(choix: Optional[str] = Cookie(None, alias=CHOIX),
-                    langue: str = Depends(langue_de)) -> Dict:
+    def lecture_ded(langue: Langue, choix: Choix = None) -> Dict:
         """Le DED du F-16 tel que DCS le montre. `ded` None tant qu'il ne
         peut pas l'être, et `raison` le dit : table pas encore téléchargée
         (la première demande la fait venir), ou DCS muet."""
@@ -411,9 +405,7 @@ def create_app(cfg: Optional[Config] = None, pont: Optional[PontDCS] = None,
         return {"ded": gabarit.ecran(planche.lire_indication(texte)), "raison": None}
 
     @app.post("/api/icp")
-    def touche_icp(corps: Optional[Dict] = None,
-                   choix: Optional[str] = Cookie(None, alias=CHOIX),
-                   langue: str = Depends(langue_de)) -> Dict:
+    def touche_icp(langue: Langue, corps: Optional[Dict] = None, choix: Choix = None) -> Dict:
         """Une touche de l'ICP du F-16, ou un côté d'un de ses commutateurs à
         ressort (RTN, SEQ, UP, DN, ▲▼ du DED) : enfoncé puis relâché, comme
         les écrans."""
@@ -433,9 +425,8 @@ def create_app(cfg: Optional[Config] = None, pont: Optional[PontDCS] = None,
         return {"envoye": envoye}
 
     @app.post("/api/kneeboard/dcs/page")
-    def page_kneeboard_dcs(corps: Optional[Dict] = None,
-                           choix: Optional[str] = Cookie(None, alias=CHOIX),
-                           langue: str = Depends(langue_de)) -> Dict:
+    def page_kneeboard_dcs(langue: Langue, corps: Optional[Dict] = None,
+                           choix: Choix = None) -> Dict:
         """Tourne la page du kneeboard dans DCS, comme les touches [ et ]."""
         sens = (corps or {}).get("sens")
         if sens not in (1, -1):
@@ -453,8 +444,7 @@ def create_app(cfg: Optional[Config] = None, pont: Optional[PontDCS] = None,
         return {"envoye": envoye}
 
     @app.post("/api/kneeboard/dcs/affichage")
-    def affichage_kneeboard_dcs(corps: Optional[Dict] = None,
-                                langue: str = Depends(langue_de)) -> Dict:
+    def affichage_kneeboard_dcs(langue: Langue, corps: Optional[Dict] = None) -> Dict:
         """Affiche ou cache le kneeboard dans DCS, comme le coup d'œil (K) :
         en mode tablette, le regarder ici en direct l'ouvre dans DCS, sans
         toucher au clavier. Commun à tous les appareils."""
@@ -468,16 +458,14 @@ def create_app(cfg: Optional[Config] = None, pont: Optional[PontDCS] = None,
         return {"envoye": envoye}
 
     @app.get("/api/kneeboard")
-    def kneeboard(choix: Optional[str] = Cookie(None, alias=CHOIX),
-                  langue: str = Depends(langue_de)) -> List[Dict]:
+    def kneeboard(langue: Langue, choix: Choix = None) -> List[Dict]:
         carnets = lister_carnets(cfg.saved_games, actif(choix)[1], dcs())
         return [{"id": c.id, "titre": dans(c.titre, langue), "pages": len(c.pages),
                  "url": f"/api/kneeboard/{quote(c.id, safe='')}"} for c in carnets]
 
     @app.get("/api/kneeboard/{carnet_id}/{rang}")
-    def page_kneeboard(carnet_id: str, rang: int,
-                       choix: Optional[str] = Cookie(None, alias=CHOIX),
-                       langue: str = Depends(langue_de)) -> Response:
+    def page_kneeboard(carnet_id: str, rang: int, langue: Langue,
+                       choix: Choix = None) -> Response:
         carnet = trouver(lister_carnets(cfg.saved_games, actif(choix)[1], dcs()), carnet_id)
         if carnet is None or not 0 <= rang < len(carnet.pages):
             raise refus(404, Texte("page introuvable"), langue)
@@ -497,7 +485,7 @@ def create_app(cfg: Optional[Config] = None, pont: Optional[PontDCS] = None,
                             headers=_SANS_CACHE)
 
     @app.get("/textes.js")
-    def textes_js(langue: str = Depends(langue_de)):
+    def textes_js(langue: Langue):
         """La langue de cette tablette et les textes de sa page, chargés avant
         app.js. Décidée ici, comme pour l'API : la page et le serveur parlent
         forcément la même."""

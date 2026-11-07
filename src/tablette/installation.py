@@ -1,9 +1,9 @@
 r"""Installation dans DCS : les scripts Lua, la ligne d'Export.lua, les écrans.
 
-Sert à l'exécutable (`DCS-Tablette.exe installer`, `desinstaller`) comme aux
-scripts du dépôt (`scripts/installer_dcs.py`, `scripts/configurer_ecrans_dcs.py`).
-Les fonctions rendent les lignes à afficher au lieu de les imprimer : les
-tests les lisent, la console les recopie.
+Sert à l'exécutable (`DCS-Tablette.exe installer`, `desinstaller`) comme au
+code source (`python -m tablette installer`). Les fonctions rendent les lignes
+à afficher au lieu de les imprimer : les tests les lisent, la console les
+recopie.
 
 Ce qui est touché, et rien d'autre :
 - l'écran virtuel (ecran_virtuel.py) : installé s'il manque et si le pilote
@@ -68,8 +68,6 @@ CLE_WINDOWS = rf"Software\Microsoft\Windows\CurrentVersion\Uninstall\{PROGRAMME}
 MENU_DEMARRER = uuid.UUID("A77F5D77-2E2B-44C3-A6A2-ABA601054A51")      # FOLDERID_Programs
 DEMARRAGE = uuid.UUID("B97D20BB-F46A-4C97-BA10-5E3608430854")          # FOLDERID_Startup
 DEPOT = "https://github.com/led5014/dcs-tablette"
-
-Moniteur = Tuple[int, int, int, int, bool]      # x, y, largeur, hauteur, principal
 
 
 def dossier_lua() -> Path:
@@ -350,6 +348,15 @@ def mode_essai(saved_games: Path) -> Optional[bool]:
     except OSError:
         return None
     return re.search(r"^Description\s*=\s*'Essai", texte, re.M) is not None
+
+
+def mode_installe(choix: Dict, saved_games: Path) -> Tuple[str, bool]:
+    """Le mode choisi à l'installation (`lire_choix`) et si un écran réel a
+    été accepté comme support. Installé avant que le choix soit retenu (1.4
+    et avant) : le mode se lit dans « Tablette DCS », et un écran réel déjà
+    en place était pris d'office, il le reste."""
+    mode = choix.get("mode") or ("essai" if mode_essai(saved_games) else "second_ecran")
+    return mode, bool(choix.get("physique", not choix))
 
 
 def configurer_ecrans(saved_games: Path, essai: bool = False,

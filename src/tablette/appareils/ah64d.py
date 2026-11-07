@@ -23,8 +23,6 @@ from ..instruments import HELICO_KT
 from . import Bouton, Ecran, Profil, reperes
 from ..langues import Texte
 
-DOSSIER_KNEEBOARD = "AH-64D_BLK_II"
-
 # Où sont les libellés : Displays/MFD/indicator/MFD_PB_Defs.lua, en pixels
 # d'un écran de 1024 (MFD_Page_Defs.lua, display_size_pix), centre 0, y vers
 # le haut. T et B : x de -335 (T1, B1) à 320 ; L et R : y de 330 (L1, R1) à

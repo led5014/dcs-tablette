@@ -36,7 +36,7 @@ a = Analysis(
     ],
     excludes=[
         "matplotlib", "numpy", "pytest", "PyInstaller", "IPython", "notebook",
-        "scipy", "pandas", "dcs_debrief", "copilote",
+        "scipy", "pandas",
     ],
     noarchive=False,
 )
