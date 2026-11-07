@@ -2,8 +2,9 @@
 #   .venv\Scripts\python.exe scripts\construire_tablette.py   (exe + zip)
 # Un dossier plutôt qu'un exe unique : démarrage immédiat, et moins de faux
 # positifs des antivirus, qui se méfient des exe qui se décompressent seuls.
-# Les scripts Lua voyagent dans l'exe : `installer` les copie dans DCS
-# (voir tablette/installation.py, dossier_lua).
+# Le script Lua voyage dans l'exe : `installer` le copie dans DCS, avec sa
+# liste blanche écrite depuis les profils (tablette/installation.py,
+# contenu_scripts).
 from pathlib import Path
 
 PROJECT = Path(SPECPATH)
@@ -15,7 +16,6 @@ a = Analysis(
     datas=[
         (str(PROJECT / "src" / "tablette" / "web"), "tablette/web"),
         (str(PROJECT / "dcs_export" / "DCS-Tablette-Export.lua"), "dcs_export"),
-        (str(PROJECT / "dcs_export" / "DCS-Tablette-Appareils.lua"), "dcs_export"),
     ],
     hiddenimports=[
         # uvicorn charge ses implémentations dynamiquement

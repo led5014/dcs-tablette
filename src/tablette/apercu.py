@@ -7,7 +7,7 @@ supposé :
 - les écrans de Windows, leur place, leur taille, leur modèle
   (ecran_virtuel.lister) ;
 - la fenêtre de DCS : la résolution réglée dans options.lua, à partir du
-  coin haut gauche du principal (voir installation.supports) ;
+  coin haut gauche du principal (voir disposition.supports) ;
 - les zones exportées par la configuration d'écrans choisie dans DCS,
   telles qu'il les donne à l'appareil piloté (ecrans_dcs.lire_zones) ;
 - la zone du kneeboard, que DCS colle en bas à droite de sa fenêtre
@@ -20,7 +20,7 @@ Ce qui pose problème est marqué, avec la raison : une zone hors des écrans
 ou hors de la fenêtre de DCS (rien n'y est dessiné), une zone sous le
 kneeboard (il la cache une fois ouvert), un écran réel couvert par la
 fenêtre de DCS (il resterait noir en vol), un écran à gauche décalé en
-hauteur (DCS partirait de lui, installation.genants).
+hauteur (DCS partirait de lui, disposition.genants).
 
 Rien n'est modifié : c'est un aperçu.
 """
@@ -32,7 +32,7 @@ from typing import Dict, Optional, Sequence, Tuple
 
 from .ecrans_dcs import (BANDEAU_KNEEBOARD, PasDExport, fichier_actif, lire_zones,
                          options_affichage, zone_kneeboard)
-from .installation import genants
+from .disposition import genants
 from .langues import Texte, message
 
 Rect = Tuple[int, int, int, int]       # x, y, largeur, hauteur
@@ -124,8 +124,7 @@ def calculer(ecrans: Sequence, resolution: Optional[Tuple[int, int]],
         resultat["zones"].append({"nom": nom, "libelle": (libelles or {}).get(nom, nom),
                                   **_rect(zone), "problemes": problemes})
 
-    decales = {tuple(m[:4]) for m in genants([(e.x, e.y, e.largeur, e.hauteur, e.principal,
-                                               e.virtuel) for e in actifs])}
+    decales = {m.rect for m in genants([e.moniteur for e in actifs])}
     for e, place in zip(actifs, places):
         problemes = []
         # Un écran réel sous la fenêtre de DCS, qui n'y reçoit aucun écran

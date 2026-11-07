@@ -24,7 +24,6 @@ from tablette.appareils import a10c, ah64d, fa18c, oh58d  # noqa: E402
 RACINE = Path(__file__).resolve().parent.parent
 DCS = Path("C:/Program Files (x86)/Steam/steamapps/common/DCSWorld")
 SCRIPT_LUA = RACINE / "dcs_export" / "DCS-Tablette-Export.lua"
-LUA_APPAREILS = RACINE / "dcs_export" / "DCS-Tablette-Appareils.lua"
 PNG = (b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01"
        b"\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\rIDATx\x9cc\xf8\x0f"
        b"\x00\x00\x01\x01\x00\x05\x18\xd8N\x00\x00\x00\x00IEND\xaeB`\x82")
@@ -187,10 +186,6 @@ class TestProfils(unittest.TestCase):
     def test_zones_d_export_toutes_dans_la_configuration(self):
         from tablette.ecrans_dcs import EXPORTS
         self.assertLessEqual(set(appareils.viewports()), set(EXPORTS))
-
-    def test_le_lua_genere_est_a_jour(self):
-        self.assertEqual(lire(LUA_APPAREILS), appareils.lua_appareils(),
-                         "relancer scripts/generer_lua_appareils.py")
 
     def test_la_liste_blanche_ne_mele_pas_les_appareils(self):
         lua = appareils.lua_appareils()
@@ -626,8 +621,8 @@ class TestInstallation(unittest.TestCase):
         self.tmp.cleanup()
 
     def test_scripts_installes_une_fois_puis_retires(self):
-        from tablette.installation import (LIGNE, SCRIPTS, desinstaller_scripts, est_installe,
-                                           installer_scripts)
+        from tablette.installation import (LIGNE, SCRIPTS, contenu_scripts, desinstaller_scripts,
+                                           est_installe, installer_scripts)
         origine = self.export.read_bytes()
         self.assertFalse(est_installe(self.saved))
         installer_scripts(self.saved)
@@ -637,9 +632,8 @@ class TestInstallation(unittest.TestCase):
         texte = self.export.read_bytes()
         self.assertTrue(texte.startswith(origine + b"\n"))
         self.assertEqual(texte.count(LIGNE.encode()), 1)
-        for nom in SCRIPTS:
-            self.assertEqual((self.saved / "Scripts" / nom).read_bytes(),
-                             (RACINE / "dcs_export" / nom).read_bytes())
+        for nom, contenu in contenu_scripts().items():
+            self.assertEqual((self.saved / "Scripts" / nom).read_bytes(), contenu)
         self.assertEqual(len(list((self.saved / "Scripts").glob("Export.lua.avant-tablette-*"))), 1)
 
         desinstaller_scripts(self.saved)
@@ -886,7 +880,7 @@ class TestInstallation(unittest.TestCase):
               (-1920, 420, 1920, 1080, False, False))
 
     def test_un_ecran_de_gauche_decale_est_aligne_en_haut(self):
-        from tablette.installation import genants, rangement
+        from tablette.disposition import genants, rangement
         principal, virtuel, gauche = self.PILOTE
         self.assertEqual(rangement(self.PILOTE), [(gauche, -1920, 0)])
         # Aligné en haut, il ne gêne pas : la disposition qui a marché en vrai.
@@ -905,7 +899,7 @@ class TestInstallation(unittest.TestCase):
     def test_plusieurs_ecrans_alignes_sans_se_chevaucher_ni_changer_d_ordre(self):
         """À gauche, collés au principal ou aux écrans déjà alignés, dans le
         même ordre ; à droite de la fenêtre de DCS pour un écran qui y était."""
-        from tablette.installation import rangement
+        from tablette.disposition import rangement
         principal, virtuel = (0, 0, 2560, 1440, True, False), (2560, 0, 2560, 1440, False, True)
         proche, loin = (-1920, 0, 1920, 1080, False, False), (-3840, 300, 1920, 1080, False, False)
         self.assertEqual(rangement([principal, virtuel, proche, loin]), [(loin, -3840, 0)])
@@ -1090,7 +1084,7 @@ class TestEcranVirtuel(unittest.TestCase):
         self.assertIn("sous le principal", detail)
 
     def test_supports_jamais_un_ecran_reel_sans_accord(self):
-        from tablette.installation import supports, support_ecrans
+        from tablette.disposition import supports, support_ecrans
         principal = (0, 0, 2560, 1440, True, False)
         reel_droite = (2560, 0, 1920, 1080, False, False)
         virtuel_dessous = (0, 1440, 2560, 1440, False, True)
@@ -3358,7 +3352,7 @@ class TestDiagnostic(unittest.TestCase):
     def test_ecran_reel_pris_seulement_s_il_a_ete_donne(self):
         self.choix = {"mode": "second_ecran", "physique": False}
         self.ecrans = [(0, 0, 2560, 1440, True, False), (2560, 0, 2560, 1440, False, False)]
-        self.virtuel = ("manque", "aucun : les écrans du cockpit iraient sur la vue", [])
+        self.virtuel = ("absent", "aucun : les écrans du cockpit iraient sur la vue", [])
         point = self.points()["Écrans de DCS"]
         # Pas pris pour les écrans du cockpit ; mais sous la fenêtre de DCS,
         # réglée pour l'écran virtuel d'avant : c'est à régler.
@@ -3691,7 +3685,7 @@ class TestRemettreEcranVirtuel(unittest.TestCase):
 
     def test_absent_rien_n_est_installe(self):
         (etat, _, solution), appels = self.remettre([[PRINCIPAL]])
-        self.assertEqual((etat, appels), ("manque", []))
+        self.assertEqual((etat, appels), ("absent", []))
         self.assertIn("Installer.bat", solution[0])
 
     def test_refuse_par_windows(self):

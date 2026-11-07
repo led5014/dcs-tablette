@@ -34,15 +34,36 @@ from .mise_a_jour import numero
 from .appareils import formes
 from .ecrans_dcs import (NOM_AFFICHE, NOM_FICHIER, PasDExport, a_leur_forme, fichier_actif,
                          lire_zones, options_affichage, plein_ecran, regler_options)
-from .installation import (LIGNE, configuration_existante, configurer_ecrans, dcs_ouvert, genants,
+from .disposition import Moniteur, en_moniteurs, genants, principal_de, support_ecrans
+from .installation import (LIGNE, configuration_existante, configurer_ecrans, dcs_ouvert,
                            dcs_regle, installer_scripts, lire_choix, mode_installe, premiere_fois,
-                           scripts_a_jour, support_ecrans)
-from .langues import FRANCAIS, Texte, dans, message, pc
+                           scripts_a_jour)
+from .langues import Texte, message, pc
 
 OK, REPARE, ATTENTE, A_FAIRE, MANQUE = "ok", "repare", "attente", "a_faire", "manque"
+# ecran_virtuel.remettre : pas d'écran virtuel du tout. Montré comme MANQUE,
+# mais ce n'est pas un échec de remise en place à espacer.
+ABSENT = "absent"
 ETIQUETTES = {OK: Texte("OK"), REPARE: Texte("RÉPARÉ"), ATTENTE: Texte("ATTENTE"),
               A_FAIRE: Texte("À FAIRE"), MANQUE: Texte("MANQUE")}
 PROBLEMES = (A_FAIRE, MANQUE)
+
+# Le titre de chaque point, qui sert aussi à le reconnaître : le journal
+# compare les points d'une vérification à l'autre par leur titre, et la
+# remise en place à l'ouverture de Windows regarde ceux des écrans (ECRANS).
+T_DOSSIER = Texte("Dossier de DCS")
+T_INSTALLATION = Texte("Installation")
+T_SCRIPTS = Texte("Scripts dans DCS")
+T_ECRAN_VIRTUEL = Texte("Écran virtuel")
+T_WINDOWS = Texte("Écrans de Windows")
+T_ECRANS_DCS = Texte("Écrans de DCS")
+T_REGLAGES = Texte("Réglages de DCS")
+T_DCS = Texte("DCS")
+T_SCRIPT = Texte("Script de la tablette dans DCS")
+T_IMAGES = Texte("Images des écrans")
+T_RESEAU = Texte("Réseau du PC")
+T_TABLETTE = Texte("Tablette")
+T_VERSION = Texte("Version")
 
 PERIODE_S = 10
 PERIODE_RESEAU_S = 60
@@ -190,7 +211,7 @@ class Diagnostic:
     # ------------------------------------------------------------ les points
 
     def _dossier(self) -> Point:
-        titre = Texte("Dossier de DCS")
+        titre = T_DOSSIER
         if not (self.saved_games / "Config" / "options.lua").exists():
             return Point(titre, MANQUE,
                          Texte("pas de réglages de DCS dans {dossier}", dossier=self.saved_games),
@@ -214,7 +235,7 @@ class Diagnostic:
                                       "existe aussi)", dossier=self.saved_games, autre=autre.name))
 
     def _scripts(self, lance: bool) -> Point:
-        titre = Texte("Scripts dans DCS")
+        titre = T_SCRIPTS
         scripts = self.saved_games / "Scripts"          # DCS ou DCS.openbeta
         if scripts_a_jour(self.saved_games):
             return Point(titre, OK, Texte("à jour, chargés par Export.lua"))
@@ -233,7 +254,7 @@ class Diagnostic:
                                           "mission", dossier=scripts))
 
     def _ecran_virtuel(self, essai: bool, forcer: bool, physique: bool, lance: bool) -> Point:
-        titre = Texte("Écran virtuel")
+        titre = T_ECRAN_VIRTUEL
         if essai:
             return Point(titre, OK, Texte("mode essai : écrans du cockpit en bas de la vue"))
         # DCS ouvert, on ne déplace rien : un écran qui s'endort ou une télé
@@ -241,22 +262,23 @@ class Diagnostic:
         reparer = not lance and (forcer or self._horloge() - self._echec_ecran
                                  > PAUSE_APRES_ECHEC_S)
         etat, detail, solution = self._virtuel(reparer, physique)
-        # Jugé sur le texte français, la référence, quelle que soit la langue.
-        if etat == MANQUE and reparer and not dans(detail, FRANCAIS).startswith("aucun"):
+        if etat == ABSENT:
+            etat = MANQUE
+        elif etat == MANQUE and reparer:
             self._echec_ecran = self._horloge()
         return Point(titre, etat, detail, tuple(solution))
 
     def _windows(self, ecrans: list, lance: bool, forcer: bool, accord: bool) -> Point:
         """Aucun écran réel décalé en hauteur à gauche du principal, ni
         au-dessus : DCS ouvrirait sa fenêtre à partir de lui
-        (installation.genants). Alignés tout seuls DCS fermé si le pilote l'a
+        (disposition.genants). Alignés tout seuls DCS fermé si le pilote l'a
         accepté à l'installation — comme l'écran virtuel, pas en boucle après
         un échec —, sinon la marche à suivre."""
-        titre = Texte("Écrans de Windows")
+        titre = T_WINDOWS
         a_ranger = genants(ecrans)
         if not a_ranger:
             return Point(titre, OK, Texte("alignés en haut sur l'écran principal"))
-        noms = [Texte("votre écran {largeur}×{hauteur}", largeur=m[2], hauteur=m[3])
+        noms = [Texte("votre écran {largeur}×{hauteur}", largeur=m.largeur, hauteur=m.hauteur)
                 for m in a_ranger]
         a_la_main = Texte("Ou Paramètres → Système → Écran : les glisser à gauche de l'écran "
                           "principal, bords du haut alignés, puis relancer DCS.")
@@ -283,33 +305,33 @@ class Diagnostic:
     def _existante(self, nom: str) -> List[Point]:
         """Le pilote a gardé sa configuration d'écrans, qui exporte déjà les
         écrans du cockpit : on ne la remplace pas, on vérifie qu'elle est là."""
-        points = [Point(Texte("Écran virtuel"), OK,
+        points = [Point(T_ECRAN_VIRTUEL, OK,
                         Texte("pas utilisé : DCS exporte avec « {nom} »", nom=nom))]
         actuelle = configuration_existante(self.saved_games)
         if actuelle and actuelle[0] == nom:
-            points.append(Point(Texte("Écrans de DCS"), OK,
+            points.append(Point(T_ECRANS_DCS, OK,
                                 Texte("« {nom} » (la vôtre) : {nombre} écrans exportés",
                                       nom=nom, nombre=len(actuelle[1]))))
         else:
             points.append(Point(
-                Texte("Écrans de DCS"), A_FAIRE,
+                T_ECRANS_DCS, A_FAIRE,
                 Texte("DCS n'est plus sur votre configuration « {nom} »", nom=nom), (
                     Texte("Dans DCS : Options → Système → Moniteurs « {nom} », puis "
                           "relancer DCS.", nom=nom),
                     Texte("Ou relancer Installer.bat pour passer à « {nom} ».",
                           nom=NOM_AFFICHE))))
         if plein_ecran(self.saved_games):
-            points.append(Point(Texte("Réglages de DCS"), A_FAIRE,
+            points.append(Point(T_REGLAGES, A_FAIRE,
                                 Texte("plein écran : la tablette n'y voit rien"),
                                 (Texte("Dans DCS : Options → Système, décocher « Plein "
                                        "écran », puis relancer DCS."),)))
         else:
-            points.append(Point(Texte("Réglages de DCS"), OK, Texte("fenêtré")))
+            points.append(Point(T_REGLAGES, OK, Texte("fenêtré")))
         return points
 
     def _configuration(self, essai: bool, ecrans: list, lance: bool,
                        physique: bool) -> Tuple[Point, Optional[Tuple[int, int]]]:
-        titre = Texte("Écrans de DCS")
+        titre = T_ECRANS_DCS
         support = support_ecrans(ecrans, essai, physique)
         if support is None:
             return self._en_attente(ecrans, lance), None
@@ -347,8 +369,8 @@ class Diagnostic:
                                           "écrans du cockpit {ou}", nom=NOM_AFFICHE, ou=ou)
                      ), resolution
 
-    def _sous_dcs(self, ecrans: list, support: Optional[Tuple[int, int, int, int]] = None
-                  ) -> Tuple[int, int, list]:
+    def _sous_dcs(self, ecrans: List[Moniteur],
+                  support: Optional[Tuple[int, int, int, int]] = None) -> Tuple[int, int, list]:
         """La fenêtre de DCS telle que réglée dans options.lua (elle part du
         coin haut gauche du principal), et les écrans réels qu'elle recouvre,
         hors du principal et du `support` des écrans du cockpit."""
@@ -356,14 +378,13 @@ class Diagnostic:
             _, largeur, hauteur = options_affichage(self.saved_games)
         except PasDExport:
             return 0, 0, []
-        principal = next((m for m in ecrans if m[4]), None)
+        principal = principal_de(ecrans)
         if principal is None:
             return largeur, hauteur, []
-        px, py = principal[:2]
         recouverts = []
         for m in ecrans:
-            x, y, l, h = m[0] - px, m[1] - py, m[2], m[3]
-            if m[4] or (x, y, l, h) == tuple(support or ()) or (len(m) > 5 and m[5]):
+            x, y, l, h = m.x - principal.x, m.y - principal.y, m.largeur, m.hauteur
+            if m.principal or m.virtuel or (x, y, l, h) == tuple(support or ()):
                 continue
             if x < largeur and 0 < x + l and y < hauteur and 0 < y + h:
                 recouverts.append(Texte("votre écran {largeur}×{hauteur}", largeur=l, hauteur=h))
@@ -374,7 +395,7 @@ class Diagnostic:
         réglée pour l'ancienne disposition, recouvre parfois alors un écran du
         pilote (photo d'un pilote, 01/11/2026 : écran virtuel repassé en
         1920 × 1080 à gauche, son écran réel à sa place) : c'est à régler."""
-        titre = Texte("Écrans de DCS")
+        titre = T_ECRANS_DCS
         largeur, hauteur, recouverts = self._sous_dcs(ecrans)
         if not recouverts:
             return Point(titre, ATTENTE, Texte("en attente de l'écran virtuel"))
@@ -386,19 +407,19 @@ class Diagnostic:
             Texte("Remettre d'abord l'écran virtuel (point « Écran virtuel ») : DCS Tablette "
                   "règle ensuite DCS tout seul."),))
 
-    def _ne_tombe_plus(self, support: Tuple[int, int, int, int], ecrans: list) -> Texte:
+    def _ne_tombe_plus(self, support: Tuple[int, int, int, int],
+                       ecrans: List[Moniteur]) -> Texte:
         """Pourquoi « Tablette DCS » ne tombe plus sur les écrans : l'écran qui
         reçoit ceux du cockpit a changé (définition, place). La fenêtre de DCS,
         toujours à la taille d'avant, recouvre alors parfois un écran du
         pilote : c'est ce qu'il voit, DCS qui déborde sur cet écran-là."""
-        principal = next(m for m in ecrans if m[4])
-        px, py = principal[:2]
+        principal = principal_de(ecrans)
         _, _, l, h = support
-        sur = next((m for m in ecrans if (m[0] - px, m[1] - py) + tuple(m[2:4]) == tuple(support)),
-                   principal)
-        if sur[4]:
+        sur = next((m for m in ecrans if (m.x - principal.x, m.y - principal.y, m.largeur,
+                                           m.hauteur) == tuple(support)), principal)
+        if sur.principal:
             ecran = Texte("de l'écran principal ({largeur}×{hauteur})", largeur=l, hauteur=h)
-        elif len(sur) > 5 and sur[5]:
+        elif sur.virtuel:
             ecran = Texte("de l'écran virtuel ({largeur}×{hauteur})", largeur=l, hauteur=h)
         else:
             ecran = Texte("du second écran ({largeur}×{hauteur})", largeur=l, hauteur=h)
@@ -412,7 +433,7 @@ class Diagnostic:
                      "sortent {ecran}", nom=NOM_AFFICHE, ecran=ecran)
 
     def _reglages(self, resolution: Tuple[int, int], lance: bool) -> Point:
-        titre = Texte("Réglages de DCS")
+        titre = T_REGLAGES
         l, h = resolution
         voulu = Texte("« {nom} », {largeur}×{hauteur}, {mode}", nom=NOM_AFFICHE, largeur=l,
                       hauteur=h, mode=Texte("fenêtré"))
@@ -444,22 +465,22 @@ class Diagnostic:
 
     def _dcs(self, lance: bool) -> Point:
         if not lance:
-            return Point(Texte("DCS"), ATTENTE, Texte("pas lancé"))
+            return Point(T_DCS, ATTENTE, Texte("pas lancé"))
         heure = self._lancement()
         try:
             change = heure is not None and fichier_actif(self.saved_games).stat().st_mtime > heure
         except (OSError, PasDExport):
             change = False
         if change:
-            return Point(Texte("DCS"), A_FAIRE,
+            return Point(T_DCS, A_FAIRE,
                          Texte("lancé avant le dernier réglage des écrans"),
                          (Texte("Quitter DCS et le relancer : il ne relit les écrans qu'au "
                                 "démarrage."),))
-        return Point(Texte("DCS"), OK, Texte("lancé") if heure is not None
+        return Point(T_DCS, OK, Texte("lancé") if heure is not None
                      else Texte("en cours de lancement"))
 
     def _script(self, lance: bool) -> Optional[Point]:
-        titre = Texte("Script de la tablette dans DCS")
+        titre = T_SCRIPT
         if self.pont is None:
             return None
         if not self.pont.a_l_ecoute:
@@ -495,7 +516,7 @@ class Diagnostic:
                   journal=self.saved_games / "Logs" / "dcs.log")))
 
     def _images(self, lance: bool) -> Optional[Point]:
-        titre = Texte("Images des écrans")
+        titre = T_IMAGES
         if self.video is None:
             return None
         dernier = getattr(self.video, "dernier", None)
@@ -508,7 +529,7 @@ class Diagnostic:
         return Point(titre, A_FAIRE, dernier[1])
 
     def _reseau_pc(self) -> Point:
-        titre = Texte("Réseau du PC")
+        titre = T_RESEAU
         if self._reseau is not None and self._horloge() - self._reseau[0] < PERIODE_RESEAU_S:
             return self._reseau[1]
         profils = self._reseaux()
@@ -533,7 +554,7 @@ class Diagnostic:
         return point
 
     def _la_tablette(self) -> Point:
-        titre = Texte("Tablette")
+        titre = T_TABLETTE
         if self._tablette is not None:
             adresse, instant = self._tablette
             depuis = self._horloge() - instant
@@ -553,15 +574,15 @@ class Diagnostic:
 
     def _version(self) -> Point:
         if self._publiee is None:
-            return Point(Texte("Version"), OK, Texte("{version} (pas de nouvelle vérifiée au "
+            return Point(T_VERSION, OK, Texte("{version} (pas de nouvelle vérifiée au "
                                                      "lancement)", version=VERSION))
         if numero(self._publiee["version"]) > numero(VERSION):
-            return Point(Texte("Version"), ATTENTE,
+            return Point(T_VERSION, ATTENTE,
                          Texte("{nouvelle} disponible, vous avez la {version}",
                                nouvelle=self._publiee["version"], version=VERSION), (
                 Texte("Fermer DCS Tablette et le relancer : il se met à jour tout seul, "
                       "réglages gardés. S'il n'y arrive pas, sa fenêtre dit pourquoi."),))
-        return Point(Texte("Version"), OK, Texte("{version}, à jour", version=VERSION))
+        return Point(T_VERSION, OK, Texte("{version}, à jour", version=VERSION))
 
     # ------------------------------------------------------------ l'ensemble
 
@@ -599,12 +620,12 @@ class Diagnostic:
             lance = bool(self._ouvert())
         except (OSError, subprocess.SubprocessError):
             lance = False
-        points = [self._sur(Texte("Dossier de DCS"), self._dossier)]
+        points = [self._sur(T_DOSSIER, self._dossier)]
         config = None
         if points[0].etat == OK and premiere_fois(self.saved_games):
             # Pas installée, ou désinstallée pendant que DCS Tablette tournait :
             # on ne remet rien d'office, la désinstallation doit tenir.
-            points.append(Point(Texte("Installation"), A_FAIRE,
+            points.append(Point(T_INSTALLATION, A_FAIRE,
                                 Texte("DCS Tablette n'est pas installé dans DCS (ou vient "
                                       "d'être désinstallé)"),
                                 (Texte("Lancer Installer.bat pour l'installer."),)))
@@ -612,34 +633,34 @@ class Diagnostic:
             choix = self._choix()
             mode, physique = mode_installe(choix, self.saved_games)
             essai = mode == "essai"
-            points.append(self._sur(Texte("Scripts dans DCS"), lambda: self._scripts(lance)))
+            points.append(self._sur(T_SCRIPTS, lambda: self._scripts(lance)))
             if mode == "existante":
-                existante = self._sur(Texte("Écrans de DCS"),
+                existante = self._sur(T_ECRANS_DCS,
                                       lambda: self._existante(choix.get("configuration", "")))
                 points += existante if isinstance(existante, list) else [existante]
             else:
-                points.append(self._sur(Texte("Écran virtuel"), lambda: self._ecran_virtuel(
+                points.append(self._sur(T_ECRAN_VIRTUEL, lambda: self._ecran_virtuel(
                     essai, forcer, physique, lance)))
-                points.append(self._sur(Texte("Écrans de Windows"), lambda: self._windows(
-                    self._ecrans(), lance, forcer, bool(choix.get("ranger")))))
-                config = self._sur(Texte("Écrans de DCS"), lambda: self._configuration(
-                    essai, self._ecrans(), lance, physique))
+                points.append(self._sur(T_WINDOWS, lambda: self._windows(
+                    en_moniteurs(self._ecrans()), lance, forcer, bool(choix.get("ranger")))))
+                config = self._sur(T_ECRANS_DCS, lambda: self._configuration(
+                    essai, en_moniteurs(self._ecrans()), lance, physique))
         if config is not None:
             if isinstance(config, tuple):
                 point, resolution = config
                 points.append(point)
                 if resolution is not None:
-                    points.append(self._sur(Texte("Réglages de DCS"),
+                    points.append(self._sur(T_REGLAGES,
                                             lambda: self._reglages(resolution, lance)))
             else:
                 points.append(config)
-        points.append(self._sur(Texte("DCS"), lambda: self._dcs(lance)))
-        points.append(self._sur(Texte("Script de la tablette dans DCS"),
+        points.append(self._sur(T_DCS, lambda: self._dcs(lance)))
+        points.append(self._sur(T_SCRIPT,
                                 lambda: self._script(lance)))
-        points.append(self._sur(Texte("Images des écrans"), lambda: self._images(lance)))
-        points.append(self._sur(Texte("Réseau du PC"), self._reseau_pc))
-        points.append(self._sur(Texte("Tablette"), self._la_tablette))
-        points.append(self._sur(Texte("Version"), self._version))
+        points.append(self._sur(T_IMAGES, lambda: self._images(lance)))
+        points.append(self._sur(T_RESEAU, self._reseau_pc))
+        points.append(self._sur(T_TABLETTE, self._la_tablette))
+        points.append(self._sur(T_VERSION, self._version))
         return [p for p in points if p is not None]
 
     def etat(self) -> Dict:
@@ -697,7 +718,7 @@ class Diagnostic:
 
 # ------------------------------------------------------------ ouverture de Windows
 
-ECRANS = ("Écran virtuel", "Écrans de Windows", "Écrans de DCS", "Réglages de DCS")
+ECRANS = (T_ECRAN_VIRTUEL, T_WINDOWS, T_ECRANS_DCS, T_REGLAGES)
 
 
 def remettre_au_demarrage(saved_games: Path, journal: Path,
@@ -720,7 +741,7 @@ def remettre_au_demarrage(saved_games: Path, journal: Path,
         if ecrans is None:
             from .ecran_virtuel import moniteurs as ecrans
         for _ in range(ATTENTE_ECRAN_VIRTUEL_S // 2):
-            if any(len(m) > 5 and m[5] and not m[4] for m in ecrans()):
+            if any(m.virtuel and not m.principal for m in en_moniteurs(ecrans())):
                 break
             attendre(2)
         attendre(POSE_DES_ECRANS_S)
