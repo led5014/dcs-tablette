@@ -831,11 +831,16 @@ function construireCadre(e) {
 
 // --------------------------------------------------------------- UFC
 
-function toucheUfc(touche, libelle, classe = 'touche') {
+// Une touche enfoncée puis relâchée, comme les boutons des écrans, envoyée à
+// `url` (/api/ufc, /api/icp).
+function touchePanneau(url, touche, libelle, classe = 'touche', aria = null) {
   const el = element('button', classe, libelle);
-  brancherAppui(el, (enfonce) => enFile('/api/ufc', { touche, enfonce }));
+  if (aria) el.setAttribute('aria-label', aria);
+  brancherAppui(el, (enfonce) => enFile(url, { touche, enfonce }));
   return el;
 }
+
+const toucheUfc = (...args) => touchePanneau('/api/ufc', ...args);
 
 function molette(touche, sens) {
   const el = element('button', 'touche', sens > 0 ? '+' : '−');
@@ -898,12 +903,7 @@ function construireUfc() {
 
 // --------------------------------------------------------------- ICP et DED (F-16)
 
-function toucheIcp(touche, libelle, classe = 'touche', aria = null) {
-  const el = element('button', classe, libelle);
-  if (aria) el.setAttribute('aria-label', aria);
-  brancherAppui(el, (enfonce) => enFile('/api/icp', { touche, enfonce }));
-  return el;
-}
+const toucheIcp = (...args) => touchePanneau('/api/icp', ...args);
 
 // Le DED en haut, comme le bloc-notes de l'UFC ; dessous l'ICP : touches
 // de priorité, clavier (chiffre et fonction de chaque touche), bascule ▲▼ du
@@ -968,21 +968,10 @@ function construireIcp() {
   return p;
 }
 
-async function boucleDed(gen) {
-  while (gen === generation) {
-    if (!ecranAffiche('icp')) {
-      await attendre(300);
-      continue;
-    }
-    let d = null;
-    try {
-      const r = await fetch('/api/ded', { cache: 'no-store' });
-      if (r.ok) d = await r.json();
-    } catch { /* serveur injoignable : DED grisé */ }
-    if (gen !== generation) return;
+function boucleDed(gen) {
+  suivre(gen, '/api/ded', ['icp'], (d) => {
     if (panneaux.has('icp')) panneaux.get('icp').maj(d);
-    await attendre(PERIODE_PLANCHE_MS);
-  }
+  });
 }
 
 // --------------------------------------------------------------- IFEI
@@ -1299,46 +1288,45 @@ function construireInstruments(c) {
   return p;
 }
 
-async function boucleInstruments(gen) {
+// Lit `url` toutes les PERIODE_PLANCHE_MS tant que le profil ne change pas,
+// et seulement quand un des panneaux `ids` est affiché. `maj` reçoit la
+// réponse, null si le serveur ne répond pas (panneaux grisés) ; elle rend
+// false pour arrêter la lecture.
+async function suivre(gen, url, ids, maj) {
   while (gen === generation) {
-    if (!ecranAffiche('instruments')) {
+    if (!ids.some((id) => ecranAffiche(id))) {
       await attendre(300);
       continue;
     }
     let d = null;
     try {
-      const r = await fetch('/api/instruments', { cache: 'no-store' });
+      const r = await fetch(url, { cache: 'no-store' });
       if (r.ok) d = await r.json();
-    } catch { /* serveur injoignable : instruments grisés */ }
-    if (gen !== generation) return;
-    const p = panneaux.get('instruments');
-    // Unités changées dans les options de DCS (MiG-29, L-39) : autres cadrans.
-    if (p && d && d.cle !== p.cle) {
-      chargerProfil();
-      return;
-    }
-    if (p) p.maj(d);
+    } catch { /* serveur injoignable */ }
+    if (gen !== generation || maj(d) === false) return;
     await attendre(PERIODE_PLANCHE_MS);
   }
 }
 
-async function bouclePlanche(gen) {
-  while (gen === generation) {
-    if (!['ufc', 'ifei', 'secours'].some((id) => ecranAffiche(id))) {
-      await attendre(300);
-      continue;
+function boucleInstruments(gen) {
+  suivre(gen, '/api/instruments', ['instruments'], (d) => {
+    const p = panneaux.get('instruments');
+    // Unités changées dans les options de DCS (MiG-29, L-39) : autres cadrans.
+    if (p && d && d.cle !== p.cle) {
+      chargerProfil();
+      return false;
     }
-    let d = null;
-    try {
-      const r = await fetch('/api/planche', { cache: 'no-store' });
-      if (r.ok) d = await r.json();
-    } catch { /* serveur injoignable : panneaux grisés */ }
-    if (gen !== generation) return;
+    if (p) p.maj(d);
+    return true;
+  });
+}
+
+function bouclePlanche(gen) {
+  suivre(gen, '/api/planche', ['ufc', 'ifei', 'secours'], (d) => {
     if (panneaux.has('ufc')) panneaux.get('ufc').maj(d && d.ufc);
     if (panneaux.has('ifei')) panneaux.get('ifei').maj(d && d.ifei);
     if (panneaux.has('secours')) panneaux.get('secours').maj(d && d.instruments, d && d.voyants);
-    await attendre(PERIODE_PLANCHE_MS);
-  }
+  });
 }
 
 // --------------------------------------------------------------- profil
