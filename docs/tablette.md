@@ -131,7 +131,7 @@ Pour l'escadron : le zip des Releases du dépôt public
 (`DCS-Tablette.exe` + `Installer.bat`), sans Python. `Installer.bat` lance
 `DCS-Tablette.exe installer`, qui fait les étapes 2 à 4 ci-dessous ; la
 désinstallation (`Desinstaller.bat`, ou Applications installées) défait 2
-et 4 (l'écran virtuel reste). Le mode d'emploi est dans le README et dans
+et 4 (l'écran virtuel reste). Le mode d'emploi est dans `docs/guide.md` et dans
 `distribution/tablette/zip/LISEZ-MOI.txt`, qui décrit aussi chaque étape à
 la main.
 
@@ -523,7 +523,7 @@ cadrans, et la page redemande les siens quand elle change.
   seule » recopiant la vue par une vignette DWM (façon OnTopReplica) se
   partagerait, mais ni Discord ni OBS n'ont été essayés dessus, et partager
   l'écran principal donne la même chose sans rien installer : c'est la
-  marche à suivre (README, « Captures et stream »).
+  marche à suivre (`docs/guide.md`, « Captures et stream »).
 
 ## Essai sans DCS
 

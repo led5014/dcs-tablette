@@ -33,7 +33,8 @@
   offers the layouts that stay comfortable to touch on the screen in use.
 
 The server runs on the PC, and the tablet connects to it over your home
-Wi-Fi. No Python to install, nothing over the internet in flight.
+Wi-Fi. No Python to install, nothing over the internet in flight (except,
+once, the F-16 DED table).
 
 ## What you need
 

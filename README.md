@@ -33,7 +33,8 @@
   propose que les dispositions confortables au doigt sur l'écran utilisé.
 
 Le serveur tourne sur le PC, la tablette s'y connecte par le Wi-Fi de la
-maison. Pas de Python à installer, rien sur internet en vol.
+maison. Pas de Python à installer, rien sur internet en vol (sauf, une
+seule fois, la table du DED du F-16).
 
 ## Ce qu'il faut
 
