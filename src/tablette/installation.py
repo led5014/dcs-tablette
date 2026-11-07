@@ -69,8 +69,6 @@ MENU_DEMARRER = uuid.UUID("A77F5D77-2E2B-44C3-A6A2-ABA601054A51")      # FOLDERI
 DEMARRAGE = uuid.UUID("B97D20BB-F46A-4C97-BA10-5E3608430854")          # FOLDERID_Startup
 DEPOT = "https://github.com/led5014/dcs-tablette"
 
-Moniteur = Tuple[int, int, int, int, bool]      # x, y, largeur, hauteur, principal
-
 
 def dossier_lua() -> Path:
     """dcs_export/ du dépôt, ou sa copie embarquée dans l'exécutable."""

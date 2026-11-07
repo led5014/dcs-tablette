@@ -659,9 +659,6 @@ class Diagnostic:
         """Appelé à chaque demande d'état de la page : une tablette est là."""
         self._tablette = (adresse, self._horloge())
 
-    def relancer(self) -> None:
-        self._reveil.set()
-
     # ------------------------------------------------------------ en fond
 
     def demarrer(self, afficher: Callable[[str], None] = print) -> None:

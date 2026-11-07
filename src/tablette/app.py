@@ -36,8 +36,8 @@ WEB_DIR = Path(__file__).resolve().parent / "web"
 # côté PC, où l'on voit que la tablette a bien parlé.
 journal = logging.getLogger("tablette")
 
-# Même raison que pour DCS Debrief : servie en local, la page n'a rien à
-# gagner au cache, et un app.js périmé face à un index.html à jour casse.
+# Servie en local, la page n'a rien à gagner au cache, et un app.js périmé
+# face à un index.html à jour casse.
 _SANS_CACHE = {"Cache-Control": "no-cache, must-revalidate"}
 
 PAGE_SUIVANTE, PAGE_PRECEDENTE = 3001, 3002     # communes à tous les kneeboards
