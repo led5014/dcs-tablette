@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DCS Tablette</title>
+<meta name="description" content="DCS World's cockpit displays on a tablet or phone, with touch buttons. Free, open source, for Windows.">
+<meta name="theme-color" content="#0b0d0e">
+<link rel="icon" type="image/png" href="../icone-192.png">
+<link rel="apple-touch-icon" href="../icone-192.png">
+<link rel="alternate" hreflang="fr" href="https://led5014.github.io/dcs-tablette/">
+<link rel="canonical" href="https://led5014.github.io/dcs-tablette/en/">
+<meta property="og:type" content="website">
+<meta property="og:title" content="DCS Tablette">
+<meta property="og:description" content="DCS World's cockpit displays on a tablet, with touch buttons.">
+<meta property="og:image" content="https://led5014.github.io/dcs-tablette/icone-512.png">
+<meta property="og:url" content="https://led5014.github.io/dcs-tablette/en/">
+<style>
+{{STYLE}}
+</style>
+</head>
+<body>
+<header class="page">
+  <a class="marque" href="./"><img src="../icone-192.png" alt="">DCS Tablette</a>
+  <nav><a href="https://github.com/led5014/dcs-tablette">GitHub</a><a href="../" hreflang="fr" lang="fr">Français</a></nav>
+</header>
+
+<main class="page">
+  <div class="entete">
+    <div>
+      <h1>DCS World's cockpit displays on your tablet</h1>
+      <p class="chapeau">Live DDIs, MFDs and MPDs, with their buttons under your finger:
+        every press goes to the cockpit. On an iPad, an Android tablet or a
+        phone, over your home Wi-Fi.</p>
+      <a class="telecharger" href="{{URL_ZIP}}">Download for Windows</a>
+      <p class="infos">{{INFOS}} · free and open source</p>
+      <p class="liens"><a href="#install">Install</a><a href="#aircraft">Aircraft</a><a href="https://discord.gg/4KJYjt7pbc">Discord</a></p>
+    </div>
+    <svg class="schema" viewBox="0 0 400 290" role="img" aria-label="Diagram: a tablet showing two cockpit displays surrounded by their buttons">
+      <rect x="4" y="4" width="392" height="282" rx="22" fill="#15181a" stroke="#2c3032" stroke-width="2"/>
+      <g fill="#3d4245">
+        <rect x="46" y="44" width="16" height="10" rx="2"/><rect x="74" y="44" width="16" height="10" rx="2"/><rect x="102" y="44" width="16" height="10" rx="2"/><rect x="130" y="44" width="16" height="10" rx="2"/><rect x="158" y="44" width="16" height="10" rx="2"/>
+        <rect x="46" y="236" width="16" height="10" rx="2"/><rect x="74" y="236" width="16" height="10" rx="2"/><rect x="102" y="236" width="16" height="10" rx="2"/><rect x="130" y="236" width="16" height="10" rx="2"/><rect x="158" y="236" width="16" height="10" rx="2"/>
+        <rect x="24" y="78" width="10" height="16" rx="2"/><rect x="24" y="108" width="10" height="16" rx="2"/><rect x="24" y="138" width="10" height="16" rx="2"/><rect x="24" y="168" width="10" height="16" rx="2"/><rect x="24" y="198" width="10" height="16" rx="2"/>
+        <rect x="186" y="78" width="10" height="16" rx="2"/><rect x="186" y="108" width="10" height="16" rx="2"/><rect x="186" y="138" width="10" height="16" rx="2"/><rect x="186" y="168" width="10" height="16" rx="2"/><rect x="186" y="198" width="10" height="16" rx="2"/>
+        <rect x="226" y="44" width="16" height="10" rx="2"/><rect x="254" y="44" width="16" height="10" rx="2"/><rect x="282" y="44" width="16" height="10" rx="2"/><rect x="310" y="44" width="16" height="10" rx="2"/><rect x="338" y="44" width="16" height="10" rx="2"/>
+        <rect x="226" y="236" width="16" height="10" rx="2"/><rect x="254" y="236" width="16" height="10" rx="2"/><rect x="282" y="236" width="16" height="10" rx="2"/><rect x="310" y="236" width="16" height="10" rx="2"/><rect x="338" y="236" width="16" height="10" rx="2"/>
+        <rect x="204" y="78" width="10" height="16" rx="2"/><rect x="204" y="108" width="10" height="16" rx="2"/><rect x="204" y="138" width="10" height="16" rx="2"/><rect x="204" y="168" width="10" height="16" rx="2"/><rect x="204" y="198" width="10" height="16" rx="2"/>
+        <rect x="366" y="78" width="10" height="16" rx="2"/><rect x="366" y="108" width="10" height="16" rx="2"/><rect x="366" y="138" width="10" height="16" rx="2"/><rect x="366" y="168" width="10" height="16" rx="2"/><rect x="366" y="198" width="10" height="16" rx="2"/>
+      </g>
+      <rect x="40" y="62" width="140" height="166" rx="18" fill="#040706" stroke="#2c3032"/>
+      <rect x="220" y="62" width="140" height="166" rx="18" fill="#040706" stroke="#2c3032"/>
+      <g fill="none" stroke="#3ddc6a" stroke-width="2" opacity="0.85">
+        <circle cx="110" cy="145" r="44"/><path d="M110 101v14M110 175v14M66 145h14M140 145h14"/>
+        <path d="M92 145h36M110 127l-8 10h16z"/>
+        <path d="M240 200l30-40 22 18 30-52 26 30"/><path d="M240 90h50M240 106h34"/>
+      </g>
+      <text x="110" y="216" fill="#7cff9a" font-size="11" text-anchor="middle" font-family="ui-monospace, Consolas, monospace">HSI</text>
+      <text x="290" y="216" fill="#7cff9a" font-size="11" text-anchor="middle" font-family="ui-monospace, Consolas, monospace">TAC</text>
+    </svg>
+  </div>
+
+  <section>
+    <h2>What DCS Tablette does</h2>
+    <div class="grille">
+      <div class="carte"><h3>Live displays</h3><p>The cockpit displays mirrored from DCS, with the buttons around their frame. A button stays pressed in the cockpit for as long as your finger stays down.</p></div>
+      <div class="carte"><h3>Redrawn panels</h3><p>On the Hornet: touch UFC, IFEI, standby instruments and warning lights. On the F-16: the ICP keypad with the DED above it.</p></div>
+      <div class="carte"><h3>Instruments for any aircraft</h3><p>Airspeed, attitude, altimeter, turn and slip, heading, vertical speed, G and RPM, in the cockpit's own units. Enough to keep your eyes outside, warbirds included.</p></div>
+      <div class="carte"><h3>Kneeboard</h3><p>The mission, module and map pages and your own, sharp at any size, plus the DCS kneeboard, live.</p></div>
+      <div class="carte"><h3>Per-display settings</h3><p>Brightness, contrast, sharpness, resolution, and filters: auto levels for a dark TGP, black and white, green, amber, night red.</p></div>
+      <div class="carte"><h3>Tablet or phone</h3><p>The page follows the aircraft you fly and only offers the layouts that stay comfortable to touch on the screen in use, in portrait or landscape.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>What you need</h2>
+    <ul>
+      <li>A Windows PC with DCS World.</li>
+      <li>A tablet or phone on the same Wi-Fi as the PC: an iPad on iPadOS 13 or newer (iPad Air 2, iPad mini 4, iPad 5th generation and later), an Android tablet or phone, or the browser of another PC.</li>
+      <li>Nothing else: no Python, no app on the tablet. The page opens in the browser.</li>
+    </ul>
+    <p class="note">The internet is used to install the virtual display, to look for a new version at launch and, once, to download the F-16 DED table. Nothing in flight.</p>
+  </section>
+
+  <section id="install">
+    <h2>Install in three steps</h2>
+    <ol class="etapes">
+      <li><h3>Download the zip</h3><p><a href="{{URL_ZIP}}">The latest release's zip</a> holds the program and its installer.</p></li>
+      <li><h3>Extract it, then double-click <code>Installer.bat</code></h3><p>Anywhere: the Downloads folder is fine. If Windows shows "Windows protected your PC": <em>More info</em>, then <em>Run anyway</em>. The program isn't signed; it is built from the code published on GitHub.</p></li>
+      <li><h3>Answer the window's questions</h3><p>It installs and places a virtual display (Virtual Display Driver, free), where DCS draws the cockpit displays, then installs the scripts in DCS, sets DCS to windowed and adds a <strong>DCS Tablette</strong> shortcut to the desktop. If a step fails, it says which one and what to do.</p></li>
+    </ol>
+    <h3>In flight</h3>
+    <ul>
+      <li>Launch <strong>DCS Tablette</strong>: its window shows the address to open on the tablet, such as <code>http://192.168.x.x:8320</code>. On first launch, allow the program on <strong>private</strong> networks.</li>
+      <li>Open the address on the tablet, then add it to the home screen to get it full screen.</li>
+      <li>Start DCS and a mission: the page builds itself for the aircraft you fly.</li>
+    </ul>
+    <p class="note">Updates install themselves at launch: verified download, settings kept. To uninstall: Settings → Apps → Installed apps → DCS Tablette.</p>
+  </section>
+
+  <section id="aircraft">
+    <h2>Supported aircraft</h2>
+    <div class="grille">
+      <div class="carte"><h3>Displays and buttons</h3><p>F/A-18C Hornet, F-16C Viper, AH-64D Apache, OH-58D Kiowa, A-10C and A-10C II, AV-8B Harrier, F-15E Strike Eagle, JF-17 Thunder, Ka-50 Black Shark II and III.</p></div>
+      <div class="carte"><h3>Displays only</h3><p>C-130J-30 Super Hercules (three HDDs), MiG-29A Fulcrum (the HDD, which repeats the HUD).</p></div>
+      <div class="carte"><h3>Instruments and kneeboard</h3><p>Warbirds: P-51D, TF-51D, P-47D, F4U-1D, Spitfire IX, Mosquito, Bf 109 K-4, Fw 190 A-8 and D-9, I-16, Yak-52. Korea: F-86F, MiG-15bis. F-14, F-4E, Mirage 2000C, Mirage F1, F-5E, MiG-21bis, MiG-19P, AJS-37, L-39, C-101, MB-339, FC3. Helicopters: CH-47F, Mi-8MTV2, Mi-24P, UH-1H, SA342.</p></div>
+    </div>
+    <p class="note">Any other aircraft gets the basic instruments and the kneeboard. Buttons on the F-16C, OH-58D, AV-8B, F-15E, JF-17 and Ka-50 still need confirming in flight: feedback on the Discord helps.</p>
+  </section>
+
+  <section>
+    <h2>Multiplayer</h2>
+    <ul>
+      <li>DCS Tablette only writes to <code>Saved Games\DCS</code>, never to the DCS install folder: the servers' integrity check is not affected.</li>
+      <li>A press on the tablet does in the cockpit what a mouse click on the same button would.</li>
+      <li>The tablet script inside DCS only accepts the buttons shown, through an allowlist for each aircraft, and releases any button held for more than 5 seconds.</li>
+      <li>A server that forbids exporting your own aircraft's data turns the instruments off: the tablet tells you so.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Help and ideas</h2>
+    <p>The <a href="https://discord.gg/4KJYjt7pbc"><strong>L'atelier DCS OS</strong></a> Discord is free and French-speaking, English questions welcome: help in #aide, aircraft and feature requests in #idées, new releases in #annonces.</p>
+    <p>On the tablet, the status dot at the top left opens the diagnostics: what is missing and how to fix it. The <a href="https://github.com/led5014/dcs-tablette/blob/main/docs/guide.en.md">full guide</a> covers installation, screenshots, streaming and common problems.</p>
+  </section>
+</main>
+
+<footer>
+  <div class="page">
+    <p>Free and open source, under the <a href="https://github.com/led5014/dcs-tablette/blob/main/LICENSE">MIT license</a>. Code on <a href="https://github.com/led5014/dcs-tablette">GitHub</a>.</p>
+    <p>Community tool, not affiliated with Eagle Dynamics. DCS World is a trademark of Eagle Dynamics SA.</p>
+  </div>
+</footer>
+</body>
+</html>
