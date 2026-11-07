@@ -24,7 +24,6 @@ from tablette.appareils import a10c, ah64d, fa18c, oh58d  # noqa: E402
 RACINE = Path(__file__).resolve().parent.parent
 DCS = Path("C:/Program Files (x86)/Steam/steamapps/common/DCSWorld")
 SCRIPT_LUA = RACINE / "dcs_export" / "DCS-Tablette-Export.lua"
-LUA_APPAREILS = RACINE / "dcs_export" / "DCS-Tablette-Appareils.lua"
 PNG = (b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01"
        b"\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\rIDATx\x9cc\xf8\x0f"
        b"\x00\x00\x01\x01\x00\x05\x18\xd8N\x00\x00\x00\x00IEND\xaeB`\x82")
@@ -187,10 +186,6 @@ class TestProfils(unittest.TestCase):
     def test_zones_d_export_toutes_dans_la_configuration(self):
         from tablette.ecrans_dcs import EXPORTS
         self.assertLessEqual(set(appareils.viewports()), set(EXPORTS))
-
-    def test_le_lua_genere_est_a_jour(self):
-        self.assertEqual(lire(LUA_APPAREILS), appareils.lua_appareils(),
-                         "relancer scripts/generer_lua_appareils.py")
 
     def test_la_liste_blanche_ne_mele_pas_les_appareils(self):
         lua = appareils.lua_appareils()
@@ -626,8 +621,8 @@ class TestInstallation(unittest.TestCase):
         self.tmp.cleanup()
 
     def test_scripts_installes_une_fois_puis_retires(self):
-        from tablette.installation import (LIGNE, SCRIPTS, desinstaller_scripts, est_installe,
-                                           installer_scripts)
+        from tablette.installation import (LIGNE, SCRIPTS, contenu_scripts, desinstaller_scripts,
+                                           est_installe, installer_scripts)
         origine = self.export.read_bytes()
         self.assertFalse(est_installe(self.saved))
         installer_scripts(self.saved)
@@ -637,9 +632,8 @@ class TestInstallation(unittest.TestCase):
         texte = self.export.read_bytes()
         self.assertTrue(texte.startswith(origine + b"\n"))
         self.assertEqual(texte.count(LIGNE.encode()), 1)
-        for nom in SCRIPTS:
-            self.assertEqual((self.saved / "Scripts" / nom).read_bytes(),
-                             (RACINE / "dcs_export" / nom).read_bytes())
+        for nom, contenu in contenu_scripts().items():
+            self.assertEqual((self.saved / "Scripts" / nom).read_bytes(), contenu)
         self.assertEqual(len(list((self.saved / "Scripts").glob("Export.lua.avant-tablette-*"))), 1)
 
         desinstaller_scripts(self.saved)

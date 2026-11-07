@@ -11,7 +11,7 @@ command_defs.lua, clickabledata.lua) ; tests/test_tablette.py les relit
 quand le module est présent.
 
 Le script Lua porte la même liste blanche, générée depuis ces profils
-(`lua_appareils`, écrite par scripts/generer_lua_appareils.py) : un ordre qui
+(`lua_appareils`, écrite dans DCS à l'installation) : un ordre qui
 n'y figure pas n'atteint jamais le cockpit, et ce qui vaut pour un avion ne
 vaut pas pour un autre — le même numéro y désigne autre chose.
 """
@@ -250,8 +250,8 @@ def lua_appareils() -> str:
     """Liste blanche du script Lua, par appareil. Générée, jamais écrite à la main."""
     lignes = [
         "-- DCS Tablette : liste blanche par appareil.",
-        "-- GENERE par scripts/generer_lua_appareils.py depuis src/tablette/appareils :",
-        "-- ne pas modifier a la main, relancer le script.",
+        "-- GENERE par DCS Tablette depuis ses profils d'appareil (src/tablette/appareils) :",
+        "-- ne pas modifier a la main, il est reecrit a chaque installation.",
         "TABLETTE_APPAREILS = {",
     ]
     for profil in PROFILS:

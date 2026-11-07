@@ -122,8 +122,8 @@ D'où viennent les numéros, et ce qui reste à confirmer :
   n'est pas relevé : une commande au mauvais appareil actionnerait autre chose.
 
 Ajouter un appareil : un fichier dans `src/tablette/appareils/`, l'entrée dans
-`PROFILS`, puis `scripts\generer_lua_appareils.py` (la liste blanche du script
-Lua en dépend) et `python -m tablette installer`.
+`PROFILS`, puis `python -m tablette installer`, qui écrit dans DCS la liste
+blanche du script Lua depuis les profils.
 
 ## Installation
 

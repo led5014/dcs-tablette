@@ -41,7 +41,7 @@ from . import VERSION, ecran_virtuel
 from .capture import moniteurs
 from .config import (BUREAU, NOMS_DCS, dernier_lancement, dossier_windows, dossiers_dcs,
                      fichier_choix)
-from .appareils import formes
+from .appareils import formes, lua_appareils
 from .disposition import rangement, supports
 from .ecrans_dcs import (NOM_AFFICHE, NOM_FICHIER, PasDExport, disposition, disposition_essai,
                          fichier_actif, generer, lire_zones, options_affichage,
@@ -94,14 +94,22 @@ def est_installe(saved_games: Path) -> bool:
     return SCRIPTS[0].encode() in texte
 
 
+def contenu_scripts(source: Optional[Path] = None) -> Dict[str, bytes]:
+    """Ce que DCS doit trouver dans Scripts : le script de la tablette, livré
+    tel quel, et sa liste blanche, écrite depuis les profils d'appareil
+    (appareils.lua_appareils) : jamais en retard sur eux."""
+    source = source or dossier_lua()
+    return {SCRIPTS[0]: (source / SCRIPTS[0]).read_bytes(),
+            SCRIPTS[1]: lua_appareils().encode("ascii")}
+
+
 def scripts_a_jour(saved_games: Path, source: Optional[Path] = None) -> bool:
     """DCS charge-t-il les scripts de CETTE version ? Après une mise à jour,
     les anciens restent dans Saved Games tant qu'on ne les recopie pas."""
-    source = source or dossier_lua()
     try:
         return est_installe(saved_games) and all(
-            (saved_games / "Scripts" / nom).read_bytes() == (source / nom).read_bytes()
-            for nom in SCRIPTS)
+            (saved_games / "Scripts" / nom).read_bytes() == contenu
+            for nom, contenu in contenu_scripts(source).items())
     except OSError:
         return False
 
@@ -119,12 +127,11 @@ def installer_scripts(saved_games: Path, source: Optional[Path] = None) -> List[
     le script de la tablette se chaîne derrière eux. À relancer après chaque
     mise à jour ; DCS prend les scripts au lancement de la mission suivante.
     """
-    source = source or dossier_lua()
     dossier = saved_games / "Scripts"
     dossier.mkdir(parents=True, exist_ok=True)
     lignes = []
-    for nom in SCRIPTS:
-        shutil.copyfile(source / nom, dossier / nom)
+    for nom, contenu in contenu_scripts(source).items():
+        (dossier / nom).write_bytes(contenu)
         lignes.append(Texte("Copié : {chemin}", chemin=dossier / nom))
     export = dossier / "Export.lua"
     if est_installe(saved_games):
