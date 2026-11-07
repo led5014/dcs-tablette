@@ -170,7 +170,7 @@ Installation et mise à jour les plus simples possible (demande du
   haut alignés, DCS revient sur le principal ; redescendu, DCS repart.
   (La 1.11.0 croyait que DCS partait du coin haut gauche du bureau entier
   et rangeait l'écran SOUS le principal : abandonné, et rien ne prouve
-  qu'un écran dessous ne gêne pas aussi.) `installation.genants` repère
+  qu'un écran dessous ne gêne pas aussi.) `disposition.genants` repère
   les écrans réels à gauche décalés en hauteur, ou au-dessus du principal ;
   `rangement` aligne leur bord du haut sur celui du principal, du même
   côté (au-dessus : à gauche), sans chevauchement ni changement d'ordre ;
@@ -228,7 +228,7 @@ Lancé sans être passé par Installer.bat, l'exécutable installe d'abord
 (`premiere_fois`). Vu au premier essai : le Wi-Fi du poste de
 développement était en réseau Public.
 
-Toutes les configurations d'écrans (30/10/2026, `installation.supports`,
+Toutes les configurations d'écrans (30/10/2026, `disposition.supports`,
 `ecran_virtuel.planifier`) : la fenêtre de DCS part du coin haut gauche du
 principal et s'étend à droite et vers le bas (les fichiers MonitorSetup
 livrés « auto_placement » le confirment : `displays[i].x - screen.x`). Les
@@ -267,7 +267,7 @@ partie : les écrans du bureau ne se chevauchent pas, la surface couverte
 suffit), zone hors de la fenêtre de DCS, zone sous le kneeboard, écran réel
 sous la fenêtre de DCS qui n'y reçoit aucune zone (une configuration du
 pilote ou une prise HDMI factice en reçoivent : voulu), écran de gauche
-décalé en hauteur (`installation.genants` : DCS partirait de lui, et le
+décalé en hauteur (`disposition.genants` : DCS partirait de lui, et le
 schéma serait faux). En mode essai, l'écran exporté de droite est sous le
 kneeboard : c'est vrai, il est montré. Lecture seule : un GET, rien
 n'est écrit. La page le relit à l'ouverture du diagnostic et à chaque

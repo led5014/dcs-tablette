@@ -25,11 +25,12 @@ import sys
 import time
 from ctypes import wintypes
 from pathlib import Path
-from typing import Dict, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from PIL import Image
 
 from .copie import Copie, Rect, dans
+from .disposition import Moniteur
 
 if sys.platform == "win32":
     user32 = ctypes.WinDLL("user32", use_last_error=True)
@@ -113,8 +114,8 @@ class MONITORINFO(ctypes.Structure):
                 ("rcWork", wintypes.RECT), ("dwFlags", wintypes.DWORD)]
 
 
-def moniteurs() -> list:
-    """Écrans branchés (ou virtuels) : [(x, y, largeur, hauteur, principal)]."""
+def moniteurs() -> List[Moniteur]:
+    """Écrans branchés (ou virtuels), sans savoir lesquels sont virtuels."""
     trouves = []
 
     def visiter(hmon, _hdc, _rect, _):
@@ -122,8 +123,8 @@ def moniteurs() -> list:
         info.cbSize = ctypes.sizeof(MONITORINFO)
         if user32.GetMonitorInfoW(hmon, ctypes.byref(info)):
             r = info.rcMonitor
-            trouves.append((r.left, r.top, r.right - r.left, r.bottom - r.top,
-                            bool(info.dwFlags & 1)))
+            trouves.append(Moniteur(r.left, r.top, r.right - r.left, r.bottom - r.top,
+                                    bool(info.dwFlags & 1)))
         return True
 
     user32.EnumDisplayMonitors(None, None, MONITOR_PROC(visiter), 0)

@@ -886,7 +886,7 @@ class TestInstallation(unittest.TestCase):
               (-1920, 420, 1920, 1080, False, False))
 
     def test_un_ecran_de_gauche_decale_est_aligne_en_haut(self):
-        from tablette.installation import genants, rangement
+        from tablette.disposition import genants, rangement
         principal, virtuel, gauche = self.PILOTE
         self.assertEqual(rangement(self.PILOTE), [(gauche, -1920, 0)])
         # Aligné en haut, il ne gêne pas : la disposition qui a marché en vrai.
@@ -905,7 +905,7 @@ class TestInstallation(unittest.TestCase):
     def test_plusieurs_ecrans_alignes_sans_se_chevaucher_ni_changer_d_ordre(self):
         """À gauche, collés au principal ou aux écrans déjà alignés, dans le
         même ordre ; à droite de la fenêtre de DCS pour un écran qui y était."""
-        from tablette.installation import rangement
+        from tablette.disposition import rangement
         principal, virtuel = (0, 0, 2560, 1440, True, False), (2560, 0, 2560, 1440, False, True)
         proche, loin = (-1920, 0, 1920, 1080, False, False), (-3840, 300, 1920, 1080, False, False)
         self.assertEqual(rangement([principal, virtuel, proche, loin]), [(loin, -3840, 0)])
@@ -1090,7 +1090,7 @@ class TestEcranVirtuel(unittest.TestCase):
         self.assertIn("sous le principal", detail)
 
     def test_supports_jamais_un_ecran_reel_sans_accord(self):
-        from tablette.installation import supports, support_ecrans
+        from tablette.disposition import supports, support_ecrans
         principal = (0, 0, 2560, 1440, True, False)
         reel_droite = (2560, 0, 1920, 1080, False, False)
         virtuel_dessous = (0, 1440, 2560, 1440, False, True)

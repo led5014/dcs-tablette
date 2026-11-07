@@ -37,11 +37,12 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Sequence, Tuple
 
-from . import VERSION
+from . import VERSION, ecran_virtuel
 from .capture import moniteurs
 from .config import (BUREAU, NOMS_DCS, dernier_lancement, dossier_windows, dossiers_dcs,
                      fichier_choix)
 from .appareils import formes
+from .disposition import rangement, supports
 from .ecrans_dcs import (NOM_AFFICHE, NOM_FICHIER, PasDExport, disposition, disposition_essai,
                          fichier_actif, generer, lire_zones, options_affichage,
                          plein_ecran, regler_options, retablir_options)
@@ -163,130 +164,6 @@ def desinstaller_scripts(saved_games: Path) -> List[str]:
             chemin.unlink()
             lignes.append(Texte("Supprimé : {chemin}", chemin=chemin))
     return lignes
-
-
-# ------------------------------------------------------------ où, selon les écrans
-#
-# La fenêtre de DCS part du coin haut gauche du principal et s'étend vers la
-# droite et vers le bas, sauf si un écran à sa gauche est décalé en hauteur :
-# elle part alors de lui. Essayé avec un pilote le 02/11/2026 : son écran de
-# gauche un peu plus bas que le principal, la vue de DCS partie dessus ;
-# débranché, ou remonté bords du haut alignés, DCS revenu sur le principal.
-# Un tel écran est à aligner (`rangement`), comme un écran au-dessus du
-# principal. Les écrans exportés vont sur un écran collé à DROITE du
-# principal (bords du haut alignés) ou DESSOUS (bords de gauche alignés), et
-# la fenêtre de DCS couvre le principal et cet écran-là. Elle ne doit couvrir
-# AUCUN autre écran : il resterait noir pendant le vol. Un écran réel à
-# droite du principal fait donc passer l'écran virtuel dessous.
-
-COTES = ("droite", "dessous")
-
-
-def _virtuel(m: Sequence) -> Optional[bool]:
-    """Un écran est décrit par (x, y, largeur, hauteur, principal[, virtuel]) ;
-    sans 6e valeur, on ne sait pas (relevé d'EnumDisplayMonitors)."""
-    return m[5] if len(m) > 5 else None
-
-
-def _chevauche(a: Sequence[int], b: Sequence[int]) -> bool:
-    return a[0] < b[0] + b[2] and b[0] < a[0] + a[2] and a[1] < b[1] + b[3] and b[1] < a[1] + a[3]
-
-
-def supports(ecrans: Sequence[Sequence], physique: bool = True) -> List[Tuple[
-        Sequence, str, Tuple[int, int, int, int], Tuple[int, int]]]:
-    """Les écrans qui peuvent recevoir les écrans du cockpit, du meilleur au
-    moins bon : (écran, côté, sa zone dans la fenêtre de DCS, taille de la
-    fenêtre). Virtuels d'abord, puis à droite avant dessous. `physique`
-    faux : un écran réel n'est jamais pris — on ne le prend que si le
-    pilote a dit que personne ne le regarde (prise HDMI factice)."""
-    principal = next((m for m in ecrans if m[4]), None)
-    if principal is None:
-        return []
-    px, py, pl, ph = principal[:4]
-    trouves = []
-    for m in ecrans:
-        if m[4] or (_virtuel(m) is False and not physique):
-            continue
-        zone = (m[0] - px, m[1] - py, m[2], m[3])
-        if zone[:2] == (pl, 0):
-            cote = "droite"
-        elif zone[:2] == (0, ph):
-            cote = "dessous"
-        else:
-            continue
-        fenetre = (max(pl, zone[0] + zone[2]), max(ph, zone[1] + zone[3]))
-        if any(o is not m and not o[4]
-               and _chevauche((o[0] - px, o[1] - py, o[2], o[3]), (0, 0) + fenetre)
-               for o in ecrans):
-            continue
-        trouves.append((m, cote, zone, fenetre))
-    trouves.sort(key=lambda t: (_virtuel(t[0]) is not True, COTES.index(t[1])))
-    return trouves
-
-
-def genants(ecrans: Sequence[Sequence]) -> List[Sequence]:
-    """Les écrans réels décalés en hauteur par rapport au principal : à sa
-    gauche sans que les bords du haut soient alignés, ou plus haut que lui.
-    DCS ouvrirait sa fenêtre à partir d'eux. Un écran virtuel mal placé n'en
-    est pas : `ecran_virtuel.remettre` s'en charge."""
-    principal = next((m for m in ecrans if m[4]), None)
-    if principal is None:
-        return []
-    px, py = principal[:2]
-    return sorted((m for m in ecrans if not m[4] and _virtuel(m) is not True
-                   and (m[1] < py or (m[0] < px and m[1] != py))), key=lambda m: m[:2])
-
-
-def rangement(ecrans: Sequence[Sequence]) -> List[Tuple[Sequence, int, int]]:
-    """Où mettre les écrans `genants` : (écran, x, y) sur le bureau.
-
-    Bord du haut aligné sur celui du principal, du même côté qu'avant : à
-    sa gauche, collés à lui ou aux écrans déjà alignés, dans le même ordre ;
-    à droite de la fenêtre de DCS pour ceux qui y étaient. Un écran au-dessus
-    du principal passe à sa gauche. Seule leur place change, jamais leur
-    définition."""
-    principal = next((m for m in ecrans if m[4]), None)
-    a_ranger = genants(ecrans)
-    if principal is None or not a_ranger:
-        return []
-    px, py, pl = principal[:3]
-    restent = [m for m in ecrans if not any(m is g for g in a_ranger)]
-    occupes = [tuple(m[:4]) for m in restent]
-    a_droite = [m for m in a_ranger if m[0] >= px + pl]
-    places = []
-    x = px                # vers la gauche : les écrans de gauche du plus proche au plus loin,
-    for m in sorted((m for m in a_ranger if m[0] < px + pl),    # puis ceux du dessus
-                    key=lambda m: (m[0] >= px, -m[0])):
-        x -= m[2]
-        while (gene := next((o for o in occupes if _chevauche((x, py, m[2], m[3]), o)),
-                            None)) is not None:
-            x = gene[0] - m[2]
-        places.append((m, x, py))
-        occupes.append((x, py, m[2], m[3]))
-    x = px + pl                                 # vers la droite, après la fenêtre de DCS
-    for m in sorted(a_droite, key=lambda m: m[0]):
-        while (gene := next((o for o in occupes if _chevauche((x, py, m[2], m[3]), o)),
-                            None)) is not None:
-            x = gene[0] + gene[2]
-        places.append((m, x, py))
-        occupes.append((x, py, m[2], m[3]))
-        x += m[2]
-    return places
-
-
-def support_ecrans(ecrans: Sequence[Sequence], essai: bool, physique: bool = True
-                   ) -> Optional[Tuple[Tuple[int, int, int, int], Tuple[int, int]]]:
-    """Où vont les écrans exportés (zone dans la fenêtre de DCS) et la taille
-    de cette fenêtre, c'est-à-dire la résolution à régler dans DCS ; None
-    sans écran à sa place."""
-    principal = next((m for m in ecrans if m[4]), None)
-    if principal is None:
-        return None
-    pl, ph = principal[2:4]
-    if essai:
-        return (0, 0, pl, ph), (pl, ph)
-    trouves = supports(ecrans, physique)
-    return (trouves[0][2], trouves[0][3]) if trouves else None
 
 
 # ------------------------------------------------------------ le choix du pilote
@@ -795,7 +672,6 @@ def ecran_de_dcs(ecrans: Sequence, demander: Callable[[str], Optional[str]],
     Windows (`changer`, ecran_virtuel.rendre_principal). Windows refuse :
     la marche à suivre, et l'installation s'arrête là — tout le reste en
     dépend. Sans réponse possible (pas de console), on continue."""
-    from . import ecran_virtuel
     numeros = {i: e for i, e in enumerate(ecrans, 1) if e.actif and not e.virtuel}
     principal = next((i for i, e in numeros.items() if e.principal), None)
     if not numeros or (principal is not None and len(numeros) < 2):
@@ -837,13 +713,11 @@ def ranger_avec_accord(lister_ecrans: Callable[[], list],
     DCS partirait de lui. On propose de l'aligner sur le haut du principal
     (`rangement`). Rend True si le pilote a dit oui : retenu, le diagnostic
     et l'ouverture de Windows l'aligneront de nouveau si Windows le décale."""
-    from . import ecran_virtuel
     try:
         actifs = [e for e in lister_ecrans() if e.actif]
     except OSError:
         return False
-    places = rangement([(e.x, e.y, e.largeur, e.hauteur, e.principal, e.virtuel)
-                        for e in actifs])
+    places = rangement([e.moniteur for e in actifs])
     if not places:
         return False
     noms = [Texte("votre écran {largeur}×{hauteur}", largeur=m[2], hauteur=m[3])
@@ -886,7 +760,6 @@ def installer(saved_games: Path, essai: bool = False,
     console de diagnostic (`ecrire_choix`), comme le dossier de DCS quand il
     y avait à choisir entre DCS et DCS.openbeta (`choisir_dossier`).
     """
-    from . import ecran_virtuel
     saved_games, retenir = choisir_dossier(saved_games, demander)
     if not saved_games.is_dir():
         print(Texte("Dossier de DCS introuvable ({dossier}).", dossier=saved_games))
@@ -973,8 +846,7 @@ def installer(saved_games: Path, essai: bool = False,
                 break
         # Relus : l'écran virtuel vient peut-être d'arriver ou de bouger.
         try:
-            actuels = [(e.x, e.y, e.largeur, e.hauteur, e.principal, e.virtuel)
-                       for e in lister_ecrans() if e.actif]
+            actuels = [e.moniteur for e in lister_ecrans() if e.actif]
         except OSError:
             actuels = None
         complet, lignes = configurer_ecrans(saved_games, choix["mode"] == "essai", actuels,

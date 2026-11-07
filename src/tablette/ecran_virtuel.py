@@ -42,6 +42,7 @@ from pathlib import Path
 from typing import Callable, Dict, List, Optional, Sequence, Tuple
 from xml.etree import ElementTree
 
+from .disposition import Moniteur, chevauche, rangement, supports
 from .langues import FRANCAIS, Texte, dans, pc
 
 Mode =Tuple[int, int, int]           # largeur, hauteur, fréquence
@@ -100,6 +101,11 @@ class Ecran:
     def virtuel(self) -> bool:
         texte = f"{self.carte} {self.ident}".lower()
         return any(mot in texte for mot in MOTS_VIRTUELS)
+
+    @property
+    def moniteur(self) -> Moniteur:
+        """L'écran tel que la règle des places le voit (disposition.py)."""
+        return Moniteur(self.x, self.y, self.largeur, self.hauteur, self.principal, self.virtuel)
 
     @property
     def texte(self) -> Texte:
@@ -165,16 +171,12 @@ def choisir_mode(modes: Sequence[Mode], largeur: int, hauteur: int,
                                      abs(m[2] - frequence)))
 
 
-def _chevauche(a: Tuple[int, int, int, int], b: Tuple[int, int, int, int]) -> bool:
-    return a[0] < b[0] + b[2] and b[0] < a[0] + a[2] and a[1] < b[1] + b[3] and b[1] < a[1] + a[3]
-
-
 def planifier(ecrans: Sequence[Ecran]) -> Tuple[Optional[Placement], List[str]]:
     """Où mettre l'écran virtuel, ou pourquoi on ne le peut pas.
 
     À droite du principal, sinon dessous : la fenêtre de DCS, qui s'étendra
     du principal jusqu'à couvrir l'écran virtuel, ne doit recouvrir aucun
-    autre écran — il resterait noir en vol (voir installation.supports). Un
+    autre écran — il resterait noir en vol (voir disposition.supports). Un
     écran déjà à l'une de ces places y reste. Seul l'écran virtuel bouge :
     un écran réel qui prend les deux places n'est pas déplacé, on dit lequel.
     """
@@ -204,7 +206,7 @@ def planifier(ecrans: Sequence[Ecran]) -> Tuple[Optional[Placement], List[str]]:
             or (cible.largeur or pl, cible.hauteur or ph, cible.frequence))
         x, y = places[cote]
         fenetre = (px, py, max(pl, x - px + largeur), max(ph, y - py + hauteur))
-        if not any(_chevauche(a, fenetre) for a in autres):
+        if not any(chevauche(a, fenetre) for a in autres):
             return Placement(cible, x, y, largeur, hauteur, frequence, cote), []
     genants = [e for e in ecrans if e is not cible and e.actif and not e.principal]
     return None, [
@@ -213,17 +215,16 @@ def planifier(ecrans: Sequence[Ecran]) -> Tuple[Optional[Placement], List[str]]:
         Texte("dessous de l'écran principal : la fenêtre de DCS les couvrirait, ils resteraient "
               "noirs."),
         # Ni au-dessus du principal, ni à sa gauche décalé : DCS partirait de cet
-        # écran (installation.genants).
+        # écran (disposition.genants).
         Texte("Paramètres → Système → Écran : glisser celui du dessous à droite de l'autre,"),
         Texte("puis relancer Installer.bat. Ou, pour essayer sans : Installer.bat --essai.")]
 
 
-def moniteurs() -> List[Tuple[int, int, int, int, bool, bool]]:
-    """Les écrans du bureau comme les attend installation.supports, avec en
-    plus : virtuel ou pas — un écran réel n'y est pris qu'avec l'accord du
-    pilote."""
-    return [(e.x, e.y, e.largeur, e.hauteur, e.principal, e.virtuel)
-            for e in lister() if e.actif]
+def moniteurs() -> List[Moniteur]:
+    """Les écrans du bureau pour la règle des places (disposition.py), avec
+    en plus : virtuel ou pas — un écran réel n'y est pris qu'avec l'accord
+    du pilote."""
+    return [e.moniteur for e in lister() if e.actif]
 
 
 def decrire(ecrans: Sequence[Ecran]) -> List[str]:
@@ -242,7 +243,7 @@ def decrire(ecrans: Sequence[Ecran]) -> List[str]:
                 ou = (Texte("à droite du principal, décalé") if decale
                       else Texte("à droite du principal"))
             elif e.x + e.largeur <= px:
-                # Décalé, DCS partirait de lui (installation.genants).
+                # Décalé, DCS partirait de lui (disposition.genants).
                 ou = (Texte("à gauche du principal, décalé en hauteur") if e.y != py
                       else Texte("à gauche du principal"))
             elif e.y >= py + ph:
@@ -574,16 +575,11 @@ def ranger(lister: Callable[[], List[Ecran]] = lister,
            deplacer: Callable[[Sequence[Tuple[Ecran, int, int]]], Optional[str]] = deplacer,
            attendre: Callable[[float], None] = time.sleep) -> Optional[str]:
     """Les écrans réels décalés en hauteur à gauche du principal, ou
-    au-dessus, alignés sur son bord du haut (installation.rangement), une
+    au-dessus, alignés sur son bord du haut (disposition.rangement), une
     fois que le pilote a dit oui. Rend la raison d'un échec, ou None (rien à
     aligner compris)."""
-    from .installation import rangement           # la règle des places, une seule fois
-    actifs = [e for e in lister() if e.actif]
-    places = []
-    for m, x, y in rangement([(e.x, e.y, e.largeur, e.hauteur, e.principal, e.virtuel)
-                              for e in actifs]):
-        ecran = next(e for e in actifs if (e.x, e.y, e.largeur, e.hauteur) == tuple(m[:4]))
-        places.append((ecran, x, y))
+    actifs = {e.moniteur: e for e in lister() if e.actif}
+    places = [(actifs[m], x, y) for m, x, y in rangement(list(actifs))]
     if not places:
         return None
     erreur = deplacer(places)
@@ -768,12 +764,9 @@ def physique_en_place(ecrans: Sequence[Ecran]) -> Optional[Tuple[Ecran, str]]:
     """Un écran réel à la place qu'aurait l'écran virtuel (à droite ou sous le
     principal, sans que DCS couvre un autre écran) : une prise HDMI factice,
     ou l'écran que le pilote regarde. Lequel, et de quel côté."""
-    from .installation import supports        # la règle des places, une seule fois
-    actifs = [e for e in ecrans if e.actif]
-    trouves = supports([(e.x, e.y, e.largeur, e.hauteur, e.principal, e.virtuel)
-                        for e in actifs], physique=True)
-    for m, cote, _, _ in trouves:
-        ecran = next(e for e in actifs if (e.x, e.y, e.largeur, e.hauteur) == tuple(m[:4]))
+    actifs = {e.moniteur: e for e in ecrans if e.actif}
+    for m, cote, _, _ in supports(list(actifs), physique=True):
+        ecran = actifs[m]
         if not ecran.virtuel:
             return ecran, cote
     return None

@@ -34,9 +34,10 @@ from .mise_a_jour import numero
 from .appareils import formes
 from .ecrans_dcs import (NOM_AFFICHE, NOM_FICHIER, PasDExport, a_leur_forme, fichier_actif,
                          lire_zones, options_affichage, plein_ecran, regler_options)
-from .installation import (LIGNE, configuration_existante, configurer_ecrans, dcs_ouvert, genants,
+from .disposition import Moniteur, en_moniteurs, genants, principal_de, support_ecrans
+from .installation import (LIGNE, configuration_existante, configurer_ecrans, dcs_ouvert,
                            dcs_regle, installer_scripts, lire_choix, mode_installe, premiere_fois,
-                           scripts_a_jour, support_ecrans)
+                           scripts_a_jour)
 from .langues import FRANCAIS, Texte, dans, message, pc
 
 OK, REPARE, ATTENTE, A_FAIRE, MANQUE = "ok", "repare", "attente", "a_faire", "manque"
@@ -249,14 +250,14 @@ class Diagnostic:
     def _windows(self, ecrans: list, lance: bool, forcer: bool, accord: bool) -> Point:
         """Aucun écran réel décalé en hauteur à gauche du principal, ni
         au-dessus : DCS ouvrirait sa fenêtre à partir de lui
-        (installation.genants). Alignés tout seuls DCS fermé si le pilote l'a
+        (disposition.genants). Alignés tout seuls DCS fermé si le pilote l'a
         accepté à l'installation — comme l'écran virtuel, pas en boucle après
         un échec —, sinon la marche à suivre."""
         titre = Texte("Écrans de Windows")
         a_ranger = genants(ecrans)
         if not a_ranger:
             return Point(titre, OK, Texte("alignés en haut sur l'écran principal"))
-        noms = [Texte("votre écran {largeur}×{hauteur}", largeur=m[2], hauteur=m[3])
+        noms = [Texte("votre écran {largeur}×{hauteur}", largeur=m.largeur, hauteur=m.hauteur)
                 for m in a_ranger]
         a_la_main = Texte("Ou Paramètres → Système → Écran : les glisser à gauche de l'écran "
                           "principal, bords du haut alignés, puis relancer DCS.")
@@ -347,8 +348,8 @@ class Diagnostic:
                                           "écrans du cockpit {ou}", nom=NOM_AFFICHE, ou=ou)
                      ), resolution
 
-    def _sous_dcs(self, ecrans: list, support: Optional[Tuple[int, int, int, int]] = None
-                  ) -> Tuple[int, int, list]:
+    def _sous_dcs(self, ecrans: List[Moniteur],
+                  support: Optional[Tuple[int, int, int, int]] = None) -> Tuple[int, int, list]:
         """La fenêtre de DCS telle que réglée dans options.lua (elle part du
         coin haut gauche du principal), et les écrans réels qu'elle recouvre,
         hors du principal et du `support` des écrans du cockpit."""
@@ -356,14 +357,13 @@ class Diagnostic:
             _, largeur, hauteur = options_affichage(self.saved_games)
         except PasDExport:
             return 0, 0, []
-        principal = next((m for m in ecrans if m[4]), None)
+        principal = principal_de(ecrans)
         if principal is None:
             return largeur, hauteur, []
-        px, py = principal[:2]
         recouverts = []
         for m in ecrans:
-            x, y, l, h = m[0] - px, m[1] - py, m[2], m[3]
-            if m[4] or (x, y, l, h) == tuple(support or ()) or (len(m) > 5 and m[5]):
+            x, y, l, h = m.x - principal.x, m.y - principal.y, m.largeur, m.hauteur
+            if m.principal or m.virtuel or (x, y, l, h) == tuple(support or ()):
                 continue
             if x < largeur and 0 < x + l and y < hauteur and 0 < y + h:
                 recouverts.append(Texte("votre écran {largeur}×{hauteur}", largeur=l, hauteur=h))
@@ -386,19 +386,19 @@ class Diagnostic:
             Texte("Remettre d'abord l'écran virtuel (point « Écran virtuel ») : DCS Tablette "
                   "règle ensuite DCS tout seul."),))
 
-    def _ne_tombe_plus(self, support: Tuple[int, int, int, int], ecrans: list) -> Texte:
+    def _ne_tombe_plus(self, support: Tuple[int, int, int, int],
+                       ecrans: List[Moniteur]) -> Texte:
         """Pourquoi « Tablette DCS » ne tombe plus sur les écrans : l'écran qui
         reçoit ceux du cockpit a changé (définition, place). La fenêtre de DCS,
         toujours à la taille d'avant, recouvre alors parfois un écran du
         pilote : c'est ce qu'il voit, DCS qui déborde sur cet écran-là."""
-        principal = next(m for m in ecrans if m[4])
-        px, py = principal[:2]
+        principal = principal_de(ecrans)
         _, _, l, h = support
-        sur = next((m for m in ecrans if (m[0] - px, m[1] - py) + tuple(m[2:4]) == tuple(support)),
-                   principal)
-        if sur[4]:
+        sur = next((m for m in ecrans if (m.x - principal.x, m.y - principal.y, m.largeur,
+                                           m.hauteur) == tuple(support)), principal)
+        if sur.principal:
             ecran = Texte("de l'écran principal ({largeur}×{hauteur})", largeur=l, hauteur=h)
-        elif len(sur) > 5 and sur[5]:
+        elif sur.virtuel:
             ecran = Texte("de l'écran virtuel ({largeur}×{hauteur})", largeur=l, hauteur=h)
         else:
             ecran = Texte("du second écran ({largeur}×{hauteur})", largeur=l, hauteur=h)
@@ -621,9 +621,9 @@ class Diagnostic:
                 points.append(self._sur(Texte("Écran virtuel"), lambda: self._ecran_virtuel(
                     essai, forcer, physique, lance)))
                 points.append(self._sur(Texte("Écrans de Windows"), lambda: self._windows(
-                    self._ecrans(), lance, forcer, bool(choix.get("ranger")))))
+                    en_moniteurs(self._ecrans()), lance, forcer, bool(choix.get("ranger")))))
                 config = self._sur(Texte("Écrans de DCS"), lambda: self._configuration(
-                    essai, self._ecrans(), lance, physique))
+                    essai, en_moniteurs(self._ecrans()), lance, physique))
         if config is not None:
             if isinstance(config, tuple):
                 point, resolution = config
@@ -720,7 +720,7 @@ def remettre_au_demarrage(saved_games: Path, journal: Path,
         if ecrans is None:
             from .ecran_virtuel import moniteurs as ecrans
         for _ in range(ATTENTE_ECRAN_VIRTUEL_S // 2):
-            if any(len(m) > 5 and m[5] and not m[4] for m in ecrans()):
+            if any(m.virtuel and not m.principal for m in en_moniteurs(ecrans())):
                 break
             attendre(2)
         attendre(POSE_DES_ECRANS_S)
