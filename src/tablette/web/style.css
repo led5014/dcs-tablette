@@ -1046,3 +1046,41 @@ body.en-kneeboard #modes { opacity: .45; }
 #diagnostic h2 { margin: 18px 0 6px; font-size: 14px; color: var(--discret); font-weight: 600; }
 #diag-journal li { padding: 4px 0; font-size: 13px; color: var(--texte); overflow-wrap: anywhere; }
 #diag-journal .heure { color: var(--discret); margin-right: 6px; }
+
+/* Le schéma de la disposition des écrans (apercu.py), à l'échelle. Les
+   épaisseurs et les tailles de texte sont posées par app.js, en unités du
+   schéma : ici, seulement les couleurs. */
+#dispo-resume { margin: 0 0 8px; font-size: 14px; color: var(--texte); overflow-wrap: anywhere; }
+#dispo-resume .raison { display: block; margin-top: 4px; color: var(--ambre); }
+#dispo-schema svg { display: block; margin: 0 auto; max-width: 100%; }
+.dispo-ecran { fill: #14181a; stroke: #4c565a; }
+.dispo-ecran.principal { fill: #1c2428; stroke: #8f9da2; }
+.dispo-ecran.virtuel { fill: #0f1314; }
+.dispo-zone { fill: rgba(61, 220, 106, .2); stroke: var(--vert); }
+.dispo-kneeboard { fill: rgba(240, 180, 60, .16); stroke: var(--ambre); }
+.dispo-fenetre { fill: none; stroke: #6fb0e6; }
+.dispo .probleme { fill: rgba(239, 90, 79, .3); stroke: var(--rouge); }
+/* Cernés de la couleur du fond : lisibles par-dessus les zones. */
+.dispo-texte { fill: var(--texte); stroke: var(--fond); paint-order: stroke; stroke-linejoin: round; }
+.dispo-texte.discret { fill: var(--discret); }
+.dispo-texte.fenetre { fill: #6fb0e6; }
+.dispo .dispo-texte.probleme { fill: #ffb1aa; stroke: var(--fond); }
+#dispo-legende { list-style: none; margin: 8px 0 0; padding: 0; font-size: 13px; }
+#dispo-legende li { padding: 3px 0; color: var(--texte); overflow-wrap: anywhere; }
+#dispo-legende li.probleme { color: #ffb1aa; }
+#dispo-legende li.ok { color: var(--vert); }
+.dispo-cles span { display: inline-block; margin: 0 14px 4px 0; color: var(--discret); white-space: nowrap; }
+.cle {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-right: 5px;
+  vertical-align: -1px;
+  border: 1px solid #4c565a;
+  background: #14181a;
+}
+.cle.virtuel { border-style: dashed; background: #0f1314; }
+.cle.fenetre { border: 2px dashed #6fb0e6; background: none; }
+.cle.zone { border-color: var(--vert); background: rgba(61, 220, 106, .3); }
+.cle.kneeboard { border-color: var(--ambre); background: rgba(240, 180, 60, .25); }
+.cle.probleme { border-color: var(--rouge); background: rgba(239, 90, 79, .4); }

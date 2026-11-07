@@ -1753,6 +1753,12 @@ function afficherDiagnostic(d) {
     journal.append(li);
   }
   majBadgeDiagnostic(d.problemes);
+  // Le PC a revérifié (toutes les 10 s, ou « Vérifier ») : les écrans ont pu
+  // bouger, la disposition est relue.
+  if (d.heure !== heureApercu) {
+    heureApercu = d.heure;
+    chargerApercu();
+  }
 }
 
 async function chargerDiagnostic(verifier = false) {
@@ -1773,7 +1779,10 @@ async function chargerDiagnostic(verifier = false) {
 function ouvrirDiagnostic(ouvrir) {
   diagnosticOuvert = ouvrir;
   $('#diagnostic').hidden = !ouvrir;
-  if (ouvrir) chargerDiagnostic();
+  if (ouvrir) {
+    heureApercu = null;            // relue à chaque ouverture
+    chargerDiagnostic();
+  }
 }
 
 function brancherDiagnostic() {
@@ -1801,6 +1810,158 @@ function brancherDiagnostic() {
     ouvrirDiagnostic(true);
   }
 }
+
+// --------------------------------------------------------------- disposition des écrans
+// Le schéma du diagnostic (/api/disposition, apercu.py) : les écrans de
+// Windows, la fenêtre de DCS, les zones exportées et le kneeboard, à
+// l'échelle ; ce qui pose problème en rouge, la raison dessous. Relu à
+// l'ouverture du diagnostic et à chaque vérification du PC, redessiné à la
+// rotation. Le schéma est en pixels du bureau de Windows : épaisseurs et
+// textes y sont convertis depuis des pixels de la page (`u`). « Aperçu »
+// dans le code : `disposition` est déjà celle des panneaux de la page.
+
+let apercu = null;              // le dernier lu : redessiné sans le relire
+let heureApercu = null;         // l'heure de la vérification qui l'a fait relire
+let apercuPrevu = 0;
+
+async function chargerApercu() {
+  try {
+    const r = await fetch('/api/disposition', { cache: 'no-store' });
+    apercu = r.ok ? await r.json() : null;
+  } catch { apercu = null; }
+  dessinerApercu();
+}
+
+// Un texte du schéma, le plus grand possible jusqu'à `taille` sans sortir de
+// `place` ; trop petit pour être lu, il n'est pas écrit (la liste dessous
+// nomme ce qui gêne). Rend sa taille, 0 s'il n'est pas écrit.
+function etiquette(parent, texte, x, y, place, taille, classe, centre = false) {
+  const fs = Math.min(taille, place / (Math.max(texte.length, 1) * 0.62));
+  if (fs < taille * 0.65) return 0;
+  const t = svg('text', { x, y: centre ? y + fs * 0.35 : y + fs, 'font-size': fs,
+    'stroke-width': fs / 4, 'text-anchor': centre ? 'middle' : 'start', class: classe }, parent);
+  t.textContent = texte;
+  return fs;
+}
+
+function dessinerApercu() {
+  const boite = $('#dispo-schema');
+  const resume = $('#dispo-resume');
+  const liste = $('#dispo-legende');
+  boite.textContent = '';
+  liste.textContent = '';
+  const d = apercu;
+  if (!d) {
+    resume.textContent = tr('Disposition des écrans : PC injoignable.');
+    return;
+  }
+  resume.textContent = [
+    d.configuration && d.fenetre ? tr('Configuration « {nom} », fenêtre de DCS {largeur}×{hauteur}.',
+      { nom: d.configuration, largeur: d.fenetre.largeur, hauteur: d.fenetre.hauteur }) : '',
+    d.zones.length ? tr('Écrans exportés pour : {appareil}.', d) : '',
+  ].filter(Boolean).join(' ');
+  if (d.raison) resume.append(element('span', 'raison', d.raison));
+  const c = d.cadre;
+  if (!c) return;
+
+  // À la largeur du panneau, sans dépasser la moitié de la hauteur.
+  const largeurPx = Math.max(240, boite.clientWidth || 600);
+  const hauteurMax = Math.max(180, window.innerHeight * 0.45);
+  const echelle = Math.min((largeurPx - 16) / c.largeur, (hauteurMax - 16) / c.hauteur);
+  const u = 1 / echelle;                  // unités du schéma par pixel de la page
+  const m = 8 * u;
+  const s = svg('svg', { viewBox: `${c.x - m} ${c.y - m} ${c.largeur + 2 * m} ${c.hauteur + 2 * m}`,
+    width: Math.round(c.largeur * echelle + 16), height: Math.round(c.hauteur * echelle + 16),
+    class: 'dispo', role: 'img', 'aria-label': tr('Disposition des écrans') }, boite);
+  const gene = (o) => (o.problemes.length ? ' probleme' : '');
+  const cadre = (r, classe, autres = {}) => svg('rect', Object.assign({ x: r.x, y: r.y,
+    width: r.largeur, height: r.hauteur, class: classe, 'stroke-width': 1.5 * u }, autres), s);
+
+  for (const e of d.ecrans) {
+    cadre(e, 'dispo-ecran' + (e.principal ? ' principal' : '') + (e.virtuel ? ' virtuel' : '') + gene(e),
+      e.virtuel ? { 'stroke-dasharray': `${5 * u} ${4 * u}` } : {});
+  }
+  for (const z of d.zones) cadre(z, 'dispo-zone' + gene(z));
+  if (d.kneeboard) cadre(d.kneeboard, 'dispo-kneeboard' + gene(d.kneeboard));
+  if (d.fenetre) {
+    cadre(d.fenetre, 'dispo-fenetre', { 'stroke-width': 2 * u, 'stroke-dasharray': `${8 * u} ${5 * u}` });
+  }
+
+  // Les textes par-dessus tous les cadres, cernés de noir pour rester lisibles.
+  // Même calcul de taille qu'etiquette() : de quoi savoir où ils tombent.
+  const taille = 12 * u;
+  const marge = 6 * u;
+  const tailleDe = (texte, place, max) => Math.min(max, place / (Math.max(texte.length, 1) * 0.62));
+  const k = d.kneeboard;
+  const f = d.fenetre;
+  for (const z of d.zones) {
+    etiquette(s, z.libelle, z.x + z.largeur / 2, z.y + z.hauteur / 2, z.largeur - 2 * marge, taille,
+      'dispo-texte' + gene(z), true);
+  }
+  if (k) {
+    etiquette(s, tr('Kneeboard'), k.x + k.largeur / 2, k.y + k.hauteur / 2, k.largeur - 2 * marge, taille,
+      'dispo-texte' + gene(k), true);
+  }
+  const obstacles = d.zones.concat(k ? [k] : []).map((r) => [r.x, r.y, r.x + r.largeur, r.y + r.hauteur]);
+  if (f) {
+    const texte = `${tr('Fenêtre de DCS')} ${f.largeur}×${f.hauteur}`;
+    const fs = etiquette(s, texte, f.x + marge, f.y + f.hauteur - marge - taille, f.largeur / 2, taille,
+      'dispo-texte fenetre');
+    if (fs) {
+      obstacles.push([f.x, f.y + f.hauteur - marge - taille, f.x + marge + texte.length * 0.62 * fs,
+        f.y + f.hauteur]);
+    }
+  }
+  // Le nom de chaque écran et sa définition dans le premier de ses coins que
+  // rien ne couvre, en haut à gauche d'abord ; aucun : en haut à gauche, le
+  // nom seul (le Kiowa sur un téléphone).
+  const libre = (b) => !obstacles.some((o) => b[0] < o[2] && o[0] < b[2] && b[1] < o[3] && o[1] < b[3]);
+  for (const e of d.ecrans) {
+    const place = e.largeur - 2 * marge;
+    const detail = `${e.largeur}×${e.hauteur}`
+      + (e.principal ? ` · ${tr('principal')}` : e.virtuel ? ` · ${tr('virtuel')}` : '');
+    const fs1 = tailleDe(e.nom, place, taille);
+    const fs2 = tailleDe(detail, place, taille * 0.9);
+    const l = Math.max(e.nom.length * fs1, detail.length * fs2) * 0.62;
+    const h = fs1 * 1.3 + fs2 * 1.15;
+    const gauche = e.x + marge;
+    const droite = e.x + e.largeur - marge - l;
+    const coins = [[gauche, e.y + marge], [droite, e.y + marge],
+      [gauche, e.y + e.hauteur - marge - h], [droite, e.y + e.hauteur - marge - h]];
+    const coin = coins.find(([x, y]) => libre([x, y, x + l, y + h]));
+    const [x, y] = coin || coins[0];
+    const fs = etiquette(s, e.nom, x, y, place, taille, 'dispo-texte' + gene(e));
+    if (fs && coin) etiquette(s, detail, x, y + fs * 1.3, place, taille * 0.9, 'dispo-texte discret');
+  }
+
+  // La légende, puis ce qui gêne, en toutes lettres.
+  const cles = element('li', 'dispo-cles');
+  for (const [classe, texte] of [['ecran', tr('Écran')], ['virtuel', tr('Écran virtuel')],
+    ['fenetre', tr('Fenêtre de DCS')], ['zone', tr('Écran exporté')], ['kneeboard', tr('Kneeboard')],
+    ['probleme', tr('Problème')]]) {
+    const cle = element('span', '');
+    cle.append(element('i', 'cle ' + classe), texte);
+    cles.append(cle);
+  }
+  liste.append(cles);
+  const genants = [...d.ecrans.map((e) => [e.nom, e.problemes]),
+    ...d.zones.map((z) => [z.libelle, z.problemes]),
+    ...(k ? [[tr('Kneeboard'), k.problemes]] : [])].filter(([, p]) => p.length);
+  for (const [nom, problemes] of genants) {
+    liste.append(element('li', 'probleme', tr('{titre} : {detail}', { titre: nom, detail: problemes.join(' ; ') })));
+  }
+  if (!genants.length && d.zones.length) {
+    liste.append(element('li', 'ok', tr('Aucun problème de disposition.')));
+  }
+}
+
+function redessinerApercu() {
+  if (!diagnosticOuvert || !apercu) return;
+  clearTimeout(apercuPrevu);
+  apercuPrevu = setTimeout(dessinerApercu, 120);
+}
+window.addEventListener('resize', redessinerApercu);
+window.addEventListener('orientationchange', redessinerApercu);
 
 // --------------------------------------------------------------- plein écran
 // Android, navigateur du PC : un bouton cache la barre du navigateur. Masqué

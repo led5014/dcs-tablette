@@ -246,6 +246,38 @@ droite était supposée) ; une configuration du pilote qui exporte déjà les
 écrans est gardée si il le veut ; le choix est retenu dans
 `%LOCALAPPDATA%\DCS-Tablette\installation.json` pour le diagnostic.
 
+Aperçu de la disposition (`apercu.py`, `GET /api/disposition`, 07/11/2026 ;
+idée d'un pilote sur le Discord, fil « Ajouter aperçu exports » du
+05/11/2026) : sous les points du diagnostic de la tablette, un schéma SVG à
+l'échelle de ce que DCS va dessiner. Tout est relu, rien n'est supposé, pour
+qu'une autre disposition que celle d'Installer.bat (écran virtuel plus
+petit, configuration du pilote) se dessine telle qu'elle est :
+- les écrans du bureau, avec leur modèle (`ecran_virtuel.lister` ;
+  EnumDisplayDevices plutôt que `Screen.AllScreens`, que proposait le
+  pilote : il dit lesquels sont virtuels et donne le modèle) ;
+- la fenêtre de DCS : la résolution d'options.lua, depuis le coin haut
+  gauche du principal — celle que DCS ouvrira, pas celle qu'il faudrait
+  (`support_ecrans`) : c'est l'écart entre les deux qui fait les ennuis ;
+- les zones de la configuration choisie dans DCS (`lire_zones`), telles
+  qu'il les donne à l'appareil piloté, ou choisi dans le menu de la
+  tablette (le Kiowa en 4:3) ; sans l'un ni l'autre, celles de tout appareil ;
+- le kneeboard (`zone_kneeboard`), bandeau de 32 px compris.
+En rouge, avec la raison : zone ou kneeboard hors des écrans (en tout ou
+partie : les écrans du bureau ne se chevauchent pas, la surface couverte
+suffit), zone hors de la fenêtre de DCS, zone sous le kneeboard, écran réel
+sous la fenêtre de DCS qui n'y reçoit aucune zone (une configuration du
+pilote ou une prise HDMI factice en reçoivent : voulu), écran de gauche
+décalé en hauteur (`installation.genants` : DCS partirait de lui, et le
+schéma serait faux). En mode essai, l'écran exporté de droite est sous le
+kneeboard : c'est vrai, il est montré. Lecture seule : un GET, rien
+n'est écrit. La page le relit à l'ouverture du diagnostic et à chaque
+vérification du PC (10 s) ; textes et épaisseurs sont posés en pixels de
+la page et convertis en unités du schéma, chaque nom d'écran dans le
+premier de ses coins libre de zones. Vérifié en local (`--local`) sur le
+poste de développement, et sur des cas injectés (écran virtuel repassé en
+1920 × 1080, écran vertical à sa place, écran de gauche décalé) en
+768 × 1024 et 375 × 812 ; pas encore sur un iPad.
+
 Réglages des écrans (`filtres.py`, 31/10/2026 ; demande : « augmenter le
 grain, un filtre par-dessus qui gère aussi la lum, plus grand panel de
 résolution, lum et grain »). Molette dans le coin bas gauche de chaque cadre

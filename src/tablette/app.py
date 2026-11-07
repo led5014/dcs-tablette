@@ -90,13 +90,16 @@ def create_app(cfg: Optional[Config] = None, pont: Optional[PontDCS] = None,
                affichage: Optional[AffichageKneeboard] = None,
                dossier_dcs: Optional[Callable[[], Optional[Path]]] = None,
                diagnostic=None, controle_hote: bool = False,
-               table_ded: Optional[ded.TableDED] = None) -> FastAPI:
+               table_ded: Optional[ded.TableDED] = None,
+               ecrans: Optional[Callable[[], list]] = None) -> FastAPI:
     """`affichage` : partagé avec le miroir du kneeboard sur le PC.
     `dossier_dcs` : où DCS est installé (pages des modules et des cartes).
     `diagnostic` : la console de diagnostic (diagnostic.py), lancée à côté.
     `controle_hote` : refuser les noms d'hôte inconnus (voir `hote_permis`) ;
     le serveur le met, les tests parlent à « testserver ».
-    `table_ded` : la table du DED du F-16, téléchargée au premier besoin."""
+    `table_ded` : la table du DED du F-16, téléchargée au premier besoin.
+    `ecrans` : les écrans de Windows (ecran_virtuel.lister), pour l'aperçu
+    de leur disposition."""
     cfg = cfg or Config()
     pont = pont or PontDCS(cfg.port_ordres, cfg.port_etat)
     video = video or Video(cfg.saved_games, appareil=pont.dernier_appareil)
@@ -104,6 +107,8 @@ def create_app(cfg: Optional[Config] = None, pont: Optional[PontDCS] = None,
     table_ded = table_ded or ded.TableDED()
     if dossier_dcs is None:
         from .capture import dossier_dcs    # Windows seulement : chargé à la demande
+    if ecrans is None:
+        from .ecran_virtuel import lister as ecrans     # Windows seulement, lui aussi
     app = FastAPI(title="DCS Tablette")
 
     if controle_hote:
@@ -222,6 +227,30 @@ def create_app(cfg: Optional[Config] = None, pont: Optional[PontDCS] = None,
             return lire_diagnostic(langue)
         diagnostic.verifier(forcer=True)
         return dans(diagnostic.etat(), langue)
+
+    @app.get("/api/disposition")
+    def disposition_ecrans(choix: Optional[str] = Cookie(None, alias=CHOIX),
+                           langue: str = Depends(langue_de)) -> Dict:
+        """Le schéma du diagnostic : écrans de Windows, fenêtre de DCS, zones
+        exportées et kneeboard, à l'échelle, ce qui pose problème marqué
+        (apercu.py). Les zones de l'appareil piloté, ou choisi sur la
+        tablette ; sans l'un ni l'autre, celles de tout appareil. Lu,
+        jamais modifié."""
+        from . import apercu
+        profil, nom = actif(choix)
+        connu = (appareils.profil_par_id(choix or "") is not None
+                 or pont.dernier_appareil() is not None)
+        libelles = {}
+        for e in profil.ecrans if connu else ():
+            libelles.setdefault(e.viewport, e.libelle)
+        try:
+            liste = ecrans()
+        except (OSError, AttributeError):        # Windows muet : « principal introuvable »
+            liste = []
+        resultat = apercu.apercu(liste, cfg.saved_games, nom if connu else None, libelles)
+        resultat["appareil"] = (Texte("tous les appareils") if not connu
+                                else nom if profil is appareils.GENERIQUE else profil.libelle)
+        return dans(resultat, langue)
 
     @app.get("/api/profils")
     def profils(langue: str = Depends(langue_de)) -> List[Dict]:
