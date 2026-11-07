@@ -256,6 +256,11 @@ connectée.
 - **Sur la tablette** : toucher la pastille en haut à gauche, ou le badge
   « ⚠ n » qui apparaît quand quelque chose est à régler. *Vérifier*
   revérifie tout de suite.
+- **Disposition des écrans**, sous la liste, sur la tablette : vos écrans,
+  la fenêtre de DCS, les écrans exportés et le kneeboard, à l'échelle, tels
+  que DCS va les dessiner. En rouge, ce qui gêne : un écran exporté hors de
+  tout écran ou sous le kneeboard, un de vos écrans que DCS couvrirait de
+  noir. Un aperçu : rien n'est modifié.
 
 Chaque point est *OK*, *réparé*, *en attente* (DCS pas lancé…), *à régler*
 ou *manque*, avec la marche à suivre. Ce qui se répare sans risque l'est

@@ -250,6 +250,11 @@ images, PC network (Public or Private), tablet connected.
   change, timestamped.
 - **On the tablet**: tap the status dot at the top left, or the "⚠ n" badge
   that shows up when something needs attention. *Check* rechecks right away.
+- **Display layout**, below the list, on the tablet: your displays, the DCS
+  window, the exported displays and the kneeboard, to scale, as DCS will
+  draw them. In red, whatever gets in the way: an exported display outside
+  every display or under the kneeboard, one of your displays that DCS would
+  cover in black. A preview only: nothing is changed.
 
 Each item is *OK*, *repaired*, *waiting* (DCS not running…), *action needed*
 or *missing*, with the steps to follow. Anything that can be repaired safely

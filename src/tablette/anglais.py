@@ -75,6 +75,21 @@ SERVEUR = {
     "page introuvable": "page not found",
     "page disparue": "page gone",
     "DED : en attente de DCS (F-16 en vol).": "DED: waiting for DCS (F-16 in flight).",
+    "tous les appareils": "all aircraft",
+
+    # ------------------------------------------------------------ apercu.py
+    "hors de tout écran": "outside every display",
+    "en partie hors des écrans": "partly outside the displays",
+    "Écran {numero}": "Display {numero}",
+    "hors de la fenêtre de DCS : elle n'y est pas dessinée":
+        "outside the DCS window: it isn't drawn there",
+    "sous le kneeboard : cachée quand il est ouvert": "under the kneeboard: hidden while it's open",
+    "sous la fenêtre de DCS : il restera noir en vol":
+        "under the DCS window: it will stay black in flight",
+    "décalé en hauteur : DCS ouvrirait sa fenêtre à partir de lui":
+        "vertically offset: DCS would open its window from it",
+    "configuration d'écrans illisible ({erreur})": "unreadable monitor setup ({erreur})",
+    "« {nom} » n'exporte aucun écran": "\"{nom}\" exports no display",
 
     # ------------------------------------------------------------ ded.py
     "DED : téléchargement de sa table (DCS-BIOS)…": "DED: downloading its table (DCS-BIOS)…",
@@ -817,4 +832,19 @@ PAGE = {
     "PC injoignable : la fenêtre DCS Tablette est-elle ouverte, et le PC sur le même Wi-Fi ?":
         "PC unreachable: is the DCS Tablette window open, and is the PC on the same Wi-Fi?",
     "vérification…": "checking…",
+
+    # ------------------------------------------------------------ disposition des écrans
+    "Disposition des écrans": "Display layout",
+    "Disposition des écrans : PC injoignable.": "Display layout: PC unreachable.",
+    "Configuration « {nom} », fenêtre de DCS {largeur}×{hauteur}.":
+        "Monitor setup \"{nom}\", DCS window {largeur}×{hauteur}.",
+    "Écrans exportés pour : {appareil}.": "Exported displays for: {appareil}.",
+    "principal": "main",
+    "virtuel": "virtual",
+    "Fenêtre de DCS": "DCS window",
+    "Écran": "Display",
+    "Écran virtuel": "Virtual display",
+    "Écran exporté": "Exported display",
+    "Problème": "Problem",
+    "Aucun problème de disposition.": "No layout problem.",
 }

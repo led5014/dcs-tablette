@@ -3610,6 +3610,197 @@ class TestRemettreEcranVirtuel(unittest.TestCase):
         self.assertIn("Paramètres", solution[0])
 
 
+class TestDisposition(unittest.TestCase):
+    """L'aperçu de la disposition des écrans (apercu.py, /api/disposition),
+    sur des écrans décrits et un faux Saved Games/DCS réglé comme le ferait
+    Installer.bat : rien du poste n'est lu, et rien n'est écrit."""
+
+    def setUp(self):
+        TestInstallation.setUp(self)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def installer(self, *ecrans, essai=False):
+        """« Tablette DCS » écrite pour ces écrans et choisie dans options.lua."""
+        from tablette.installation import configurer_ecrans
+        complet, lignes = configurer_ecrans(
+            self.saved, essai, [(e.x, e.y, e.largeur, e.hauteur, e.principal, e.virtuel)
+                                for e in ecrans], ouvert=lambda: False)
+        self.assertTrue(complet, lignes)
+
+    def apercu(self, ecrans, appareil=None):
+        from tablette.apercu import apercu
+        return apercu(ecrans, self.saved, appareil)
+
+    @staticmethod
+    def rect(o):
+        return (o["x"], o["y"], o["largeur"], o["hauteur"])
+
+    def problemes(self, d):
+        """Ce qui gêne, par nom, en français."""
+        trouves = {e["nom"]: e["problemes"] for e in d["ecrans"] if e["problemes"]}
+        trouves.update({z["nom"]: z["problemes"] for z in d["zones"] if z["problemes"]})
+        if d["kneeboard"] and d["kneeboard"]["problemes"]:
+            trouves["KNEEBOARD"] = d["kneeboard"]["problemes"]
+        self.assertEqual(d["problemes"], sum(len(p) for p in trouves.values()))
+        return {nom: [str(p) for p in liste] for nom, liste in trouves.items()}
+
+    def test_ecran_virtuel_a_droite(self):
+        """La disposition d'Installer.bat : tout sur l'écran virtuel, le
+        kneeboard en bas à droite de la fenêtre, rien qui gêne."""
+        virtuel = ecran()
+        self.installer(PRINCIPAL, virtuel)
+        d = self.apercu([PRINCIPAL, virtuel])
+        self.assertEqual(d["configuration"], "Tablette DCS")
+        self.assertIsNone(d["raison"])
+        self.assertEqual(self.rect(d["fenetre"]), (0, 0, 5120, 1440))
+        self.assertEqual(self.rect(d["cadre"]), (0, 0, 5120, 1440))
+        self.assertEqual([(e["nom"], e["principal"], e["virtuel"]) for e in d["ecrans"]],
+                         [("Écran 1", True, False), ("Virtual Display Driver", False, True)])
+        self.assertEqual({z["nom"]: self.rect(z) for z in d["zones"]},
+                         {"LEFT_MFCD": (2560, 0, 720, 720), "RIGHT_MFCD": (3280, 0, 720, 720),
+                          "CENTER_MFCD": (2560, 720, 720, 720), "TEDAC": (3280, 720, 720, 720)})
+        # Mesuré en vrai en 5120 × 1440 : x = 4368 à 5120, bandeau compris.
+        self.assertEqual(self.rect(d["kneeboard"]), (4368, 356, 752, 1084))
+        self.assertEqual(self.problemes(d), {})
+        # L'appareil piloté : les écrans 4:3 du Kiowa, là où DCS les lui donne.
+        kiowa = {z["nom"]: z for z in self.apercu([PRINCIPAL, virtuel], "OH58D")["zones"]}
+        self.assertAlmostEqual(kiowa["LEFT_MFCD"]["largeur"] / kiowa["LEFT_MFCD"]["hauteur"],
+                               4 / 3, places=2)
+
+    def test_ecran_virtuel_dessous(self):
+        """Un écran réel à droite : l'écran virtuel va dessous, la fenêtre de
+        DCS s'étend vers le bas sans couvrir l'écran de droite."""
+        from dataclasses import replace
+        droite = replace(ecran("\\\\.\\DISPLAY3", "NVIDIA", "PCI\\VEN_10DE MONITOR\\GSM5BBF",
+                               2560, 0, 1920, 1080, 144), modele="LG ULTRAGEAR")
+        dessous = ecran(x=0, y=1440)
+        self.installer(PRINCIPAL, droite, dessous)
+        d = self.apercu([PRINCIPAL, droite, dessous])
+        self.assertEqual(self.rect(d["fenetre"]), (0, 0, 2560, 2880))
+        self.assertEqual(self.rect(d["cadre"]), (0, 0, 4480, 2880))
+        self.assertTrue(all(z["y"] >= 1440 for z in d["zones"]), d["zones"])
+        self.assertEqual(len(d["zones"]), 4)
+        self.assertIn("LG ULTRAGEAR", [e["nom"] for e in d["ecrans"]])
+        # À cheval sur le principal et l'écran virtuel : sur des écrans, c'est DCS qui le place.
+        kx, ky, kl, kh = self.rect(d["kneeboard"])
+        self.assertLess(ky, 1440)
+        self.assertEqual((kx + kl, ky + kh), (2560, 2880))
+        self.assertEqual(self.problemes(d), {})
+
+    def test_ecran_de_gauche(self):
+        """Un écran à gauche du principal, bords du haut alignés : hors de la
+        fenêtre de DCS, rien à dire. Décalé en hauteur, DCS partirait de lui."""
+        from dataclasses import replace
+        gauche = replace(ecran("\\\\.\\DISPLAY3", "NVIDIA", "PCI\\VEN_10DE MONITOR\\DEL4321",
+                               -1920, 0, 1920, 1080, 60), modele="DELL U2419H")
+        virtuel = ecran()
+        self.installer(PRINCIPAL, gauche, virtuel)
+        d = self.apercu([PRINCIPAL, gauche, virtuel])
+        self.assertEqual(self.rect(d["fenetre"]), (0, 0, 5120, 1440))
+        self.assertEqual(self.rect(d["cadre"]), (-1920, 0, 7040, 1440))
+        self.assertEqual(self.problemes(d), {})
+        decale = replace(gauche, y=300)
+        self.assertEqual(self.problemes(self.apercu([PRINCIPAL, decale, virtuel])),
+                         {"DELL U2419H": ["décalé en hauteur : DCS ouvrirait sa fenêtre à "
+                                          "partir de lui"]})
+
+    def test_zone_hors_ecran(self):
+        """Photo d'un pilote, le 01/11/2026 : l'écran virtuel repassé en
+        1920 × 1080, son écran vertical à sa place, DCS toujours réglé pour
+        l'ancienne disposition. Le schéma montre ce qui ne tombe plus sur un
+        écran, et l'écran que DCS couvre de noir."""
+        from dataclasses import replace
+        self.installer(PRINCIPAL, ecran())
+        petit = ecran(largeur=1920, hauteur=1080)
+        vertical = replace(ecran("\\\\.\\DISPLAY3", "NVIDIA", "PCI\\VEN_10DE MONITOR\\GSM5BBF",
+                                 4480, 0, 1080, 1920, 60), modele="LG ULTRAGEAR")
+        d = self.apercu([PRINCIPAL, petit, vertical])
+        self.assertEqual(self.problemes(d), {
+            "CENTER_MFCD": ["en partie hors des écrans"],
+            "TEDAC": ["en partie hors des écrans"],
+            "KNEEBOARD": ["en partie hors des écrans"],
+            "LG ULTRAGEAR": ["sous la fenêtre de DCS : il restera noir en vol"]})
+        # L'écran virtuel débranché : plus rien n'est sur un écran.
+        seul = self.problemes(self.apercu([PRINCIPAL]))
+        self.assertEqual(set(seul), {"LEFT_MFCD", "RIGHT_MFCD", "CENTER_MFCD", "TEDAC",
+                                     "KNEEBOARD"})
+        self.assertEqual(seul["TEDAC"], ["hors de tout écran"])
+        # DCS remis sur un seul écran : les zones restent sur l'écran
+        # virtuel, mais hors de sa fenêtre, où il ne dessine rien.
+        options = self.saved / "Config" / "options.lua"
+        options.write_text(lire(options).replace("5120", "2560"), encoding="utf-8")
+        d = self.apercu([PRINCIPAL, ecran()])
+        self.assertEqual(self.rect(d["fenetre"]), (0, 0, 2560, 1440))
+        self.assertEqual(self.problemes(d)["LEFT_MFCD"],
+                         ["hors de la fenêtre de DCS : elle n'y est pas dessinée"])
+
+    def test_zone_sous_le_kneeboard(self):
+        """Mode essai : le kneeboard ouvert cache l'écran de droite, en bas de
+        la vue. C'est le prix de l'essai, et le schéma le montre."""
+        self.installer(PRINCIPAL, essai=True)
+        d = self.apercu([PRINCIPAL])
+        self.assertEqual(self.problemes(d),
+                         {"RIGHT_MFCD": ["sous le kneeboard : cachée quand il est ouvert"]})
+
+    def test_sans_configuration_qui_exporte(self):
+        """DCS sur « 1camera » : les écrans et la fenêtre, pas de zone, et pourquoi."""
+        d = self.apercu([PRINCIPAL, ecran()])
+        self.assertEqual(d["configuration"], "1camera")
+        self.assertEqual(d["zones"], [])
+        self.assertEqual(self.rect(d["fenetre"]), (0, 0, 2560, 1440))
+        self.assertIn("1camera", d["raison"])
+        (self.saved / "Config" / "options.lua").unlink()
+        d = self.apercu([PRINCIPAL, ecran()])
+        self.assertEqual((d["fenetre"], d["kneeboard"], d["zones"]), (None, None, []))
+        self.assertEqual(len(d["ecrans"]), 2)
+        self.assertIn("options.lua", d["raison"])
+
+    def test_api_en_lecture_seule_et_dans_la_langue_de_la_tablette(self):
+        from fastapi.testclient import TestClient
+
+        from tablette.app import create_app
+        from tablette.config import Config
+        virtuel = ecran()
+        self.installer(PRINCIPAL, virtuel)
+        fichiers = [self.saved / "Config" / "options.lua",
+                    self.saved / "Config" / "MonitorSetup" / "tablette.lua"]
+        avant = [(f.read_bytes(), f.stat().st_mtime_ns) for f in fichiers]
+        listes = [[PRINCIPAL, virtuel]]
+
+        def client(pont):
+            return TestClient(create_app(Config(saved_games=self.saved), pont,
+                                         dossier_dcs=lambda: None, ecrans=lambda: listes[0]))
+        hornet = client(FauxPont(connecte=True, appareil="FA-18C_hornet"))
+        anglaise = {"Accept-Language": "en-US,en;q=0.9"}
+        d = hornet.get("/api/disposition", headers=anglaise).json()
+        self.assertEqual(d["appareil"], "F/A-18C Hornet")
+        self.assertEqual({z["nom"]: z["libelle"] for z in d["zones"]},
+                         {"LEFT_MFCD": "Left DDI", "RIGHT_MFCD": "Right DDI",
+                          "CENTER_MFCD": "AMPCD", "TEDAC": "TEDAC"})
+        self.assertEqual(d["ecrans"][0]["nom"], "Display 1")
+        self.assertEqual(d["problemes"], 0)
+        # Les écrans ont bougé : la raison, dans la langue de la tablette.
+        listes[0] = [PRINCIPAL, ecran(largeur=1920, hauteur=1080)]
+        d = hornet.get("/api/disposition", headers=anglaise).json()
+        self.assertEqual([z["problemes"] for z in d["zones"] if z["nom"] == "TEDAC"],
+                         [["partly outside the displays"]])
+        francaise = hornet.get("/api/disposition", headers={"Accept-Language": "fr-FR"}).json()
+        self.assertEqual(francaise["kneeboard"]["problemes"], ["en partie hors des écrans"])
+        # Aucun appareil connu : les zones de tous.
+        d = client(FauxPont()).get("/api/disposition", headers=anglaise).json()
+        self.assertEqual(d["appareil"], "all aircraft")
+        self.assertEqual(d["zones"][0]["libelle"], "LEFT_MFCD")
+        # Windows muet : on le dit, rien ne casse.
+        listes[0] = []
+        d = hornet.get("/api/disposition").json()
+        self.assertEqual(d["raison"], "Écran principal introuvable.")
+        # Un aperçu : lu, jamais écrit, et rien d'autre qu'une lecture.
+        self.assertEqual([(f.read_bytes(), f.stat().st_mtime_ns) for f in fichiers], avant)
+        self.assertEqual(hornet.post("/api/disposition", json={}).status_code, 405)
+
+
 # Les voyants du Hornet dont le nom, montré tel quel en français, se traduit.
 VOYANTS_FRANCAIS = ("FIRE G", "FIRE D", "TRAIN", "AOA HAUT", "AOA CENTRE", "AOA BAS", "ALT BASSE")
 

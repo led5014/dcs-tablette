@@ -164,6 +164,9 @@ settings, DCS running, script signal, images, PC network, tablet connected.
   - On the tablet: tap the status dot at the top left, or the "⚠ 2" badge
     that shows up when something needs attention. "Check" rechecks right
     away.
+  - Below the list, on the tablet, "Display layout": your displays, the
+    DCS window, the exported displays and the kneeboard, to scale. In red,
+    whatever gets in the way. A preview only: nothing is changed.
 
 Each item says OK, FIXED, WAITING (DCS not running…), ACTION NEEDED or
 MISSING, and for those last two, the steps to follow. Anything that can be
