@@ -41,7 +41,7 @@ def servir(local: bool, miroir: bool, mise_a_jour: bool = True, captures: bool =
 
     from .app import create_app
     from .captures import Captures, vue_a_rogner
-    from .config import Config
+    from .config import Config, dossier_saved_games
     from .dcs import PontDCS
     from .diagnostic import Diagnostic
     from .installation import (demander, exe_installe, installer, lancer, premiere_fois,
@@ -77,6 +77,7 @@ def servir(local: bool, miroir: bool, mise_a_jour: bool = True, captures: bool =
         print(Texte("Première utilisation : installation.") + "\n")
         installer(cfg.saved_games)
         print()
+        cfg.saved_games = dossier_saved_games()      # DCS ou DCS.openbeta, au choix du pilote
         installe = exe_installe() if fige else None
         if installe:
             # Copié à sa place : c'est lui qui sert. Cette fenêtre-ci attend

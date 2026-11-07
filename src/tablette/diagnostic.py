@@ -28,7 +28,8 @@ from pathlib import Path
 from typing import Callable, Dict, List, Optional, Sequence, Tuple
 
 from . import VERSION
-from .config import PORT_WEB, adresses_locales
+from .config import (NOMS_DCS, PORT_WEB, adresses_locales, dernier_lancement, dossiers_dcs,
+                     plus_recent)
 from .mise_a_jour import numero
 from .appareils import formes
 from .ecrans_dcs import (NOM_AFFICHE, NOM_FICHIER, PasDExport, a_leur_forme, fichier_actif,
@@ -189,15 +190,32 @@ class Diagnostic:
     # ------------------------------------------------------------ les points
 
     def _dossier(self) -> Point:
-        if (self.saved_games / "Config" / "options.lua").exists():
-            return Point(Texte("Dossier de DCS"), OK, str(self.saved_games))
-        return Point(Texte("Dossier de DCS"), MANQUE,
-                     Texte("pas de réglages de DCS dans {dossier}", dossier=self.saved_games),
-                     (Texte("Lancer DCS une fois, jusqu'au menu, le quitter, puis relancer "
-                            "DCS Tablette : il finit l'installation tout seul."),))
+        titre = Texte("Dossier de DCS")
+        if not (self.saved_games / "Config" / "options.lua").exists():
+            return Point(titre, MANQUE,
+                         Texte("pas de réglages de DCS dans {dossier}", dossier=self.saved_games),
+                         (Texte("Lancer DCS une fois, jusqu'au menu, le quitter, puis relancer "
+                                "DCS Tablette : il finit l'installation tout seul."),))
+        # DCS et DCS.openbeta côte à côte : DCS ne se sert que d'un des deux
+        # (config.dossier_saved_games). On dit lequel a été pris, et si DCS
+        # s'est lancé depuis avec l'autre.
+        autres = ([d for d in dossiers_dcs(self.saved_games.parent) if d != self.saved_games]
+                  if self.saved_games.name in NOMS_DCS else [])
+        autre = plus_recent(autres)
+        if autre is None:
+            return Point(titre, OK, str(self.saved_games))
+        if (dernier_lancement(autre) or 0) > (dernier_lancement(self.saved_games) or 0):
+            return Point(titre, A_FAIRE,
+                         Texte("{dossier}, mais DCS s'est lancé plus récemment avec {autre}",
+                               dossier=self.saved_games, autre=autre.name),
+                         (Texte("Relancer Installer.bat : il demande lequel est le dossier de "
+                                "votre DCS et y installe la tablette."),))
+        return Point(titre, OK, Texte("{dossier} (celui du dernier lancement de DCS ; {autre} "
+                                      "existe aussi)", dossier=self.saved_games, autre=autre.name))
 
     def _scripts(self, lance: bool) -> Point:
         titre = Texte("Scripts dans DCS")
+        scripts = self.saved_games / "Scripts"          # DCS ou DCS.openbeta
         if scripts_a_jour(self.saved_games):
             return Point(titre, OK, Texte("à jour, chargés par Export.lua"))
         try:
@@ -206,13 +224,13 @@ class Diagnostic:
             return Point(titre, MANQUE, Texte("copie impossible ({erreur})", erreur=e), (
                 Texte("Relancer Installer.bat."),
                 Texte("À la main : copier DCS-Tablette-Export.lua et DCS-Tablette-Appareils.lua "
-                      "dans Saved Games\\DCS\\Scripts, et ajouter à la fin d'Export.lua :"),
+                      "dans {dossier}, et ajouter à la fin d'Export.lua :", dossier=scripts),
                 LIGNE))
         if lance:
-            return Point(titre, REPARE, Texte("copiés dans Saved Games\\DCS\\Scripts : "
-                                              "relancer la mission pour qu'ils servent"))
-        return Point(titre, REPARE, Texte("copiés dans Saved Games\\DCS\\Scripts : "
-                                          "ils serviront dès la prochaine mission"))
+            return Point(titre, REPARE, Texte("copiés dans {dossier} : relancer la mission pour "
+                                              "qu'ils servent", dossier=scripts))
+        return Point(titre, REPARE, Texte("copiés dans {dossier} : ils serviront dès la prochaine "
+                                          "mission", dossier=scripts))
 
     def _ecran_virtuel(self, essai: bool, forcer: bool, physique: bool, lance: bool) -> Point:
         titre = Texte("Écran virtuel")
@@ -472,8 +490,9 @@ class Diagnostic:
             Texte("Normal au menu de DCS : le script démarre avec la mission."),
             Texte("En mission et toujours rien : relancer la mission (les scripts ont pu "
                   "changer depuis son lancement)."),
-            Texte("Rien sous DCS-TABLETTE dans Saved Games\\DCS\\Logs\\dcs.log : Export.lua ne "
-                  "charge pas le script ; relancer Installer.bat, puis la mission.")))
+            Texte("Rien sous DCS-TABLETTE dans {journal} : Export.lua ne charge pas le script ; "
+                  "relancer Installer.bat, puis la mission.",
+                  journal=self.saved_games / "Logs" / "dcs.log")))
 
     def _images(self, lance: bool) -> Optional[Point]:
         titre = Texte("Images des écrans")

@@ -287,6 +287,10 @@ Depuis le code :
    Copie `DCS-Tablette-Export.lua` et `DCS-Tablette-Appareils.lua` dans
    `Saved Games\DCS\Scripts` et ajoute la ligne qui les charge à `Export.lua`,
    après une copie de l'original. Tacview, SRS et les autres restent intacts.
+   `Saved Games\DCS.openbeta` à la place quand c'est celui dont DCS se sert :
+   une installation venue de l'ancienne bêta le garde. Les deux existent ?
+   C'est celui dont `Logs\dcs.log` est le plus récent (`config.dossier_saved_games`),
+   et `installer` demande au pilote de confirmer, puis retient sa réponse.
 3. **Un second écran que personne ne regarde**, pour que DCS y dessine les
    écrans exportés au lieu de les poser sur la vue. `python -m tablette
    installer` l'installe et le place (voir plus haut). À la main :

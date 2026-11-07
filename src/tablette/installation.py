@@ -33,13 +33,14 @@ import subprocess
 import sys
 import tempfile
 import uuid
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Sequence, Tuple
 
 from . import VERSION
 from .capture import moniteurs
-from .config import BUREAU, dossier_windows
+from .config import (BUREAU, NOMS_DCS, dernier_lancement, dossier_windows, dossiers_dcs,
+                     fichier_choix)
 from .appareils import formes
 from .ecrans_dcs import (NOM_AFFICHE, NOM_FICHIER, PasDExport, disposition, disposition_essai,
                          fichier_actif, generer, lire_zones, options_affichage,
@@ -297,11 +298,9 @@ def support_ecrans(ecrans: Sequence[Sequence], essai: bool, physique: bool = Tru
 # en bas de la vue), ou « existante » (la configuration d'écrans du pilote,
 # qui exporte déjà les écrans : on la laisse et on capture là où elle les
 # met). `physique` : un écran réel a été accepté comme support.
-
-def fichier_choix() -> Path:
-    racine = os.environ.get("LOCALAPPDATA")
-    return (Path(racine) if racine else Path.home()) / "DCS-Tablette" / "installation.json"
-
+# `saved_games` : le dossier de DCS, quand le pilote a eu à choisir entre
+# DCS et DCS.openbeta (config.dossier_saved_games le relit). Le fichier :
+# config.fichier_choix.
 
 def lire_choix(chemin: Optional[Path] = None) -> Dict:
     try:
@@ -743,6 +742,38 @@ def demander(question: str) -> Optional[str]:
         return None
 
 
+def choisir_dossier(saved_games: Path,
+                    demander: Callable[[str], Optional[str]]) -> Tuple[Path, bool]:
+    """DCS et DCS.openbeta, tous deux dans Parties enregistrées : DCS ne se
+    sert que d'un des deux (config.dossier_saved_games). Le pilote confirme
+    lequel, par son numéro ; Entrée garde `saved_games`, celui dont DCS
+    s'est servi en dernier (ou celui choisi la fois d'avant). Rend le dossier,
+    et s'il faut le retenir : seulement si le pilote a eu à choisir."""
+    if saved_games.name not in NOMS_DCS:
+        return saved_games, False
+    dossiers = dossiers_dcs(saved_games.parent)
+    if len(dossiers) < 2 or saved_games not in dossiers:
+        return saved_games, False
+    defaut = dossiers.index(saved_games) + 1
+    print("\n" + Texte("Deux dossiers de DCS dans Parties enregistrées ; DCS ne se sert que "
+                       "d'un seul :"))
+    for i, dossier in enumerate(dossiers, 1):
+        quand = dernier_lancement(dossier)
+        print(f"  {i}. {dossier} — " + (
+            Texte("dernier lancement de DCS : {date}",
+                  date=datetime.fromtimestamp(quand).strftime("%Y-%m-%d %H:%M"))
+            if quand is not None else Texte("aucun lancement de DCS relevé")))
+    while True:
+        reponse = demander(Texte("Lequel est celui de votre DCS ? [{numero}] ", numero=defaut))
+        if reponse is None:                     # pas de console : rien de retenu
+            return saved_games, False
+        reponse = reponse.strip() or str(defaut)
+        if reponse.isdigit() and 1 <= int(reponse) <= len(dossiers):
+            return dossiers[int(reponse) - 1], True
+        print(Texte("  Le numéro d'un des dossiers : {numeros}.",
+                    numeros=list(range(1, len(dossiers) + 1))))
+
+
 A_LA_MAIN_RANGER = (
     Texte("  À la main : Paramètres → Système → Écran, glisser cet écran à gauche du"),
     Texte("  principal, son bord du haut exactement aligné sur celui du principal."))
@@ -845,9 +876,11 @@ def installer(saved_games: Path, essai: bool = False,
     pris sans son accord, l'écran virtuel va à droite ou dessous selon la
     place), et sa configuration d'écrans de DCS (si elle exporte déjà les
     écrans du cockpit, on propose de la garder). Le choix est retenu pour la
-    console de diagnostic (`ecrire_choix`).
+    console de diagnostic (`ecrire_choix`), comme le dossier de DCS quand il
+    y avait à choisir entre DCS et DCS.openbeta (`choisir_dossier`).
     """
     from . import ecran_virtuel
+    saved_games, retenir = choisir_dossier(saved_games, demander)
     if not saved_games.is_dir():
         print(Texte("Dossier de DCS introuvable ({dossier}).", dossier=saved_games))
         print(Texte("Lance DCS une fois pour qu'il le crée, puis recommence."))
@@ -904,6 +937,8 @@ def installer(saved_games: Path, essai: bool = False,
             choix["physique"] = resultat == "physique"
     if choix["mode"] != "existante" and pret and ranger_avec_accord(lister_ecrans, demander):
         choix["ranger"] = True
+    if retenir:
+        choix["saved_games"] = str(saved_games)
     ecrire_choix(choix, chemin_choix)
     print("\n" + Texte("{etape}/{etapes}  Scripts de la tablette", etape=etapes - 1,
                        etapes=etapes))

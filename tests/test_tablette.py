@@ -804,6 +804,80 @@ class TestInstallation(unittest.TestCase):
         self.installer([""], lambda: False, pret="physique")
         self.assertEqual(self.choix(), {"mode": "second_ecran", "physique": True})
 
+    # Retour d'un pilote, le 05/11/2026 : DCS et DCS.openbeta dans ses Parties
+    # enregistrées, son DCS se servait du second, la tablette s'installait
+    # dans le premier.
+    def deux_dossiers(self) -> Path:
+        """Parties enregistrées avec DCS et DCS.openbeta, chacun une copie du
+        faux Saved Games/DCS. Rend leur dossier."""
+        import shutil
+        racine = Path(self.tmp.name) / "Parties enregistrees"
+        for nom in ("DCS", "DCS.openbeta"):
+            for sous in ("Scripts", "Config"):
+                shutil.copytree(self.saved / sous, racine / nom / sous)
+        return racine
+
+    @staticmethod
+    def lance_le(dossier: Path, heure: float) -> None:
+        """DCS s'est servi de `dossier` jusqu'à `heure` : son dcs.log en date."""
+        journal = dossier / "Logs" / "dcs.log"
+        journal.parent.mkdir(exist_ok=True)
+        journal.write_text("=== Log opened UTC\n", encoding="utf-8")
+        os.utime(journal, (heure, heure))
+
+    def test_dossier_de_dcs_celui_dont_dcs_s_est_servi_en_dernier(self):
+        import json
+        import shutil
+
+        from tablette.config import dossier_saved_games
+        racine = self.deux_dossiers()
+        dcs, beta = racine / "DCS", racine / "DCS.openbeta"
+        choix = self.saved / "installation.json"              # pas encore écrit
+        self.assertEqual(dossier_saved_games(racine, choix), dcs)      # sans dcs.log : DCS
+        self.lance_le(dcs, 1_700_000_000)
+        self.lance_le(beta, 1_800_000_000)
+        self.assertEqual(dossier_saved_games(racine, choix), beta)
+        self.lance_le(dcs, 1_900_000_000)
+        self.assertEqual(dossier_saved_games(racine, choix), dcs)
+        # Choisi à l'installation : il l'emporte, tant qu'il existe.
+        choix.write_text(json.dumps({"mode": "second_ecran", "saved_games": str(beta)}),
+                         encoding="utf-8")
+        self.assertEqual(dossier_saved_games(racine, choix), beta)
+        shutil.rmtree(beta)
+        self.assertEqual(dossier_saved_games(racine, choix), dcs)
+        shutil.rmtree(dcs)
+        self.assertEqual(dossier_saved_games(racine, choix), racine / "DCS")
+
+    def test_installer_demande_lequel_des_deux_dossiers(self):
+        import contextlib
+
+        from tablette.installation import choisir_dossier
+        racine = self.deux_dossiers()
+        dcs, beta = racine / "DCS", racine / "DCS.openbeta"
+        self.lance_le(beta, time.time())
+        self.saved = beta                   # celui que donne dossier_saved_games
+        # Une faute de frappe redemande ; le pilote prend l'autre.
+        code, sortie = self.installer(["x", "1"], lambda: False)
+        self.assertEqual(code, 0)
+        self.assertIn(f"1. {dcs} — aucun lancement de DCS relevé", sortie)
+        self.assertIn(f"2. {beta} — dernier lancement de DCS : ", sortie)
+        self.assertIn("Lequel est celui de votre DCS ? [2]", sortie)
+        self.assertIn("Le numéro d'un des dossiers : 1, 2.", sortie)
+        self.assertIn(f"Dossier de DCS : {dcs}", sortie)
+        self.assertTrue((dcs / "Scripts" / "DCS-Tablette-Export.lua").exists())
+        self.assertFalse((beta / "Scripts" / "DCS-Tablette-Export.lua").exists())
+        self.assertEqual(self.choix()["saved_games"], str(dcs))
+        # Entrée : celui proposé, retenu lui aussi.
+        self.installer([""], lambda: False)
+        self.assertTrue((beta / "Scripts" / "DCS-Tablette-Export.lua").exists())
+        self.assertEqual(self.choix()["saved_games"], str(beta))
+        # Personne pour répondre : celui proposé, rien de retenu.
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(choisir_dossier(beta, lambda question: None), (beta, False))
+        # Un seul dossier de DCS : pas de question.
+        self.assertEqual(choisir_dossier(self.saved.parent / "ailleurs", lambda q: 1 / 0),
+                         (self.saved.parent / "ailleurs", False))
+
     # Photo d'un pilote, 01/11/2026 : « Identifier » montrait son écran 2 à
     # gauche du principal, un peu plus bas, l'écran virtuel 3 à droite ; DCS
     # partait du 2. Essayé avec lui le 02/11 : débranché, ou remonté bords du
@@ -3450,6 +3524,24 @@ class TestDiagnostic(unittest.TestCase):
         points = self.points()
         self.assertEqual(points["Dossier de DCS"].etat, "manque")
         self.assertNotIn("Scripts dans DCS", points)
+
+    def test_dcs_et_dcs_openbeta_le_dossier_pris_est_dit(self):
+        """Les deux dossiers côte à côte : lequel a été pris, et s'il faut
+        réinstaller parce que DCS s'est lancé depuis avec l'autre."""
+        racine = TestInstallation.deux_dossiers(self)
+        dcs, beta = racine / "DCS", racine / "DCS.openbeta"
+        TestInstallation.lance_le(dcs, 1_700_000_000)
+        TestInstallation.lance_le(beta, 1_800_000_000)
+        self.saved = beta
+        point = self.points()["Dossier de DCS"]
+        self.assertEqual(point.etat, "ok")
+        self.assertEqual(point.detail,
+                         f"{beta} (celui du dernier lancement de DCS ; DCS existe aussi)")
+        TestInstallation.lance_le(dcs, 1_900_000_000)
+        point = self.points()["Dossier de DCS"]
+        self.assertEqual(point.etat, "a_faire")
+        self.assertEqual(point.detail, f"{beta}, mais DCS s'est lancé plus récemment avec DCS")
+        self.assertIn("Relancer Installer.bat", point.solution[0])
 
     def test_la_tablette_vue_par_l_api(self):
         from fastapi.testclient import TestClient

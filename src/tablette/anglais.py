@@ -181,6 +181,14 @@ SERVEUR = {
     "non vérifié ({type} : {erreur})": "not checked ({type}: {erreur})",
     "Dossier de DCS": "DCS folder",
     "pas de réglages de DCS dans {dossier}": "no DCS settings in {dossier}",
+    "{dossier}, mais DCS s'est lancé plus récemment avec {autre}":
+        "{dossier}, but DCS was started more recently with {autre}",
+    "Relancer Installer.bat : il demande lequel est le dossier de votre DCS et y installe la "
+    "tablette.":
+        "Run Installer.bat again: it asks which folder your DCS uses and installs the tablet "
+        "there.",
+    "{dossier} (celui du dernier lancement de DCS ; {autre} existe aussi)":
+        "{dossier} (the one DCS last started with; {autre} also exists)",
     "Lancer DCS une fois, jusqu'au menu, le quitter, puis relancer DCS Tablette : il finit "
     "l'installation tout seul.":
         "Start DCS once, up to the main menu, quit it, then restart DCS Tablette: it finishes "
@@ -193,14 +201,14 @@ SERVEUR = {
     "à jour, chargés par Export.lua": "up to date, loaded by Export.lua",
     "copie impossible ({erreur})": "copy failed ({erreur})",
     "Relancer Installer.bat.": "Run Installer.bat again.",
-    "À la main : copier DCS-Tablette-Export.lua et DCS-Tablette-Appareils.lua dans Saved "
-    "Games\\DCS\\Scripts, et ajouter à la fin d'Export.lua :":
-        "By hand: copy DCS-Tablette-Export.lua and DCS-Tablette-Appareils.lua to Saved "
-        "Games\\DCS\\Scripts, and add at the end of Export.lua:",
-    "copiés dans Saved Games\\DCS\\Scripts : relancer la mission pour qu'ils servent":
-        "copied to Saved Games\\DCS\\Scripts: restart the mission to use them",
-    "copiés dans Saved Games\\DCS\\Scripts : ils serviront dès la prochaine mission":
-        "copied to Saved Games\\DCS\\Scripts: they'll be used from the next mission",
+    "À la main : copier DCS-Tablette-Export.lua et DCS-Tablette-Appareils.lua dans "
+    "{dossier}, et ajouter à la fin d'Export.lua :":
+        "By hand: copy DCS-Tablette-Export.lua and DCS-Tablette-Appareils.lua to {dossier}, "
+        "and add at the end of Export.lua:",
+    "copiés dans {dossier} : relancer la mission pour qu'ils servent":
+        "copied to {dossier}: restart the mission to use them",
+    "copiés dans {dossier} : ils serviront dès la prochaine mission":
+        "copied to {dossier}: they'll be used from the next mission",
     "Écran virtuel": "Virtual display",
     "Écrans de Windows": "Windows displays",
     "alignés en haut sur l'écran principal": "top-aligned with the main display",
@@ -310,10 +318,10 @@ SERVEUR = {
     "son lancement).":
         "In a mission and still nothing: restart the mission (the scripts may have changed "
         "since it started).",
-    "Rien sous DCS-TABLETTE dans Saved Games\\DCS\\Logs\\dcs.log : Export.lua ne charge pas "
-    "le script ; relancer Installer.bat, puis la mission.":
-        "Nothing under DCS-TABLETTE in Saved Games\\DCS\\Logs\\dcs.log: Export.lua doesn't "
-        "load the script; run Installer.bat again, then restart the mission.",
+    "Rien sous DCS-TABLETTE dans {journal} : Export.lua ne charge pas le script ; relancer "
+    "Installer.bat, puis la mission.":
+        "Nothing under DCS-TABLETTE in {journal}: Export.lua doesn't load the script; run "
+        "Installer.bat again, then restart the mission.",
     "Images des écrans": "Display images",
     "aucune tablette n'en demande en ce moment": "no tablet is asking for them right now",
     "envoyées à la tablette": "sent to the tablet",
@@ -557,6 +565,12 @@ SERVEUR = {
     "Lance DCS une fois pour qu'il le crée, puis recommence.":
         "Start DCS once so it creates it, then try again.",
     "Dossier de DCS : {dossier}": "DCS folder: {dossier}",
+    "Deux dossiers de DCS dans Parties enregistrées ; DCS ne se sert que d'un seul :":
+        "Two DCS folders in Saved Games; DCS only uses one of them:",
+    "dernier lancement de DCS : {date}": "DCS last started with it: {date}",
+    "aucun lancement de DCS relevé": "no DCS start found",
+    "Lequel est celui de votre DCS ? [{numero}] ": "Which one does your DCS use? [{numero}] ",
+    "  Le numéro d'un des dossiers : {numeros}.": "  The number of one of the folders: {numeros}.",
     "Vos écrans :": "Your displays:",
     "(illisibles)": "(unreadable)",
     "DCS : configuration « {nom} », {largeur}×{hauteur}, {mode}":
