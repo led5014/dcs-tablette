@@ -1,0 +1,52 @@
+# Le site de DCS Tablette (site/), publié sur GitHub Pages.
+# Reconstruit à chaque version publiée, pour que le bouton mène au bon zip,
+# et quand les pages changent. Pages doit être réglé sur « GitHub Actions »
+# (Settings → Pages → Source) : sans cela, l'étape de déploiement échoue.
+name: Site
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "site/**"
+      - "src/tablette/web/icone-*.png"
+      - ".github/workflows/pages.yml"
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  construire:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Lire la dernière version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        # Sans version publiée, le bouton mène à la page des versions.
+        run: gh api "repos/${{ github.repository }}/releases/latest" > release.json || echo "{}" > release.json
+      - name: Construire les pages
+        run: python3 site/construire.py --release release.json --sortie _site
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  publier:
+    needs: construire
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploiement.outputs.page_url }}
+    steps:
+      - id: deploiement
+        uses: actions/deploy-pages@v4

@@ -1,0 +1,311 @@
+# DCS Tablette : le guide
+
+**English:** [guide.en.md](guide.en.md) · Retour au [README](../README.md)
+
+Tout ce que le README résume, en détail. Le fonctionnement interne, les
+choix et les pistes écartées sont dans [tablette.md](tablette.md).
+
+## Ce que fait DCS Tablette
+
+Les écrans du cockpit de DCS World sur une tablette, avec leurs boutons sous
+le doigt. La page s'adapte toute seule à l'appareil piloté et à l'écran qui
+l'affiche : iPad, tablette Android, téléphone, navigateur d'un autre PC.
+
+- **Écrans en direct** : DDI, MFD, MPD… recopiés depuis DCS, sans scintillement.
+- **Boutons tactiles** : chaque appui est joué dans le cockpit, tant que le
+  doigt est posé.
+- **Réglages écran par écran**, au-delà de ce que propose DCS : la molette
+  du coin bas gauche de chaque cadre règle la luminosité ; touchée, elle
+  ouvre le panneau de l'écran — luminosité, contraste, netteté, définition
+  (agrandie et affinée par le PC, ou allégée pour un Wi-Fi faible) et
+  filtres : niveaux auto pour un TGP ou un FLIR sombre, noir et blanc,
+  inversé, vert, ambre, rouge de nuit. Retenus par appareil.
+- **Instruments de base pour tout appareil** — warbirds, hélicoptères, jets :
+  badin, horizon, altimètre, virage et bille, cap, vario, G, régime, et en
+  chiffres carburant, train, volets… dans les unités du cockpit (mph et
+  pieds pour un P-51, km/h et mètres pour un Bf 109, nœuds pour un jet de
+  l'OTAN). De quoi garder la tête dehors. Tirés des données de vol de DCS,
+  pas des aiguilles du module : en multijoueur, un serveur qui interdit
+  l'export de son propre appareil les coupe, la tablette le dit.
+- **Planche avant du Hornet** redessinée : UFC tactile, IFEI, instruments de
+  secours, voyants.
+- **ICP et DED du F-16** : le clavier de l'ICP (touches de priorité,
+  chiffres, RCL, ENTR, ▲▼, dobber RTN / SEQ / UP / DN) et le DED redessiné
+  au-dessus, d'après la table de
+  [DCS-BIOS](https://github.com/DCS-Skunkworks/dcs-bios) qui dit où chaque
+  texte s'écrit. Cette table, sous licence GPL, n'est pas livrée avec DCS
+  Tablette : il la télécharge la première fois que le DED s'affiche
+  (version fixée, vérifiée par son empreinte SHA-256), puis la garde.
+- **Kneeboard** : les pages de l'avion piloté lues directement dans les
+  fichiers, nettes à toute taille — mission en cours (solo ou multijoueur),
+  pages du module, les vôtres, planches de la carte — et celui de DCS en
+  direct. Au choix, la touche kneeboard de DCS l'affiche sur le PC comme
+  d'habitude, ou sur la tablette, qui bascule alors d'elle-même dessus — et
+  dans ce mode, l'ouvrir sur la tablette l'ouvre dans DCS, sans clavier.
+- **Toutes les tailles d'écran** : la page ne propose que les dispositions
+  qui restent confortables au doigt sur l'écran utilisé — un ou deux écrans
+  sur un téléphone, trois sur une tablette en paysage, toute la planche sur
+  un grand écran — et se réarrange quand on la fait pivoter.
+
+Pas de Python à installer, rien sur internet en vol (sauf, une seule fois, la
+table du DED du F-16) : le serveur tourne sur le PC, l'iPad s'y connecte par
+le Wi-Fi de la maison.
+
+## Mettre à jour
+
+**Mettre à jour : rien à faire.** DCS Tablette regarde à son lancement s'il
+existe une version plus récente et se met à jour tout seul, sans rien
+demander : téléchargement vérifié (SHA-256), remplacement de ses fichiers,
+relance — vos réglages restent, DCS peut rester ouvert. Seule demande faite
+à internet à chaque lancement ; `--sans-mise-a-jour` la supprime. De la 1.5.0 à
+la 1.8.0, il demandait « Mettre à jour maintenant ? » : répondre O une
+dernière fois. Depuis une version plus ancienne, extraire une dernière fois
+le zip à la place de l'ancien dossier.
+
+## Appareils
+
+| Appareil | Écrans + boutons | En plus |
+|---|---|---|
+| F/A-18C Hornet | DDI G, DDI D, AMPCD | UFC tactile, IFEI, secours, voyants |
+| F-16C Viper | MFD G, MFD D | ICP tactile, DED |
+| AH-64D Apache | MPD G, MPD D (+ FCR, WPN, TSD…), TEDAC en image | siège Pilote / CPG |
+| OH-58D Kiowa | MFD G, MFD D | — |
+| A-10C / A-10C II | MFCD G, MFCD D | — |
+| AV-8B Harrier | MPCD G, MPCD D | — |
+| F-15E Strike Eagle | MPD G, MPD D, MPCD (place avant) | — |
+| JF-17 Thunder | MFCD G, centre, D (en portrait, 26 boutons) | — |
+| Ka-50 Black Shark II / III | Shkval en image, ABRIS et ses 5 boutons | — |
+| C-130J-30 Super Hercules | HDD G, centre, D en image (pages choisies sur les AMU du cockpit) | kneeboard |
+| MiG-29A Fulcrum | HDD, la recopie du HUD (interrupteur TACT / DUBL) | HDD + instruments côte à côte, kneeboard |
+| Warbirds : P-51D, TF-51D, P-47D, F4U-1D, Spitfire IX, Mosquito, Bf 109 K-4, Fw 190 A-8 / D-9, I-16, Yak-52 | — (cockpits à cadrans) | instruments dans leurs unités, kneeboard |
+| Corée : F-86F, MiG-15bis | — | instruments, kneeboard |
+| F-14, F-4E, Mirage 2000C, Mirage F1, F-5E, MiG-21bis, MiG-19P, AJS-37, L-39, C-101, MB-339, FC3 | — | instruments, kneeboard |
+| CH-47F, Mi-8MTV2, Mi-24P, UH-1H, SA342 | — | instruments d'hélicoptère, kneeboard |
+
+Tout autre appareil a les instruments de base et le kneeboard. Les unités du
+MiG-29A et du L-39 suivent les options de DCS (« Avionics Units » du MiG-29,
+langue des avioniques du L-39) : la tablette relit `options.lua`.
+
+Le HUD lui-même n'est exportable dans aucun module : DCS ne propose pas de
+zone d'export pour lui. Le MiG-29A fait exception par son HDD, le petit écran
+tête basse qui recopie le HUD (position DUBL) ou montre la situation tactique
+(TACT) : le module l'envoie de lui-même dans la zone RIGHT_MFCD de « Tablette
+DCS », rien à régler.
+
+Les numéros des boutons du F-16C (MFD et ICP), de l'OH-58D, de l'AV-8B, du
+F-15E, du JF-17 et du Ka-50 viennent de
+[DCS-BIOS](https://github.com/DCS-Skunkworks/dcs-bios) et restent à confirmer
+en vol (surtout la place des boutons autour des écrans du JF-17 et du
+F-15E, et le DED du F-16C : la page reconnue, les caractères spéciaux comme
+la flèche ↕) : un retour est bienvenu.
+
+Sur le Hornet, l'Apache et l'A-10C, chaque bouton est en face du libellé que
+le module écrit sur l'écran (positions lues dans les scripts du module). Sur
+l'OH-58D, ils sont calés sur une photo de la tablette, et ses MFD, en 4:3,
+ont des zones à leur forme : plus d'image étirée ni de haut coupé. Sur le
+F-16C, les boutons sont également répartis le long du cadre : une capture
+d'écran de ses MFD permettra de les caler aussi.
+
+## Installation
+
+1. Extraire le zip n'importe où (Téléchargements convient), puis
+   double-cliquer **`Installer.bat`**.
+2. Si Windows affiche « Windows a protégé votre ordinateur » : *Informations
+   complémentaires* → *Exécuter quand même*. L'exécutable n'est pas signé ; il
+   est construit à partir de ce dépôt (`scripts/construire_tablette.py`).
+3. Répondre aux questions de la fenêtre. Elle affiche d'abord vos écrans et
+   vos réglages de DCS, puis fait le reste en tenant compte de ce que vous
+   avez déjà. Avec plusieurs écrans, elle demande sur lequel vous voulez DCS
+   (Entrée : l'écran principal actuel), et en fait l'écran principal de
+   Windows si besoin. Si votre configuration d'écrans de DCS exporte déjà
+   les écrans du cockpit (vrais MFD, Helios…), elle propose de la garder : la
+   tablette les prend là où ils sont.
+
+   1. **Écran virtuel.** DCS dessine les écrans exportés sur un écran : sans
+      second écran, ils recouvrent la vue. S'il n'y a pas d'écran virtuel,
+      l'installation propose d'installer
+      [Virtual Display Driver](https://github.com/VirtualDrivers/Virtual-Display-Driver)
+      (gratuit, open source ; internet nécessaire pour cette étape). Windows
+      demande l'autorisation administrateur, puis de confirmer le pilote.
+      Elle le place ensuite **à droite** du principal, ou **dessous** si un de
+      vos écrans occupe déjà la droite (la fenêtre de DCS ne doit couvrir
+      aucun de vos écrans), à la même définition et à la même fréquence :
+      rien à régler dans Paramètres → Écran. Un de vos écrans n'est utilisé
+      que si vous dites que c'est une prise HDMI factice ; sans aucune place
+      libre, elle propose le mode essai. Un de vos écrans à **gauche** du
+      principal, plus haut ou plus bas que lui (ou au-dessus du principal) ?
+      DCS ouvrirait sa fenêtre à partir de lui : elle propose d'aligner son
+      bord du haut sur celui du principal, et s'en souvient si Windows le
+      décale de nouveau.
+   2. **Scripts** de la tablette dans `Saved Games\DCS\Scripts`.
+   3. **Écrans de DCS** : configuration « Tablette DCS », résolution des deux
+      écrans, fenêtré. Si DCS est ouvert, la fenêtre attend qu'on le ferme.
+
+   Puis elle installe le programme dans `%LOCALAPPDATA%\Programs\DCS-Tablette`
+   (pour vous seul, sans droits d'administrateur), pose un raccourci
+   **DCS Tablette** sur le bureau et dans le menu Démarrer, l'inscrit dans
+   *Paramètres → Applications → Applications installées* et le démarre. Le
+   dossier extrait du zip peut ensuite être supprimé.
+
+   Elle pose aussi **DCS Tablette (écrans)** dans le dossier Démarrage : à
+   chaque ouverture de Windows, sans fenêtre, il remet l'écran virtuel et les
+   réglages de DCS en place avant que vous lanciez DCS. Une mise à jour du
+   pilote de l'écran virtuel ou de Windows peut en effet le changer de
+   définition ou de place au redémarrage, et DCS s'étendrait alors sur un de
+   vos écrans. Ce qu'il a fait : `%LOCALAPPDATA%\DCS-Tablette\ecrans.log`.
+   Désactivable dans *Gestionnaire des tâches → Applications de démarrage*.
+
+Si une étape n'aboutit pas, la fenêtre dit laquelle et quoi faire. Chaque
+étape se fait aussi à la main : section « À la main » du `LISEZ-MOI.txt`
+([source](../distribution/tablette/zip/LISEZ-MOI.txt)). En bref : installer
+Virtual Display Driver avec *VDD Control* ; dans Paramètres → Système → Écran,
+« Étendre ces affichages », écran virtuel à la définition et à la fréquence
+du principal, glissé à sa droite, bords du haut alignés ; relancer
+`Installer.bat`.
+
+### En vol
+
+1. Lancer **DCS Tablette** (bureau ou menu Démarrer) : la fenêtre affiche
+   l'adresse à ouvrir sur la tablette (`http://192.168.x.x:8320`). Au premier
+   lancement, autoriser le programme sur le réseau **privé**.
+2. Sur la tablette ou le téléphone, ouvrir l'adresse :
+   - iPad, iPhone : Safari, puis *Partager* → *Sur l'écran d'accueil* ;
+   - Android : Chrome, puis ⋮ → *Ajouter à l'écran d'accueil*, ou le bouton
+     ⛶ pour le plein écran.
+3. Lancer DCS et une mission.
+
+Navigateurs : la page évite les fonctions récentes, pour tourner aussi sur
+les iPad restés sous un ancien iOS et sur les Android d'entrée de gamme.
+Minimum : **iOS / iPadOS 13** (iPad Air 2, iPad mini 4, iPad 5e génération et
+suivants) — avant, les boutons ne réagissent pas au doigt.
+Essayée dans Chrome aux tailles des téléphones, tablettes et écrans de PC
+courants ; un retour sur votre appareil est bienvenu.
+
+## Ce que l'installation modifie
+
+Dans DCS, uniquement `Saved Games\DCS`, jamais le dossier d'installation de
+DCS (le contrôle d'intégrité du multijoueur n'est pas concerné) :
+
+| Fichier | Changement | Copie gardée |
+|---|---|---|
+| Windows : écran virtuel | installé s'il manque et si on accepte (Virtual Display Driver 25.7.23, empreinte vérifiée, réglages dans `C:\VirtualDisplayDriver`) ; placé à droite du principal, ou dessous | — |
+| `%LOCALAPPDATA%\DCS-Tablette\installation.json` | ce que vous avez choisi à l'installation (votre configuration gardée, écran HDMI factice…), relu par le diagnostic | — |
+| `Scripts\DCS-Tablette-Export.lua`, `Scripts\DCS-Tablette-Appareils.lua` | ajoutés | — |
+| `Scripts\Export.lua` | une ligne ajoutée à la fin ; Tacview, SRS… intacts | `Export.lua.avant-tablette-<date>` |
+| `Config\MonitorSetup\tablette.lua` | configuration d'écrans « Tablette DCS » | — |
+| `Config\options.lua` | configuration d'écrans, résolution, fenêtré | `options.lua.avant-tablette` |
+| `%LOCALAPPDATA%\Programs\DCS-Tablette` | le programme (ce que contient le zip) | — |
+| Bureau, menu Démarrer | raccourci « DCS Tablette » | — |
+| Dossier Démarrage | raccourci « DCS Tablette (écrans) » : écrans remis en place à chaque ouverture de Windows (journal dans `%LOCALAPPDATA%\DCS-Tablette\ecrans.log`) | — |
+| Registre, `HKCU\…\Uninstall\DCS-Tablette` | l'entrée d'*Applications installées* | — |
+
+Le script Lua n'accepte que les commandes des boutons affichés (une liste
+blanche par appareil) et relâche tout bouton tenu plus de 5 secondes.
+
+**Désinstaller** : DCS et DCS Tablette fermés, *Paramètres → Applications →
+Applications installées → DCS Tablette → Désinstaller* (ou `Desinstaller.bat`
+dans le dossier du programme) retire tout, remet l'affichage d'avant et
+efface le programme — seulement les fichiers posés par le zip. L'écran
+virtuel reste (Gestionnaire de périphériques → Cartes graphiques → Virtual
+Display Driver → *Désinstaller l'appareil* pour le retirer).
+
+## Captures et stream
+
+DCS s'étend sur l'écran principal **et** sur l'écran virtuel : sa fenêtre
+fait deux écrans de large (5120 × 1440 pour deux écrans de 2560 × 1440).
+Tout ce qui la prend en entier montre aussi l'écran virtuel.
+
+- **Captures** : tant que DCS Tablette tourne, chaque nouvelle capture de
+  toute la fenêtre de DCS est recadrée d'elle-même sur l'écran principal, à
+  la même qualité — F12 de Steam, *Impr. écran* dans DCS, *Win + Impr. écran*,
+  Game Bar. Les captures d'une zone et les anciennes ne sont pas touchées ;
+  `--captures-entieres` les garde entières.
+- **Stream** : une fenêtre se partage en entier, rien ne peut la recadrer en
+  direct. Partager l'**écran** principal, pas l'application : dans Discord,
+  *Partager votre écran* → onglet *Écrans* → l'écran principal (pas
+  *Applications* → DCS) ; dans OBS, *Capture d'écran* de l'écran principal,
+  ou *Capture de jeu* avec un filtre *Rogner/Remplir* (à droite : la largeur
+  de l'écran virtuel).
+
+## Appareil détecté ou choisi
+
+En haut à gauche, le menu **Appareil** : en *Auto*, la page suit l'appareil
+que DCS annonce (la pastille est verte quand DCS parle à la tablette). On
+peut aussi y choisir son appareil à la main, pour préparer la page avant de
+lancer la mission. Si l'appareil choisi n'est pas celui que DCS pilote, la
+pastille passe à l'orange et les boutons sont coupés : d'un module à
+l'autre, le même numéro désigne un tout autre bouton.
+
+## Diagnostic
+
+DCS Tablette vérifie tout ce dont la tablette a besoin, à son lancement puis
+toutes les 10 secondes : dossier de DCS, scripts, écran virtuel, écrans et
+réglages de DCS, DCS lancé, signal du script (avec la dernière ligne
+`DCS-TABLETTE` de dcs.log), images, réseau du PC (Public ou Privé), tablette
+connectée.
+
+- **Sur le PC** : la liste « Vérification » dans la fenêtre au lancement,
+  puis chaque changement, horodaté.
+- **Sur la tablette** : toucher la pastille en haut à gauche, ou le badge
+  « ⚠ n » qui apparaît quand quelque chose est à régler. *Vérifier*
+  revérifie tout de suite.
+- **Disposition des écrans**, sous la liste, sur la tablette : vos écrans,
+  la fenêtre de DCS, les écrans exportés et le kneeboard, à l'échelle, tels
+  que DCS va les dessiner. En rouge, ce qui gêne : un écran exporté hors de
+  tout écran ou sous le kneeboard, un de vos écrans que DCS couvrirait de
+  noir. Un aperçu : rien n'est modifié.
+
+Chaque point est *OK*, *réparé*, *en attente* (DCS pas lancé…), *à régler*
+ou *manque*, avec la marche à suivre. Ce qui se répare sans risque l'est
+tout seul, et c'est dit : scripts d'une ancienne version, écran virtuel
+déplacé par une mise à jour de Windows, configuration d'écrans qui ne tombe
+plus sur les écrans, DCS repassé en plein écran ou sur une autre
+configuration (une fois DCS fermé : il réécrit ses réglages en quittant).
+Rien n'est installé sans le demander : l'écran virtuel manquant, c'est
+`Installer.bat`.
+
+## Langue
+
+- **Sur la tablette** : la page s'affiche en français si le navigateur est
+  en français, en anglais sinon. Pour changer : toucher la pastille en haut
+  à gauche (elle ouvre le panneau Diagnostic), puis **FR** ou **EN**. Le
+  choix est retenu sur cette tablette : chaque tablette ou téléphone garde
+  le sien.
+- **Sur le PC** (fenêtre de DCS Tablette, installation, mise à jour) : en
+  français si Windows est en français, en anglais sinon. Pour forcer une
+  langue, lancer une fois `DCS-Tablette.exe --langue en` (ou `--langue fr`) :
+  le choix est retenu, et `--langue auto` fait de nouveau suivre Windows. Le
+  plus simple : *Win + R*, taper
+  `%LOCALAPPDATA%\Programs\DCS-Tablette\DCS-Tablette.exe --langue en` puis
+  Entrée. L'option marche aussi avec l'installation :
+  `Installer.bat --langue en`.
+
+## Problèmes courants
+
+D'abord, le diagnostic ci-dessus. Les cas les plus fréquents :
+
+- **« DCS : pas de signal » alors que les écrans s'affichent** : les images
+  viennent de l'écran, mais les boutons et le nom de l'appareil passent par
+  le script de la tablette dans DCS. Le diagnostic montre la dernière ligne
+  `DCS-TABLETTE` de `Saved Games\DCS\Logs\dcs.log` : le script y dit s'il
+  est prêt, quel appareil il voit, ou pourquoi il ne peut pas démarrer.
+  Aucune ligne : relancer `Installer.bat`, puis la mission.
+
+- **La page ne s'ouvre pas sur l'iPad** : le Wi-Fi du PC est peut-être en
+  réseau *Public* dans Windows ; le passer en *Privé*.
+- **Écrans noirs** : relancer DCS après l'installation (il ne lit la
+  configuration d'écrans qu'au démarrage) et vérifier dans Options → Système
+  → Moniteurs que « Tablette DCS » est choisi.
+- **Les écrans du cockpit couvrent la vue** : l'écran virtuel n'est plus à
+  sa place (mise à jour de Windows ou du pilote graphique). DCS Tablette le
+  remet tout seul ; quitter DCS et le relancer.
+- **Le kneeboard de DCS tombe sur l'écran virtuel** : c'est voulu. Dans
+  l'onglet Kneeboard de la tablette, « Kneeboard DCS sur » choisit où il
+  apparaît quand vous l'ouvrez : *PC* (une fenêtre le recopie en bas à
+  droite de l'écran principal) ou *Tablette* (elle bascule dessus, rien sur
+  le PC). Si la tablette se déconnecte, il revient sur le PC au bout de 10 s.
+- **Un stream ou une capture montre deux écrans côte à côte** : voir
+  [Captures et stream](#captures-et-stream).
+- **La tablette montre une ancienne version après une mise à jour** : à
+  partir de la 1.2.1 elle se recharge seule ; avant, fermer l'app (ou
+  l'onglet) et la rouvrir.
