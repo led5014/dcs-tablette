@@ -77,6 +77,22 @@ def _rect(r: Rect) -> Dict[str, int]:
     return {"x": r[0], "y": r[1], "largeur": r[2], "hauteur": r[3]}
 
 
+def depuis_moniteurs(ecrans: Sequence) -> List:
+    """Des écrans de ecran_virtuel.lister tels quels ; ceux décrits par
+    (x, y, largeur, hauteur, principal[, virtuel]) (installation.moniteurs,
+    le diagnostic) en `Ecran`, pour `calculer`."""
+    from .ecran_virtuel import Ecran
+    resultat = []
+    for i, m in enumerate(ecrans, 1):
+        if isinstance(m, Ecran):
+            resultat.append(m)
+            continue
+        virtuel = len(m) > 5 and bool(m[5])
+        resultat.append(Ecran(f"\\\\.\\DISPLAY{i}", "Virtual Display Driver" if virtuel else "",
+                              "", *m[:4], 0, principal=bool(m[4])))
+    return resultat
+
+
 def calculer(ecrans: Sequence, resolution: Optional[Tuple[int, int]],
              zones: Dict[str, Rect], libelles: Optional[Dict[str, str]] = None) -> Dict:
     """La disposition, en coordonnées du bureau de Windows.

@@ -18,6 +18,9 @@ from typing import List, Optional, Sequence
 PORT_WEB = 8320          # 8317 : DCS Debrief ; 8318 : son instance de travail
 PORT_ORDRES = 7790       # le script Lua écoute ici
 PORT_ETAT = 7791         # le serveur écoute ici
+# La page des écrans (reglage_ecrans.py), sur le PC seulement : elle déplace
+# des écrans de Windows et écrit les réglages de DCS.
+PAGE_ECRANS = f"http://127.0.0.1:{PORT_WEB}/ecrans"
 
 SAVED_GAMES = uuid.UUID("4C5C32FF-BB9D-43B0-B5B4-2D72E54EAAA4")   # FOLDERID_SavedGames
 BUREAU = uuid.UUID("B4BFCC3A-DB2C-424C-B029-7FE99A87C641")        # FOLDERID_Desktop

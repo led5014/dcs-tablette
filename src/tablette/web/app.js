@@ -1742,6 +1742,22 @@ function afficherDiagnostic(d) {
       for (const s of p.solution) etapes.append(element('li', '', s));
       li.append(etapes);
     }
+    if (p.action === 'ignorer_reseau') {
+      // Réseau en Public où la tablette passe quand même (pare-feu autorisé) :
+      // l'alerte s'acquitte pour de bon.
+      const bouton = element('button', 'point-action', tr('Ne plus le signaler'));
+      bouton.type = 'button';
+      bouton.addEventListener('click', async () => {
+        bouton.disabled = true;
+        try {
+          const r = await fetch('/api/diagnostic/ignorer', {
+            method: 'POST', cache: 'no-store', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ point: 'reseau' }) });
+          if (r.ok) afficherDiagnostic(await r.json());
+        } catch { bouton.disabled = false; }
+      });
+      li.append(bouton);
+    }
     liste.append(li);
   }
   const journal = $('#diag-journal');

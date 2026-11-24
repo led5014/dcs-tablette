@@ -237,8 +237,17 @@ SERVEUR = {
     "{ecrans} décalés en hauteur par rapport à l'écran principal : DCS ouvre sa fenêtre à "
     "partir d'eux":
         "{ecrans} vertically offset from the main display: DCS opens its window from them",
-    "Quitter DCS : DCS Tablette les aligne tout seul, puis relancer DCS.":
-        "Quit DCS: DCS Tablette aligns them by itself, then restart DCS.",
+    "« Vérifier », DCS fermé : DCS Tablette les aligne, puis relancer DCS.":
+        "\"Check\", with DCS closed: DCS Tablette aligns them, then restart DCS.",
+    "à votre main": "your own layout",
+    "à votre main : {ecrans}": "your own layout: {ecrans}",
+    "à votre main : aucun écran virtuel": "your own layout: no virtual display",
+    "{largeur}×{hauteur} en ({x}, {y})": "{largeur}×{hauteur} at ({x}, {y})",
+    "{largeur}×{hauteur}, fenêtré": "{largeur}×{hauteur}, windowed",
+    "Page Écrans du PC : {adresse}": "Displays page on the PC: {adresse}",
+    "DCS est sur « {choix} », pas sur « {nom} »": "DCS is on \"{choix}\", not on \"{nom}\"",
+    "« {nom} » ({nombre} écrans) : {probleme}": "\"{nom}\" ({nombre} displays): {probleme}",
+    "« {nom} » : {nombre} écrans, à votre main": "\"{nom}\": {nombre} displays, your own layout",
     "Relancer Installer.bat (DCS fermé) : il propose de les aligner sur l'écran principal.":
         "Run Installer.bat again (DCS closed): it offers to align them with the main display.",
     "mode essai : écrans du cockpit en bas de la vue":
@@ -257,10 +266,9 @@ SERVEUR = {
     "{recouverts}":
         "waiting for the virtual display, and the DCS window ({largeur}×{hauteur}) covers "
         "{recouverts}",
-    "Quitter DCS : DCS Tablette remet l'écran virtuel à sa place et règle DCS, puis relancer "
+    "Quitter DCS, puis « Vérifier » : DCS Tablette remet l'écran virtuel à sa place et règle "
     "DCS.":
-        "Quit DCS: DCS Tablette puts the virtual display back and sets up DCS, then restart "
-        "DCS.",
+        "Quit DCS, then \"Check\": DCS Tablette puts the virtual display back and sets up DCS.",
     "Remettre d'abord l'écran virtuel (point « Écran virtuel ») : DCS Tablette règle "
     "ensuite DCS tout seul.":
         "First put the virtual display back (\"Virtual display\" item): DCS Tablette then sets "
@@ -346,8 +354,15 @@ SERVEUR = {
     "Le brancher au Wi-Fi ou au câble de la maison : la tablette doit être sur le même "
     "réseau.":
         "Connect it to the home Wi-Fi or cable: the tablet must be on the same network.",
-    "« {reseau} » est en réseau Public : Windows y bloque la tablette":
-        "\"{reseau}\" is a Public network: Windows blocks the tablet on it",
+    "« {reseau} » est en réseau Public : Windows y bloque d'ordinaire la tablette":
+        "\"{reseau}\" is a Public network: Windows usually blocks the tablet on it",
+    "La tablette se connecte quand même ? Cette alerte se tait d'elle-même à sa première "
+    "connexion (ou « Ne plus le signaler »).":
+        "The tablet connects anyway? This warning goes away by itself on its first "
+        "connection (or \"Don't report again\").",
+    "{reseaux} en réseau Public, mais la tablette s'y connecte : rien à régler":
+        "{reseaux} set to Public, but the tablet connects through it: nothing to do",
+    "seul le réseau du PC s'acquitte": "only the PC network warning can be dismissed",
     "Paramètres → Réseau et Internet → Wi-Fi (ou Ethernet) → « {reseau} » → Type de profil "
     "réseau : Privé.":
         "Settings → Network & internet → Wi-Fi (or Ethernet) → \"{reseau}\" → Network profile "
@@ -456,11 +471,14 @@ SERVEUR = {
         "none: the cockpit displays would land on the view",
     "Lancer Installer.bat : il propose de l'installer (répondre O) et le place.":
         "Run Installer.bat: it offers to install it (answer Y) and places it.",
-    "{ecran} n'est pas à sa place": "{ecran} is out of place",
-    "« Vérifier » pour réessayer de le remettre, ou relancer Installer.bat.":
-        "\"Check\" to try putting it back again, or run Installer.bat again.",
-    "À la main : Paramètres → Système → Écran, « Étendre ces affichages », {voulu}.":
-        "By hand: Settings → System → Display, \"Extend these displays\", {voulu}.",
+    "{ecran} n'est pas à la place prévue ({voulu})":
+        "{ecran} is not where it was planned ({voulu})",
+    "« Vérifier » le remet à cette place (DCS fermé).":
+        "\"Check\" puts it back there (DCS closed).",
+    "Vous l'avez placé vous-même ? Page Écrans du PC ({adresse}), « À ma main » : DCS "
+    "Tablette n'y touchera plus.":
+        "You placed it yourself? Displays page on the PC ({adresse}), \"My own layout\": DCS "
+        "Tablette won't touch it again.",
     "L'écran {ecran} est à droite du principal.": "Display {ecran} is right of the main one.",
     "L'écran {ecran} est sous le principal.": "Display {ecran} is below the main one.",
     "Si personne ne le regarde (prise HDMI factice), les écrans du cockpit":
@@ -835,6 +853,7 @@ PAGE = {
 
     # ------------------------------------------------------------ diagnostic
     "réparé": "fixed",
+    "Ne plus le signaler": "Don't report again",
     "en attente": "waiting",
     "à régler": "action needed",
     "manque": "missing",

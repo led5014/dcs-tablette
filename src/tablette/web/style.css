@@ -1043,6 +1043,7 @@ body.en-kneeboard #modes { opacity: .45; }
 .point-detail { color: var(--texte); font-size: 14px; overflow-wrap: anywhere; }
 .point-solution { margin: 6px 0 0; padding-left: 18px; font-size: 14px; color: #e8ecee; }
 .point-solution li { padding: 2px 0; border: 0; display: list-item; overflow-wrap: anywhere; }
+.point-action { margin: 8px 0 2px; padding: 6px 12px; font-size: 14px; }
 #diagnostic h2 { margin: 18px 0 6px; font-size: 14px; color: var(--discret); font-weight: 600; }
 #diag-journal li { padding: 4px 0; font-size: 13px; color: var(--texte); overflow-wrap: anywhere; }
 #diag-journal .heure { color: var(--discret); margin-right: 6px; }

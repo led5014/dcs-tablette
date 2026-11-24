@@ -3298,15 +3298,18 @@ class TestDiagnostic(unittest.TestCase):
         self.assertIn("Installer.bat", point.solution[0])
         self.choix = {"mode": "second_ecran", "physique": False, "ranger": True}
         rangements = []
-        self.assertIn("Quitter DCS", self.points(self.diagnostic(
-            ranger=lambda: rangements.append(1)))[titre].solution[0])
+        self.assertIn("Vérifier", self.points(self.diagnostic(
+            ranger=lambda: rangements.append(1)), forcer=True)[titre].solution[0])
         self.assertEqual(rangements, [])                  # DCS ouvert : on ne touche à rien
         self.lance = False
+        # Entre deux vérifications demandées, rien ne bouge : on le dit.
         point = self.points(self.diagnostic(ranger=lambda: rangements.append(1)))[titre]
+        self.assertEqual((point.etat, rangements), ("a_faire", []))
+        point = self.points(self.diagnostic(ranger=lambda: rangements.append(1)), forcer=True)[titre]
         self.assertEqual((point.etat, rangements), ("repare", [1]))
         refus = self.diagnostic(ranger=lambda: rangements.append(2) or "refusé")
-        self.assertEqual(self.points(refus)[titre].etat, "manque")
-        self.assertEqual(self.points(refus)[titre].etat, "a_faire")      # pas tout de suite
+        self.assertEqual(self.points(refus, forcer=True)[titre].etat, "manque")
+        self.assertEqual(self.points(refus)[titre].etat, "a_faire")      # pas tout seul
         self.assertEqual(self.points(refus, forcer=True)[titre].etat, "manque")  # « Vérifier »
         self.assertEqual(rangements, [1, 2, 2])
         self.ecrans = [self.PRINCIPAL, self.VIRTUEL]
@@ -3364,6 +3367,8 @@ class TestDiagnostic(unittest.TestCase):
         # réglée pour l'écran virtuel d'avant : c'est à régler.
         self.assertTrue(point.detail.startswith("en attente de l'écran virtuel"), point.detail)
         self.assertEqual(point.etat, "a_faire")
+        self.assertEqual(self.reparer[-1:], [False])
+        self.points(forcer=True)
         self.assertEqual(self.reparer[-1:], [True])
 
     def diagnostic(self, **autres):
@@ -3372,9 +3377,11 @@ class TestDiagnostic(unittest.TestCase):
         def virtuel(reparer, physique=False):
             self.reparer.append(reparer)
             return self.virtuel
+        def ecrire(choix):
+            self.choix = dict(choix)
         reglages = dict(ouvert=lambda: self.lance, ecrans=lambda: self.ecrans,
                         virtuel=virtuel, lancement=lambda: None,
-                        reseaux=lambda: self.reseaux, choix=lambda: self.choix)
+                        reseaux=lambda: self.reseaux, choix=lambda: self.choix, ecrire=ecrire)
         reglages.update(autres)
         return Diagnostic(self.saved, **reglages)
 
@@ -3464,13 +3471,72 @@ class TestDiagnostic(unittest.TestCase):
         self.assertEqual(point.etat, "a_faire")
         self.assertIn("Privé", point.solution[0])
 
-    def test_ecran_virtuel_rate_pas_reessaye_en_boucle(self):
+    def test_reseau_public_ou_la_tablette_se_connecte_n_est_plus_signale(self):
+        """Retour d'un pilote, 08/11/2026 : en réseau Public, tout marche ;
+        l'alerte ne doit pas rester. Une tablette connectée le prouve, et le
+        réseau est retenu ; « Ne plus le signaler » l'accepte aussi."""
+        self.reseaux = [("ORBI46 2", "Public")]
+        d = self.diagnostic()
+        self.assertEqual(self.points(d)["Réseau du PC"].etat, "a_faire")
+        d.tablette_vue("192.168.1.20")
+        point = self.points(d)["Réseau du PC"]
+        self.assertEqual((point.etat, point.detail),
+                         ("ok", "« ORBI46 2 » en réseau Public, mais la tablette s'y connecte : "
+                                "rien à régler"))
+        self.assertEqual(self.choix["reseaux_publics"], ["ORBI46 2"])
+        # Retenu : un autre lancement, sans tablette, ne le redit pas.
+        self.assertEqual(self.points()["Réseau du PC"].etat, "ok")
+        # Un autre réseau public, acquitté à la main.
+        self.reseaux = [("Hotel", "Public")]
+        d = self.diagnostic()
+        self.assertEqual(self.points(d)["Réseau du PC"].etat, "a_faire")
+        d.ignorer_reseau()
+        self.assertEqual(self.points(d)["Réseau du PC"].etat, "ok")
+        self.assertEqual(self.choix["reseaux_publics"], ["ORBI46 2", "Hotel"])
+
+    def test_ecran_virtuel_remis_seulement_quand_on_le_demande(self):
+        """Retour d'un pilote, 09/11/2026 : il déplaçait son écran virtuel, la
+        tablette le remettait aussitôt. Plus de remise toute seule entre deux
+        vérifications : au lancement, à l'ouverture de Windows et sur
+        « Vérifier » seulement."""
         self.virtuel = ("manque", "Écran virtuel non placé : Windows refuse", ["À la main"])
         d = self.diagnostic()
         self.points(d)
         self.points(d)
         self.points(d, forcer=True)
-        self.assertEqual(self.reparer, [True, False, True])
+        self.assertEqual(self.reparer, [False, False, True])
+
+    def test_ecrans_a_ma_main_rien_n_est_deplace_ni_reecrit(self):
+        """« À ma main » : l'écran virtuel où le pilote l'a mis (760×760 sous le
+        principal, une configuration à lui), rien de déplacé ni de réécrit,
+        même sur « Vérifier » ; seulement ce qui cloche, dit."""
+        from tablette.ecrans_dcs import generer, regler_options
+        fichier = self.saved / "Config" / "MonitorSetup" / "tablette.lua"
+        fichier.write_text(generer((0, 0, 3440, 1440), {"CENTER_MFCD": (0, 1440, 760, 760)},
+                                   "A ma main"), encoding="ascii")
+        regler_options(self.saved, 3440, 2520)
+        avant = (lire(fichier), lire(self.saved / "Config" / "options.lua"))
+        self.choix = {"mode": "second_ecran", "physique": False, "a_la_main": True}
+        self.ecrans = [(0, 0, 3440, 1440, True, False), (760, 1440, 1920, 1080, False, False),
+                       (0, 1440, 760, 760, False, True)]
+        points = self.points(forcer=True)
+        self.assertEqual(self.reparer, [])
+        self.assertEqual((lire(fichier), lire(self.saved / "Config" / "options.lua")), avant)
+        self.assertEqual((points["Écran virtuel"].etat, points["Écran virtuel"].detail),
+                         ("ok", "à votre main : 760×760 en (0, 1440)"))
+        # L'écran réel du dessous est sous la fenêtre de DCS sans recevoir de zone :
+        # il resterait noir. Dit, avec la page où le régler.
+        point = points["Écrans de DCS"]
+        self.assertEqual(point.etat, "a_faire")
+        self.assertIn("il restera noir", point.detail)
+        self.assertIn("/ecrans", point.solution[0])
+        fichier.write_text(generer((0, 0, 3440, 1440), {"CENTER_MFCD": (0, 1440, 760, 760),
+                                                        "LEFT_MFCD": (900, 1500, 700, 700)},
+                                   "A ma main"), encoding="ascii")
+        point = self.points()["Écrans de DCS"]
+        self.assertEqual((point.etat, point.detail),
+                         ("ok", "« Tablette DCS » : 2 écrans, à votre main"))
+        self.assertEqual(self.points()["Réglages de DCS"].detail, "3440×2520, fenêtré")
 
     def test_signal_de_dcs(self):
         logs = self.saved / "Logs"
@@ -3548,7 +3614,9 @@ class TestDiagnostic(unittest.TestCase):
 
         from tablette.app import create_app
         from tablette.config import Config
-        self.reseaux = [("ORBI46 2", "Public")]
+        self.reseaux = [("Maison", "Private")]
+        self.ecrans = [self.PRINCIPAL, (2560, 0, 1920, 1080, False)]      # à réécrire
+        self.lance = True
         d = self.diagnostic()
         d.verifier()
         client = TestClient(create_app(Config(saved_games=self.saved), FauxPont(),
@@ -3560,6 +3628,16 @@ class TestDiagnostic(unittest.TestCase):
         self.assertEqual(tablette["etat"], "ok")
         self.assertEqual(corps["problemes"], 1)
         self.assertEqual(client.get("/api/diagnostic").json()["points"], corps["points"])
+        # « Ne plus le signaler », pour le réseau public seulement.
+        self.assertEqual(client.post("/api/diagnostic/ignorer", json={"point": "autre"})
+                         .status_code, 422)
+        self.reseaux = [("Hotel", "Public")]
+        d._reseau = None
+        d.verifier()
+        corps = client.post("/api/diagnostic/ignorer", json={"point": "reseau"}).json()
+        reseau = next(p for p in corps["points"] if p["titre"] == "Réseau du PC")
+        self.assertEqual(reseau["etat"], "ok")
+        self.assertEqual(self.choix["reseaux_publics"], ["Hotel"])
 
     def test_derniere_ligne_du_script_dans_dcs_log(self):
         from tablette.diagnostic import derniere_ligne_tablette
@@ -4023,7 +4101,7 @@ class TestLangues(unittest.TestCase):
         copie = asdict(point)                                # comme /api/diagnostic
         self.assertEqual(dans(copie, "en"), {"titre": "PC network", "etat": "ok",
                                              "detail": '"Maison", Bureau set to Private',
-                                             "solution": ()})
+                                             "solution": (), "action": ""})
         self.assertEqual(dans(copie, "fr")["detail"], "« Maison », Bureau en privé")
         # Des nombres dans une liste de valeurs : écrits tels quels.
         self.assertEqual(Texte("{reseaux} en privé", reseaux=["Maison", 2]).dans("en"),

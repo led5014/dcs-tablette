@@ -42,6 +42,7 @@ from pathlib import Path
 from typing import Callable, Dict, List, Optional, Sequence, Tuple
 from xml.etree import ElementTree
 
+from .config import PAGE_ECRANS
 from .langues import FRANCAIS, Texte, dans, pc
 
 Mode =Tuple[int, int, int]           # largeur, hauteur, fréquence
@@ -810,10 +811,14 @@ def remettre(reparer: bool = True, physique: bool = False,
         return "manque", raisons[0], raisons[1:]
     p = placement
     if not reparer:
-        return "a_faire", Texte("{ecran} n'est pas à sa place", ecran=p.ecran.texte), [
-            Texte("« Vérifier » pour réessayer de le remettre, ou relancer Installer.bat."),
-            Texte("À la main : Paramètres → Système → Écran, « Étendre ces affichages », "
-                  "{voulu}.", voulu=p.voulu)]
+        # Déplacé pendant que DCS Tablette tourne : peut-être par le pilote
+        # lui-même. On le dit, sans le reprendre (retour d'un pilote, 09/11/2026 :
+        # « je le place où je veux, et la tablette le remet où elle veut »).
+        return "a_faire", Texte("{ecran} n'est pas à la place prévue ({voulu})",
+                                ecran=p.ecran.texte, voulu=p.voulu), [
+            Texte("« Vérifier » le remet à cette place (DCS fermé)."),
+            Texte("Vous l'avez placé vous-même ? Page Écrans du PC ({adresse}), « À ma main » : "
+                  "DCS Tablette n'y touchera plus.", adresse=PAGE_ECRANS)]
     lignes: List[str] = []
     if preparer(lignes.append, lambda question: None, lister, etendre, appliquer,
                 attendre=attendre):

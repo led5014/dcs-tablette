@@ -3,11 +3,18 @@ comment le régler.
 
 Une douzaine de points, de l'installation au vol, vérifiés au lancement de DCS Tablette
 puis toutes les 10 secondes. Ce qui se répare sans risque l'est aussitôt, et
-c'est dit : scripts d'une ancienne version, écran virtuel déplacé (mise à
-jour de Windows ou du pilote graphique), configuration d'écrans qui ne tombe
-plus sur les écrans, DCS repassé en plein écran ou sur une autre
+c'est dit : scripts d'une ancienne version, configuration d'écrans qui ne
+tombe plus sur les écrans, DCS repassé en plein écran ou sur une autre
 configuration — ses réglages DCS fermé seulement : il les réécrit en
 quittant. Pour le reste, la marche à suivre.
+
+Les écrans de Windows ne bougent jamais pendant que DCS Tablette tourne :
+seulement à son lancement, à l'ouverture de Windows (`remettre_au_demarrage`)
+et sur « Vérifier ». Un écran déplacé entre-temps l'a peut-être été par le
+pilote lui-même (retour d'un pilote, 09/11/2026 : « je place mon écran
+virtuel où je veux, et la tablette le remet où elle veut ») : on le dit,
+sans le reprendre. Et « à ma main » (page Écrans du PC, reglage_ecrans.py),
+plus rien n'est déplacé ni réécrit : on vérifie seulement.
 
 Affichée dans la fenêtre de DCS Tablette (la liste au lancement, puis ce qui
 change) et dans le panneau Diagnostic de la tablette (/api/diagnostic).
@@ -28,15 +35,15 @@ from pathlib import Path
 from typing import Callable, Dict, List, Optional, Sequence, Tuple
 
 from . import VERSION
-from .config import (NOMS_DCS, PORT_WEB, adresses_locales, dernier_lancement, dossiers_dcs,
-                     plus_recent)
+from .config import (NOMS_DCS, PAGE_ECRANS, PORT_WEB, adresses_locales, dernier_lancement,
+                     dossiers_dcs, plus_recent)
 from .mise_a_jour import numero
 from .appareils import formes
 from .ecrans_dcs import (NOM_AFFICHE, NOM_FICHIER, PasDExport, a_leur_forme, fichier_actif,
                          lire_zones, options_affichage, plein_ecran, regler_options)
 from .installation import (LIGNE, configuration_existante, configurer_ecrans, dcs_ouvert, genants,
-                           dcs_regle, installer_scripts, lire_choix, mode_essai, premiere_fois,
-                           scripts_a_jour, support_ecrans)
+                           dcs_regle, ecrire_choix, installer_scripts, lire_choix, mode_essai,
+                           premiere_fois, scripts_a_jour, support_ecrans)
 from .langues import FRANCAIS, Texte, dans, message, pc
 
 OK, REPARE, ATTENTE, A_FAIRE, MANQUE = "ok", "repare", "attente", "a_faire", "manque"
@@ -46,9 +53,6 @@ PROBLEMES = (A_FAIRE, MANQUE)
 
 PERIODE_S = 10
 PERIODE_RESEAU_S = 60
-# Un écran virtuel qu'on n'a pas su remettre : chaque essai fait clignoter
-# les écrans, on ne réessaie pas tout seul avant ce délai.
-PAUSE_APRES_ECHEC_S = 600
 TABLETTE_RECENTE_S = 10
 # Ouverture de Windows : l'écran virtuel arrive quelques secondes après la
 # session. On l'attend, puis on laisse Windows finir de poser les écrans.
@@ -65,6 +69,8 @@ class Point:
     etat: str
     detail: str
     solution: Tuple[str, ...] = ()
+    # Un bouton de plus sur la tablette : « ignorer_reseau » (Ne plus le signaler).
+    action: str = ""
 
 
 def lignes_console(points: Sequence[Point]) -> List[str]:
@@ -146,8 +152,9 @@ class Diagnostic:
     tourne ?), `ecrans` (moniteurs, virtuels signalés), `virtuel`
     (ecran_virtuel.remettre), `lancement` (heure de lancement de DCS),
     `reseaux` (profils_reseau), `choix` (ce que le pilote a choisi à
-    l'installation, installation.lire_choix), `ranger` (ecran_virtuel.ranger,
-    appelé seulement avec l'accord du pilote).
+    l'installation, installation.lire_choix) et `ecrire` (pour y retenir un
+    réseau public accepté), `ranger` (ecran_virtuel.ranger, appelé
+    seulement avec l'accord du pilote).
     """
 
     def __init__(self, saved_games: Path, pont=None, video=None, port_web: int = PORT_WEB,
@@ -157,6 +164,7 @@ class Diagnostic:
                  lancement: Optional[Callable[[], Optional[float]]] = None,
                  reseaux: Callable[[], Optional[List[Tuple[str, str]]]] = profils_reseau,
                  choix: Callable[[], Dict] = lire_choix,
+                 ecrire: Callable[[Dict], None] = ecrire_choix,
                  publiee: Optional[Dict] = None,
                  horloge: Callable[[], float] = time.monotonic,
                  ranger: Optional[Callable[[], Optional[str]]] = None):
@@ -169,9 +177,8 @@ class Diagnostic:
         self.pont, self.video, self.port_web = pont, video, port_web
         self._ouvert, self._ecrans, self._virtuel = ouvert, ecrans, virtuel
         self._lancement, self._reseaux, self._horloge = lancement, reseaux, horloge
-        self._choix = choix
+        self._choix, self._ecrire = choix, ecrire
         self._ranger = ranger
-        self._echec_rangement = -1e9
         self._publiee = publiee          # dernière version sur GitHub, lue au lancement
         self._verrou = threading.Lock()          # une vérification à la fois
         # Le résultat, lu par la page toutes les 750 ms : jamais bloqué par
@@ -182,7 +189,7 @@ class Diagnostic:
         self._journal: List[Dict] = []
         self._tablette: Optional[Tuple[str, float]] = None
         self._reseau: Optional[Tuple[float, Point]] = None
-        self._echec_ecran = -1e9
+        self._publics: List[str] = []            # réseaux en Public au dernier relevé
         self._derniers_nouveaux: List[Dict] = []
         self._reveil = threading.Event()
         self._arret = threading.Event()
@@ -236,22 +243,19 @@ class Diagnostic:
         titre = Texte("Écran virtuel")
         if essai:
             return Point(titre, OK, Texte("mode essai : écrans du cockpit en bas de la vue"))
-        # DCS ouvert, on ne déplace rien : un écran qui s'endort ou une télé
-        # qu'on allume en vol ne doit pas faire perdre la tablette. On le dit.
-        reparer = not lance and (forcer or self._horloge() - self._echec_ecran
-                                 > PAUSE_APRES_ECHEC_S)
-        etat, detail, solution = self._virtuel(reparer, physique)
-        # Jugé sur le texte français, la référence, quelle que soit la langue.
-        if etat == MANQUE and reparer and not dans(detail, FRANCAIS).startswith("aucun"):
-            self._echec_ecran = self._horloge()
+        # Remis seulement quand on le demande (lancement, ouverture de Windows,
+        # « Vérifier »), et jamais DCS ouvert : un écran qui s'endort ou une
+        # télé qu'on allume en vol ne doit pas faire perdre la tablette. Entre
+        # deux, un écran déplacé l'a peut-être été par le pilote : on le dit.
+        etat, detail, solution = self._virtuel(forcer and not lance, physique)
         return Point(titre, etat, detail, tuple(solution))
 
     def _windows(self, ecrans: list, lance: bool, forcer: bool, accord: bool) -> Point:
         """Aucun écran réel décalé en hauteur à gauche du principal, ni
         au-dessus : DCS ouvrirait sa fenêtre à partir de lui
-        (installation.genants). Alignés tout seuls DCS fermé si le pilote l'a
-        accepté à l'installation — comme l'écran virtuel, pas en boucle après
-        un échec —, sinon la marche à suivre."""
+        (installation.genants). Alignés DCS fermé si le pilote l'a accepté à
+        l'installation — quand on le demande, comme l'écran virtuel —, sinon
+        la marche à suivre."""
         titre = Texte("Écrans de Windows")
         a_ranger = genants(ecrans)
         if not a_ranger:
@@ -260,8 +264,7 @@ class Diagnostic:
                 for m in a_ranger]
         a_la_main = Texte("Ou Paramètres → Système → Écran : les glisser à gauche de l'écran "
                           "principal, bords du haut alignés, puis relancer DCS.")
-        if accord and not lance and (forcer or self._horloge() - self._echec_rangement
-                                     > PAUSE_APRES_ECHEC_S):
+        if accord and not lance and forcer:
             if self._ranger is None:
                 from .ecran_virtuel import ranger    # Windows seulement
                 self._ranger = ranger
@@ -269,16 +272,76 @@ class Diagnostic:
             if erreur is None:
                 return Point(titre, REPARE, Texte("alignés en haut sur l'écran principal : "
                                                   "{ecrans}", ecrans=noms))
-            self._echec_rangement = self._horloge()
             return Point(titre, MANQUE, Texte("{ecrans} pas alignés : {erreur}", ecrans=noms,
                                               erreur=erreur), (a_la_main,))
         return Point(titre, A_FAIRE, Texte(
             "{ecrans} décalés en hauteur par rapport à l'écran principal : DCS ouvre sa fenêtre "
             "à partir d'eux", ecrans=noms), (
-            Texte("Quitter DCS : DCS Tablette les aligne tout seul, puis relancer DCS.")
+            Texte("« Vérifier », DCS fermé : DCS Tablette les aligne, puis relancer DCS.")
             if accord else
             Texte("Relancer Installer.bat (DCS fermé) : il propose de les aligner sur l'écran "
                   "principal."), a_la_main))
+
+    def _a_la_main(self, lance: bool) -> List[Point]:
+        """Le pilote règle ses écrans lui-même (page Écrans du PC) : on ne
+        déplace ni ne réécrit rien, on vérifie seulement que ce qu'il a fait
+        marchera — les zones sur les écrans et dans la fenêtre de DCS, aucun
+        écran couvert pour rien, DCS sur « Tablette DCS », fenêtré. Ce qui
+        cloche est dit, avec la page où le régler."""
+        from . import apercu
+        page = Texte("Page Écrans du PC : {adresse}", adresse=PAGE_ECRANS)
+        ecrans = apercu.depuis_moniteurs(self._ecrans())
+        virtuels = [Texte("{largeur}×{hauteur} en ({x}, {y})", largeur=e.largeur,
+                          hauteur=e.hauteur, x=e.x, y=e.y)
+                    for e in ecrans if e.virtuel and e.actif]
+        points = [Point(Texte("Écran virtuel"), OK,
+                        Texte("à votre main : {ecrans}", ecrans=virtuels) if virtuels
+                        else Texte("à votre main : aucun écran virtuel"))]
+        decales = genants([(e.x, e.y, e.largeur, e.hauteur, e.principal, e.virtuel)
+                           for e in ecrans if e.actif])
+        if decales:
+            points.append(Point(Texte("Écrans de Windows"), A_FAIRE, Texte(
+                "{ecrans} décalés en hauteur par rapport à l'écran principal : DCS ouvre sa "
+                "fenêtre à partir d'eux", ecrans=[
+                    Texte("votre écran {largeur}×{hauteur}", largeur=m[2], hauteur=m[3])
+                    for m in decales]), (page,)))
+        else:
+            points.append(Point(Texte("Écrans de Windows"), OK, Texte("à votre main")))
+        titre = Texte("Écrans de DCS")
+        try:
+            choix, largeur, hauteur = options_affichage(self.saved_games)
+        except PasDExport as e:
+            return points + [Point(titre, MANQUE, message(e), (page,))]
+        if choix.lower() not in (Path(NOM_FICHIER).stem, NOM_AFFICHE.lower()):
+            points.append(Point(titre, A_FAIRE, Texte("DCS est sur « {choix} », pas sur « {nom} »",
+                                                      choix=choix, nom=NOM_AFFICHE), (
+                Texte("Dans DCS : Options → Système → Moniteurs « {nom} », puis relancer DCS.",
+                      nom=NOM_AFFICHE), page)))
+        else:
+            disposition = apercu.apercu(ecrans, self.saved_games)
+            problemes = [p for groupe in ([z["problemes"] for z in disposition["zones"]]
+                                          + [e["problemes"] for e in disposition["ecrans"]])
+                         for p in groupe]
+            nombre = len(disposition["zones"])
+            if disposition["raison"]:
+                points.append(Point(titre, A_FAIRE, disposition["raison"], (page,)))
+            elif problemes:
+                points.append(Point(titre, A_FAIRE, Texte(
+                    "« {nom} » ({nombre} écrans) : {probleme}", nom=NOM_AFFICHE, nombre=nombre,
+                    probleme=problemes[0]), (page,)))
+            else:
+                points.append(Point(titre, OK, Texte("« {nom} » : {nombre} écrans, à votre main",
+                                                     nom=NOM_AFFICHE, nombre=nombre)))
+        if plein_ecran(self.saved_games):
+            points.append(Point(Texte("Réglages de DCS"), A_FAIRE,
+                                Texte("plein écran : la tablette n'y voit rien"),
+                                (Texte("Dans DCS : Options → Système, décocher « Plein "
+                                       "écran », puis relancer DCS."),)))
+        else:
+            points.append(Point(Texte("Réglages de DCS"), OK,
+                                Texte("{largeur}×{hauteur}, fenêtré", largeur=largeur,
+                                      hauteur=hauteur)))
+        return points
 
     def _existante(self, nom: str) -> List[Point]:
         """Le pilote a gardé sa configuration d'écrans, qui exporte déjà les
@@ -381,8 +444,8 @@ class Diagnostic:
         return Point(titre, A_FAIRE, Texte(
             "en attente de l'écran virtuel, et la fenêtre de DCS ({largeur}×{hauteur}) "
             "recouvre {recouverts}", largeur=largeur, hauteur=hauteur, recouverts=recouverts), (
-            Texte("Quitter DCS : DCS Tablette remet l'écran virtuel à sa place et règle DCS, "
-                  "puis relancer DCS.") if lance else
+            Texte("Quitter DCS, puis « Vérifier » : DCS Tablette remet l'écran virtuel à sa "
+                  "place et règle DCS.") if lance else
             Texte("Remettre d'abord l'écran virtuel (point « Écran virtuel ») : DCS Tablette "
                   "règle ensuite DCS tout seul."),))
 
@@ -508,9 +571,17 @@ class Diagnostic:
         return Point(titre, A_FAIRE, dernier[1])
 
     def _reseau_pc(self) -> Point:
+        """En réseau Public, Windows bloque d'ordinaire la tablette. Mais pas
+        toujours (pare-feu autorisé aussi en public) : retour d'un pilote,
+        08/11/2026, « tout est fonctionnel, réseau public ou pas ; peut-on
+        acquitter cette erreur de façon définitive ? ». Une tablette qui
+        s'est connectée le prouve : ce réseau est retenu et ne fait plus
+        d'alerte. Le pilote peut aussi l'acquitter lui-même (`ignorer_reseau`)."""
         titre = Texte("Réseau du PC")
         if self._reseau is not None and self._horloge() - self._reseau[0] < PERIODE_RESEAU_S:
-            return self._reseau[1]
+            point = self._reseau[1]
+            if not (point.etat == A_FAIRE and self._tablette_recente()):
+                return point
         profils = self._reseaux()
         if profils is None:
             point = Point(titre, ATTENTE, Texte("non vérifié"))
@@ -520,17 +591,49 @@ class Diagnostic:
                       "sur le même réseau."),))
         else:
             publics = [nom for nom, categorie in profils if categorie == "Public"]
-            if publics:
+            self._publics = publics
+            acceptes = set(self._choix().get("reseaux_publics", []))
+            if publics and self._tablette_recente() and not set(publics) <= acceptes:
+                self._retenir_reseaux(publics)
+                acceptes |= set(publics)
+            a_dire = [nom for nom in publics if nom not in acceptes]
+            if a_dire:
                 point = Point(titre, A_FAIRE, Texte("« {reseau} » est en réseau Public : "
-                                                    "Windows y bloque la tablette",
-                                                    reseau=publics[0]), (
+                                                    "Windows y bloque d'ordinaire la tablette",
+                                                    reseau=a_dire[0]), (
                     Texte("Paramètres → Réseau et Internet → Wi-Fi (ou Ethernet) → "
-                          "« {reseau} » → Type de profil réseau : Privé.", reseau=publics[0]),))
+                          "« {reseau} » → Type de profil réseau : Privé.", reseau=a_dire[0]),
+                    Texte("La tablette se connecte quand même ? Cette alerte se tait d'elle-même "
+                          "à sa première connexion (ou « Ne plus le signaler »).")),
+                    action="ignorer_reseau")
+            elif publics:
+                point = Point(titre, OK, Texte("{reseaux} en réseau Public, mais la tablette s'y "
+                                               "connecte : rien à régler", reseaux=[
+                                                   Texte("« {nom} »", nom=n) for n in publics]))
             else:
                 point = Point(titre, OK, Texte("{reseaux} en privé", reseaux=[
                     Texte("« {nom} »", nom=n) for n, _ in profils]))
         self._reseau = (self._horloge(), point)
         return point
+
+    def _tablette_recente(self) -> bool:
+        return (self._tablette is not None
+                and self._horloge() - self._tablette[1] < TABLETTE_RECENTE_S)
+
+    def _retenir_reseaux(self, noms: Sequence[str]) -> None:
+        choix = self._choix()
+        acceptes = list(choix.get("reseaux_publics", []))
+        acceptes += [n for n in noms if n not in acceptes]
+        try:
+            self._ecrire(dict(choix, reseaux_publics=acceptes))
+        except OSError:
+            pass                                # redit à la prochaine vérification
+
+    def ignorer_reseau(self) -> None:
+        """« Ne plus le signaler » : les réseaux en Public du moment sont
+        acceptés pour de bon, et le point revérifié tout de suite."""
+        self._retenir_reseaux(self._publics)
+        self._reseau = None
 
     def _la_tablette(self) -> Point:
         titre = Texte("Tablette")
@@ -617,7 +720,10 @@ class Diagnostic:
                                          else "second_ecran")
             essai = mode == "essai"
             points.append(self._sur(Texte("Scripts dans DCS"), lambda: self._scripts(lance)))
-            if mode == "existante":
+            if choix.get("a_la_main") and mode != "existante":
+                a_la_main = self._sur(Texte("Écrans de DCS"), lambda: self._a_la_main(lance))
+                points += a_la_main if isinstance(a_la_main, list) else [a_la_main]
+            elif mode == "existante":
                 existante = self._sur(Texte("Écrans de DCS"),
                                       lambda: self._existante(choix.get("configuration", "")))
                 points += existante if isinstance(existante, list) else [existante]
@@ -666,10 +772,12 @@ class Diagnostic:
 
     def demarrer(self, afficher: Callable[[str], None] = print) -> None:
         """La liste complète tout de suite, puis toutes les PERIODE_S ce qui
-        a changé, horodaté, dans la fenêtre de DCS Tablette."""
+        a changé, horodaté, dans la fenêtre de DCS Tablette. Au lancement,
+        les réparations sont faites (comme « Vérifier ») ; ensuite, plus rien
+        ne déplace les écrans de Windows tout seul."""
         afficher(Texte("Vérification :"))
         try:
-            for ligne in lignes_console(self.verifier()):
+            for ligne in lignes_console(self.verifier(forcer=True)):
                 afficher(ligne)
         except Exception as e:                  # noqa: BLE001 — le serveur démarre quand même
             afficher("  " + Texte("vérification impossible ({type} : {erreur})",
@@ -725,7 +833,8 @@ def remettre_au_demarrage(saved_games: Path, journal: Path,
     voulu = choix()
     physique = bool(voulu.get("physique", not voulu))
     mode = voulu.get("mode") or ("essai" if mode_essai(saved_games) else "second_ecran")
-    if mode == "second_ecran" and not physique:
+    # « À ma main » : rien n'est remis, on n'attend donc pas l'écran virtuel.
+    if mode == "second_ecran" and not physique and not voulu.get("a_la_main"):
         if ecrans is None:
             from .ecran_virtuel import moniteurs as ecrans
         for _ in range(ATTENTE_ECRAN_VIRTUEL_S // 2):

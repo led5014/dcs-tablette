@@ -228,6 +228,18 @@ def create_app(cfg: Optional[Config] = None, pont: Optional[PontDCS] = None,
         diagnostic.verifier(forcer=True)
         return dans(diagnostic.etat(), langue)
 
+    @app.post("/api/diagnostic/ignorer")
+    def ignorer_diagnostic(corps: Dict = Body(...), langue: str = Depends(langue_de)) -> Dict:
+        """« Ne plus le signaler » : seul le réseau en Public s'acquitte ainsi
+        (la tablette s'y connecte peut-être très bien : pare-feu autorisé)."""
+        if corps.get("point") != "reseau":
+            raise refus(422, Texte("seul le réseau du PC s'acquitte"), langue)
+        if diagnostic is None:
+            return lire_diagnostic(langue)
+        diagnostic.ignorer_reseau()
+        diagnostic.verifier()
+        return dans(diagnostic.etat(), langue)
+
     @app.get("/api/disposition")
     def disposition_ecrans(choix: Optional[str] = Cookie(None, alias=CHOIX),
                            langue: str = Depends(langue_de)) -> Dict:
