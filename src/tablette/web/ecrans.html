@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0b0d0e">
+<title>DCS Tablette — Écrans</title>
+<link rel="icon" type="image/png" sizes="192x192" href="/icone-192.png">
+<style>
+:root {
+  --fond: #0b0d0e; --panneau: #15181a; --bord: #2a3034; --texte: #c9d1d3; --clair: #e8ecee;
+  --discret: #7d878b; --vert: #3ddc6a; --ambre: #f0b43c; --rouge: #ef5a4f; --bleu: #6aa9ff;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--fond); color: var(--texte);
+  font: 14px/1.45 -apple-system, "Segoe UI", Roboto, sans-serif; }
+header { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 10px 16px;
+  background: var(--panneau); border-bottom: 1px solid var(--bord); }
+header h1 { font-size: 17px; margin: 0; color: var(--clair); font-weight: 600; }
+.mode { padding: 2px 10px; border-radius: 10px; font-size: 13px; border: 1px solid var(--bord); }
+.mode.main { color: var(--ambre); border-color: var(--ambre); }
+.mode.auto { color: var(--vert); border-color: var(--vert); }
+header .saut { flex: 1; }
+button, select, input { font: inherit; color: var(--clair); background: #23292d;
+  border: 1px solid #3a4248; border-radius: 6px; }
+button { padding: 6px 12px; cursor: pointer; }
+button:hover:not(:disabled) { background: #2d353a; }
+button:disabled { opacity: .5; cursor: default; }
+button.principal { background: #1d4f2c; border-color: var(--vert); }
+button.actif { background: #44391b; border-color: var(--ambre); }
+select { padding: 5px 6px; }
+input[type=number] { width: 84px; padding: 4px 6px; }
+main { display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 14px; padding: 14px 16px; }
+@media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+.explication { margin: 0 16px; padding: 10px 14px; background: var(--panneau);
+  border: 1px solid var(--bord); border-radius: 8px; color: var(--texte); }
+.explication p { margin: 4px 0; }
+.explication strong { color: var(--clair); }
+#schema-cadre { background: #090b0c; border: 1px solid var(--bord); border-radius: 8px;
+  min-height: 420px; position: relative; }
+#schema { width: 100%; height: 62vh; min-height: 400px; display: block; touch-action: none; }
+#schema text { pointer-events: none; font-family: "Segoe UI", sans-serif; }
+#schema .ecran rect.fond { fill: #1b2125; stroke: #4a5258; }
+#schema .ecran.principal rect.fond { stroke: var(--vert); }
+#schema .ecran.virtuel rect.fond { fill: #141c27; stroke: var(--bleu); stroke-dasharray: 8 5; }
+#schema .ecran.mobile { cursor: move; }
+#schema .zone { cursor: move; }
+#schema .choisi rect.fond, #schema .zone.choisi rect { stroke: #fff !important; stroke-width: 3 !important; }
+#schema .probleme rect.fond, #schema .zone.probleme rect { stroke: var(--rouge) !important; }
+#schema .poignee { fill: #fff; cursor: nwse-resize; }
+aside { display: flex; flex-direction: column; gap: 12px; }
+section.carte { background: var(--panneau); border: 1px solid var(--bord); border-radius: 8px;
+  padding: 10px 12px; }
+section.carte h2 { font-size: 14px; margin: 0 0 8px; color: var(--clair); font-weight: 600; }
+.champs { display: grid; grid-template-columns: auto 1fr; gap: 6px 10px; align-items: center; }
+.champs label { color: var(--discret); }
+.ligne { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 6px; }
+.discret { color: var(--discret); font-size: 13px; }
+ul.liste { margin: 6px 0 0; padding-left: 18px; }
+ul.liste li { margin: 3px 0; }
+ul.erreurs li { color: var(--rouge); }
+ul.problemes li { color: var(--ambre); }
+#bas { padding: 0 16px 24px; display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 14px; }
+@media (max-width: 900px) { #bas { grid-template-columns: 1fr; } }
+#confirmer { position: sticky; bottom: 0; display: flex; gap: 12px; align-items: center;
+  justify-content: center; padding: 12px; background: #44391b; color: var(--clair);
+  border-top: 2px solid var(--ambre); }
+[hidden], #confirmer[hidden] { display: none !important; }
+#journal li { color: var(--clair); }
+.legende span { display: inline-block; width: 12px; height: 12px; border-radius: 2px;
+  vertical-align: -1px; margin: 0 4px 0 10px; }
+</style>
+</head>
+<body>
+<header>
+  <h1 data-t>DCS Tablette — Écrans</h1>
+  <span id="mode" class="mode"></span>
+  <span class="saut"></span>
+  <button id="relire" type="button" data-t>Relire</button>
+  <button id="montrer" type="button" data-t>Montrer sur mes écrans</button>
+</header>
+
+<!-- Ce que les écrans exportés vont devenir, avant de rien toucher : retour
+     d'un pilote, « il manque une fenêtre qui explique ce que les exports vont
+     devenir ». -->
+<div class="explication">
+  <p data-t>DCS ouvre une seule fenêtre, depuis le coin haut gauche de l'écran principal, de la taille réglée ici. Tout ce qu'elle couvre est à lui : la vue sur l'écran principal, les écrans du cockpit dans leurs zones.</p>
+  <p data-t>Un écran couvert sans zone reste noir en vol. Le kneeboard se colle en bas à droite de la fenêtre. La tablette recopie chaque zone telle que DCS la dessine.</p>
+  <p class="discret" data-t>Glisser un écran ou une zone à la souris, ou la choisir puis régler ses chiffres ; flèches : 1 pixel, Maj + flèches : 10 ; Ctrl + flèches : la taille. Rien n'est changé avant « Enregistrer ».</p>
+</div>
+
+<main>
+  <div id="schema-cadre">
+    <svg id="schema" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Disposition des écrans" data-t-aria></svg>
+  </div>
+  <aside>
+    <section class="carte">
+      <h2 data-t>Zones pour</h2>
+      <select id="jeu" aria-label="Zones pour" data-t-aria></select>
+      <p id="jeu-aide" class="discret"></p>
+      <div class="ligne"><label for="profil" class="discret" data-t>Libellés et boutons de</label>
+        <select id="profil"></select></div>
+    </section>
+    <section class="carte" id="choisi">
+      <h2 id="choisi-titre" data-t>Rien de choisi</h2>
+      <div id="choisi-corps" class="discret" data-t>Cliquer un écran, une zone ou la fenêtre de DCS dans le schéma.</div>
+    </section>
+    <section class="carte">
+      <h2 data-t>Fenêtre de DCS</h2>
+      <div class="champs">
+        <label for="f-largeur" data-t>Largeur</label><input id="f-largeur" type="number" min="640" step="1">
+        <label for="f-hauteur" data-t>Hauteur</label><input id="f-hauteur" type="number" min="480" step="1">
+      </div>
+      <div class="ligne"><button id="couvrir" type="button" data-t>Couvrir l'écran principal et les zones</button></div>
+    </section>
+    <section class="carte">
+      <h2 data-t>Écrans virtuels</h2>
+      <div class="ligne"><input id="nb-virtuels" type="number" min="1" step="1" aria-label="Nombre d'écrans virtuels" data-t-aria>
+        <button id="changer-virtuels" type="button" data-t>Changer</button></div>
+      <p class="discret" data-t>Le pilote de l'écran virtuel est rechargé : les écrans clignotent quelques secondes. Placez ensuite les nouveaux.</p>
+    </section>
+  </aside>
+</main>
+
+<div id="bas">
+  <section class="carte">
+    <h2 data-t>Ce qui va changer</h2>
+    <ul id="erreurs" class="liste erreurs"></ul>
+    <ul id="changements" class="liste"></ul>
+    <h2 id="titre-problemes" data-t>À vérifier sur le schéma</h2>
+    <ul id="problemes" class="liste problemes"></ul>
+    <ul id="journal" class="liste"></ul>
+  </section>
+  <section class="carte">
+    <h2 data-t>Enregistrer</h2>
+    <p class="discret" data-t>Écrit « Tablette DCS » et règle DCS (fermé), puis passe les écrans à votre main : DCS Tablette ne déplacera ni ne réécrira plus rien.</p>
+    <div class="ligne"><button id="enregistrer" class="principal" type="button" data-t>Enregistrer</button>
+      <button id="annuler" type="button" data-t>Annuler les retouches</button></div>
+    <p class="discret" data-t>« Automatique » rend la main à DCS Tablette : il remet l'écran virtuel à sa place et réécrit « Tablette DCS » à sa façon.</p>
+    <div class="ligne"><button id="automatique" type="button" data-t>Automatique</button></div>
+  </section>
+</div>
+
+<div id="confirmer" hidden>
+  <span id="confirmer-texte"></span>
+  <button id="garder" class="principal" type="button" data-t>Garder ces écrans</button>
+  <button id="revenir" type="button" data-t>Revenir comme avant</button>
+</div>
+
+<script src="/textes.js"></script>
+<script src="/ecrans.js"></script>
+</body>
+</html>

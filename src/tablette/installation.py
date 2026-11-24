@@ -60,6 +60,11 @@ EXE = f"{PROGRAMME}.exe"
 # sans console (scripts/dcs_tablette_ecrans.py).
 EXE_ECRANS = f"{PROGRAMME}-Ecrans.exe"
 RACCOURCI_ECRANS = "DCS Tablette (écrans).lnk"
+# Menu Démarrer : la page Écrans du PC (reglage_ecrans.py), pour refaire la
+# disposition sans réinstaller (demande d'un pilote, 08/11/2026 : « comment
+# refaire la configuration depuis le début ? »).
+RACCOURCI_PAGE = "DCS Tablette - réglage des écrans.lnk"
+COMMANDE_PAGE = "page-ecrans"
 # Ce que le zip pose dans le dossier du programme : copié à l'installation,
 # et seul effacé à la désinstallation — rien d'autre de ce dossier.
 LIVRES = (EXE, EXE_ECRANS, "_internal", "Installer.bat", "Desinstaller.bat", "LISEZ-MOI.txt",
@@ -491,7 +496,7 @@ def dossier_bureau() -> Path:
 
 
 def creer_raccourci(cible: Path, dossier: Optional[Path] = None, nom: str = RACCOURCI,
-                    description: Optional[str] = None) -> Path:
+                    description: Optional[str] = None, arguments: str = "") -> Path:
     """Raccourci « DCS Tablette » vers l'exécutable, sur le bureau : un
     double-clic pour lancer la tablette, avec son icône.
 
@@ -501,10 +506,10 @@ def creer_raccourci(cible: Path, dossier: Optional[Path] = None, nom: str = RACC
     lien = (dossier or dossier_bureau()) / nom
     commande = ("$r = (New-Object -ComObject WScript.Shell).CreateShortcut($env:DT_LIEN); "
                 "$r.TargetPath = $env:DT_CIBLE; $r.WorkingDirectory = $env:DT_DOSSIER; "
-                "$r.IconLocation = $env:DT_CIBLE + ',0'; "
+                "$r.IconLocation = $env:DT_CIBLE + ',0'; $r.Arguments = $env:DT_ARGUMENTS; "
                 "$r.Description = $env:DT_DESCRIPTION; $r.Save()")
     environnement = dict(os.environ, DT_LIEN=str(lien), DT_CIBLE=str(cible),
-                         DT_DOSSIER=str(cible.parent),
+                         DT_DOSSIER=str(cible.parent), DT_ARGUMENTS=arguments,
                          DT_DESCRIPTION=str(description or Texte(
                              "Les écrans du cockpit de DCS sur la tablette")))
     subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", commande],
@@ -577,6 +582,13 @@ def ecrans_au_demarrage(dossier: Path) -> Path:
     return creer_raccourci(dossier / EXE_ECRANS, dossier_demarrage(), RACCOURCI_ECRANS,
                            Texte("Remet l'écran virtuel et les réglages de DCS en place pour "
                                  "DCS Tablette"))
+
+
+def raccourci_page_ecrans(exe: Path) -> Path:
+    """« DCS Tablette - réglage des écrans » dans le menu Démarrer : démarre
+    DCS Tablette s'il ne tourne pas, puis ouvre la page Écrans du PC."""
+    return creer_raccourci(exe, dossier_menu(), RACCOURCI_PAGE,
+                           Texte("Régler soi-même les écrans de DCS Tablette"), COMMANDE_PAGE)
 
 
 def meme_fichier(a: Path, b: Path) -> bool:
@@ -666,6 +678,13 @@ def tenir_a_jour(exe: Path) -> List[str]:
             lignes.append(Texte("Raccourci « DCS Tablette » ajouté au menu Démarrer."))
         except (OSError, subprocess.SubprocessError):
             pass
+    if not (dossier_menu() / RACCOURCI_PAGE).exists():
+        try:
+            raccourci_page_ecrans(exe)
+            lignes.append(Texte("Raccourci « DCS Tablette - réglage des écrans » ajouté au menu "
+                                "Démarrer."))
+        except (OSError, subprocess.SubprocessError):
+            pass
     choix = lire_choix()
     if (exe.parent / EXE_ECRANS).is_file() and not choix.get("demarrage"):
         try:
@@ -710,6 +729,11 @@ def installer_programme(demander: Callable[[str], Optional[str]],
             creer_raccourci(exe, dossier)
         except (OSError, subprocess.SubprocessError) as e:
             print(echec(e))
+    try:
+        raccourci_page_ecrans(exe)
+    except (OSError, subprocess.SubprocessError) as e:
+        print(Texte("Raccourci « DCS Tablette - réglage des écrans » non créé ({erreur}).",
+                    erreur=e))
     if (exe.parent / EXE_ECRANS).is_file():
         try:
             ecrans_au_demarrage(exe.parent)
@@ -1018,6 +1042,7 @@ def desinstaller(saved_games: Path, demander: Callable[[str], Optional[str]] = d
             break
     lignes = desinstaller_scripts(saved_games) + retirer_ecrans(saved_games)
     for chemin in (dossier_bureau() / RACCOURCI, dossier_menu() / RACCOURCI,
+                   dossier_menu() / RACCOURCI_PAGE,
                    dossier_demarrage() / RACCOURCI_ECRANS, fichier_choix(), journal_ecrans(),
                    fichier_langue()):
         if chemin.exists():

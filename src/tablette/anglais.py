@@ -724,6 +724,94 @@ SERVEUR = {
     "La copie a echoue. Extraire a la main le zip telecharge :":
         "The copy failed. Extract the downloaded zip by hand:",
     'dans "%DT_CIBLE%"': 'into "%DT_CIBLE%"',
+    # ------------------------------------------------------------ reglage_ecrans.py
+    "Écran gauche": "Left display",
+    "Écran droit": "Right display",
+    "Écran central": "Center display",
+    "TEDAC": "TEDAC",
+    "valeur illisible : {valeur}": "unreadable value: {valeur}",
+    "Écran inconnu ou débranché : {id} (relire la page).":
+        "Unknown or unplugged display: {id} (reload the page).",
+    "Écran virtuel de {largeur}×{hauteur} : entre {lmin}×{hmin} et {lmax}×{hmax}.":
+        "Virtual display of {largeur}×{hauteur}: between {lmin}×{hmin} and {lmax}×{hmax}.",
+    "L'écran principal reste en (0, 0) pour Windows : déplacer plutôt les autres autour de "
+    "lui.":
+        "Windows keeps the main display at (0, 0): move the others around it instead.",
+    "Les écrans {a} et {b} se chevauchent.": "Displays {a} and {b} overlap.",
+    "{ecran} ne touche aucun autre écran : Windows le recollera au plus près.":
+        "{ecran} touches no other display: Windows will snap it to the nearest one.",
+    "Fenêtre de DCS de {largeur}×{hauteur} : entre {lmin}×{hmin} et {lmax}×{hmax}.":
+        "DCS window of {largeur}×{hauteur}: between {lmin}×{hmin} and {lmax}×{hmax}.",
+    "Zone {zone} trop petite ({largeur}×{hauteur}).": "Area {zone} too small ({largeur}×{hauteur}).",
+    "DCS est ouvert : le fermer pour enregistrer (il réécrit ses réglages en quittant, et ne "
+    "relit ses écrans qu'au démarrage).":
+        "DCS is running: close it to save (it rewrites its settings when quitting, and only "
+        "reads its displays at startup).",
+    "Écran virtuel {ecran} : {avant} → {largeur}×{hauteur}":
+        "Virtual display {ecran}: {avant} → {largeur}×{hauteur}",
+    "  définition nouvelle pour le pilote de l'écran virtuel : il est rechargé, les écrans "
+    "clignotent quelques secondes.":
+        "  new resolution for the virtual display driver: it is reloaded, the displays flicker "
+        "for a few seconds.",
+    "Écran {ecran} : de ({x0}, {y0}) à ({x}, {y})": "Display {ecran}: from ({x0}, {y0}) to ({x}, {y})",
+    "Écrans de Windows remis comme avant dans {secondes} s si vous ne confirmez pas.":
+        "Windows displays put back as before in {secondes} s unless you confirm.",
+    "DCS : configuration « {nom} », fenêtre {largeur}×{hauteur}, fenêtré (avant : « {choix} », "
+    "{avant})":
+        "DCS: \"{nom}\" monitor setup, {largeur}×{hauteur} window, windowed (before: "
+        "\"{choix}\", {avant})",
+    "{zone} : x={x} y={y} {largeur}×{hauteur}": "{zone}: x={x} y={y} {largeur}×{hauteur}",
+    "{zone} : plus exporté (l'écran reste dans le cockpit)":
+        "{zone}: no longer exported (the display stays in the cockpit)",
+    "Zones à part pour {appareil} : {nombre}": "Separate areas for {appareil}: {nombre}",
+    "Écrans à votre main : DCS Tablette ne les déplacera ni ne les réécrira plus "
+    "(« Automatique » pour revenir à sa disposition).":
+        "Displays your own way: DCS Tablette won't move or rewrite them anymore "
+        "(\"Automatic\" to go back to its layout).",
+    "« {nom} » écrite, DCS réglé en {largeur}×{hauteur}, fenêtré.":
+        "\"{nom}\" written, DCS set to {largeur}×{hauteur}, windowed.",
+    "Définition {definitions} pas ajoutée à l'écran virtuel ({erreur}).":
+        "Resolution {definitions} not added to the virtual display ({erreur}).",
+    "Écran virtuel : {definitions} ajoutée(s), pilote rechargé.":
+        "Virtual display: {definitions} added, driver reloaded.",
+    "Écrans non déplacés : {erreur}.": "Displays not moved: {erreur}.",
+    "Windows a mis {ecran} en ({x}, {y}), {largeur}×{hauteur}.":
+        "Windows put {ecran} at ({x}, {y}), {largeur}×{hauteur}.",
+    "Écrans de Windows posés : confirmer dans les {secondes} s, sinon ils reviennent comme "
+    "avant.":
+        "Windows displays set: confirm within {secondes} s, or they go back as before.",
+    "« {nom} » écrite, mais réglages de DCS non modifiés ({erreur}).":
+        "\"{nom}\" written, but DCS settings not changed ({erreur}).",
+    "De 1 à {max} écrans virtuels.": "From 1 to {max} virtual displays.",
+    "DCS est ouvert : le fermer avant de changer les écrans virtuels.":
+        "DCS is running: close it before changing the virtual displays.",
+    "Le pilote de l'écran virtuel ne répond pas ({erreur}) : installé par Installer.bat ?":
+        "The virtual display driver doesn't answer ({erreur}): installed by Installer.bat?",
+    "{nombre} écran(s) virtuel(s) : les placer, puis Enregistrer.":
+        "{nombre} virtual display(s): place them, then Save.",
+    "DCS est ouvert : le fermer pour revenir à la disposition automatique.":
+        "DCS is running: close it to go back to the automatic layout.",
+    "Écran virtuel : {detail}": "Virtual display: {detail}",
+    # ------------------------------------------------------------ calage.py, app.py (page Écrans)
+    "Calage des écrans : cadres non posés": "Display alignment: frames not shown",
+    "Page réservée au PC où tourne DCS Tablette : l'ouvrir sur lui, à l'adresse {adresse}.":
+        "Page for the PC running DCS Tablette only: open it there, at {adresse}.",
+    "{erreur}": "{erreur}",
+    "Écrans remis comme avant.": "Displays put back as before.",
+    "Écrans gardés.": "Displays kept.",
+    # ------------------------------------------------------------ page-ecrans (__main__, installation)
+    "Régler soi-même les écrans : {adresse} (sur ce PC).":
+        "Set up the displays yourself: {adresse} (on this PC).",
+    "DCS Tablette démarre dans sa fenêtre…": "DCS Tablette is starting in its window…",
+    "DCS Tablette n'a pas répondu : regarder sa fenêtre.":
+        "DCS Tablette didn't answer: look at its window.",
+    "ouvrir la page Écrans du PC (régler soi-même écrans et zones)":
+        "open the Displays page on the PC (set up displays and areas yourself)",
+    "Régler soi-même les écrans de DCS Tablette": "Set up DCS Tablette's displays yourself",
+    "Raccourci « DCS Tablette - réglage des écrans » ajouté au menu Démarrer.":
+        "\"DCS Tablette - réglage des écrans\" shortcut added to the Start menu.",
+    "Raccourci « DCS Tablette - réglage des écrans » non créé ({erreur}).":
+        "\"DCS Tablette - réglage des écrans\" shortcut not created ({erreur}).",
 }
 
 # La page de la tablette (web/app.js, web/index.html), servie par /textes.js.
@@ -880,4 +968,90 @@ PAGE = {
     "Écran exporté": "Exported display",
     "Problème": "Problem",
     "Aucun problème de disposition.": "No layout problem.",
+    # ------------------------------------------------------------ ecrans.html, ecrans.js
+    "DCS Tablette — Écrans": "DCS Tablette — Displays",
+    "Relire": "Reload",
+    "Montrer sur mes écrans": "Show on my displays",
+    "Cacher des écrans": "Hide from displays",
+    "DCS ouvre une seule fenêtre, depuis le coin haut gauche de l'écran principal, de la "
+    "taille réglée ici. Tout ce qu'elle couvre est à lui : la vue sur l'écran principal, les "
+    "écrans du cockpit dans leurs zones.":
+        "DCS opens a single window, from the top-left corner of the main display, of the size "
+        "set here. Everything it covers belongs to it: the view on the main display, the "
+        "cockpit displays in their areas.",
+    "Un écran couvert sans zone reste noir en vol. Le kneeboard se colle en bas à droite de "
+    "la fenêtre. La tablette recopie chaque zone telle que DCS la dessine.":
+        "A covered display without any area stays black in flight. The kneeboard sticks to the "
+        "bottom right of the window. The tablet copies each area as DCS draws it.",
+    "Glisser un écran ou une zone à la souris, ou la choisir puis régler ses chiffres ; "
+    "flèches : 1 pixel, Maj + flèches : 10 ; Ctrl + flèches : la taille. Rien n'est changé "
+    "avant « Enregistrer ».":
+        "Drag a display or an area with the mouse, or select it and set its numbers; arrows: "
+        "1 pixel, Shift + arrows: 10; Ctrl + arrows: the size. Nothing changes before "
+        "\"Save\".",
+    "Zones pour": "Areas for",
+    "Libellés et boutons de": "Labels and buttons of",
+    "Rien de choisi": "Nothing selected",
+    "Cliquer un écran, une zone ou la fenêtre de DCS dans le schéma.":
+        "Click a display, an area or the DCS window in the diagram.",
+    "Largeur": "Width",
+    "Hauteur": "Height",
+    "Couvrir l'écran principal et les zones": "Cover the main display and the areas",
+    "Écrans virtuels": "Virtual displays",
+    "Nombre d'écrans virtuels": "Number of virtual displays",
+    "Changer": "Change",
+    "Le pilote de l'écran virtuel est rechargé : les écrans clignotent quelques secondes. "
+    "Placez ensuite les nouveaux.":
+        "The virtual display driver is reloaded: the displays flicker for a few seconds. Then "
+        "place the new ones.",
+    "Ce qui va changer": "What will change",
+    "À vérifier sur le schéma": "To check on the diagram",
+    "Enregistrer": "Save",
+    "Écrit « Tablette DCS » et règle DCS (fermé), puis passe les écrans à votre main : DCS "
+    "Tablette ne déplacera ni ne réécrira plus rien.":
+        "Writes \"Tablette DCS\" and sets up DCS (closed), then switches the displays to "
+        "your own layout: DCS Tablette won't move or rewrite anything anymore.",
+    "Annuler les retouches": "Discard changes",
+    "« Automatique » rend la main à DCS Tablette : il remet l'écran virtuel à sa place et "
+    "réécrit « Tablette DCS » à sa façon.":
+        "\"Automatic\" hands control back to DCS Tablette: it puts the virtual display back "
+        "in place and rewrites \"Tablette DCS\" its own way.",
+    "Automatique": "Automatic",
+    "Garder ces écrans": "Keep these displays",
+    "Revenir comme avant": "Go back as before",
+    "À votre main": "Your own layout",
+    "Tous les appareils": "All aircraft",
+    "Les zones de tout appareil sans zones à part.": "The areas of every aircraft without separate ones.",
+    "Zones à part pour {appareil}": "Separate areas for {appareil}",
+    "Ajouter :": "Add:",
+    "(aucun appareil)": "(no aircraft)",
+    "kneeboard ouvert": "open kneeboard",
+    "Fenêtre de DCS {largeur}×{hauteur}": "DCS window {largeur}×{hauteur}",
+    "Définitions": "Resolutions",
+    "Définition…": "Resolution…",
+    "Windows garde l'écran principal en (0, 0) : déplacer les autres autour de lui.":
+        "Windows keeps the main display at (0, 0): move the others around it.",
+    "Écran réel : sa place seulement, jamais sa définition.":
+        "Real display: its position only, never its resolution.",
+    "Garder la forme": "Keep the shape",
+    "Ne plus exporter": "Stop exporting",
+    "Pas exporté, l'écran reste dans le cockpit, sans image sur la tablette.":
+        "Not exported, the display stays in the cockpit, with no picture on the tablet.",
+    "Zones communes : cocher « Zones à part » pour en donner d'autres à cet appareil.":
+        "Shared areas: tick \"Separate areas\" to give this aircraft other ones.",
+    "Elle part du coin haut gauche de l'écran principal : régler sa taille à droite.":
+        "It starts at the top-left corner of the main display: set its size on the right.",
+    "Rien : tout est comme enregistré.": "Nothing: everything is as saved.",
+    "Garder ces écrans ? Retour comme avant dans {secondes} s.":
+        "Keep these displays? Back as before in {secondes} s.",
+    "Pas de confirmation : écrans remis comme avant.": "No confirmation: displays put back as before.",
+    "Enregistrement…": "Saving…",
+    "Rendre la main à DCS Tablette ? Il remet l'écran virtuel à sa place et réécrit « Tablette "
+    "DCS » à sa façon.":
+        "Hand control back to DCS Tablette? It puts the virtual display back in place and "
+        "rewrites \"Tablette DCS\" its own way.",
+    "Disposition automatique…": "Automatic layout…",
+    "Écrans virtuels : pilote rechargé…": "Virtual displays: reloading the driver…",
+    "Recaler les zones à part de {appareils} sur les zones communes":
+        "Realign the separate areas of {appareils} on the shared areas",
 }

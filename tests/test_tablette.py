@@ -2201,6 +2201,7 @@ class TestDesinstallation(unittest.TestCase):
             programme.mkdir(parents=True)
             (dossier / installation.RACCOURCI).write_bytes(b"L")
             (dossier / installation.RACCOURCI_ECRANS).write_bytes(b"L")
+            (dossier / installation.RACCOURCI_PAGE).write_bytes(b"L")
             (dossier / "ecrans.log").write_text("ouverture de Windows")
             (dossier / "langue.txt").write_text("en")       # --langue en, retenu
             with mock.patch.object(sys, "frozen", True, create=True), \
@@ -2219,6 +2220,7 @@ class TestDesinstallation(unittest.TestCase):
                                           autres=lambda: 0, attendre=True)
             self.assertFalse((dossier / installation.RACCOURCI).exists())
             self.assertFalse((dossier / installation.RACCOURCI_ECRANS).exists())
+            self.assertFalse((dossier / installation.RACCOURCI_PAGE).exists())
             self.assertFalse((dossier / "ecrans.log").exists())
             self.assertFalse((dossier / "langue.txt").exists())
         self.assertEqual(effaces, [programme])
@@ -2296,7 +2298,9 @@ class TestProgramme(unittest.TestCase):
         self.assertEqual(exe, programme / installation.EXE)
         self.assertTrue(exe.exists())
         # Et la remise en place des écrans, sans fenêtre, à chaque ouverture de Windows.
+        # Plus la page Écrans du PC, dans le menu Démarrer.
         self.assertEqual(raccourcis, [(exe, self.racine / "Bureau"), (exe, self.racine / "Menu"),
+                                      (exe, self.racine / "Menu"),
                                       (programme / installation.EXE_ECRANS,
                                        self.racine / "Démarrage")])
         self.assertEqual(entrees, [programme])
@@ -2358,7 +2362,8 @@ class TestProgramme(unittest.TestCase):
             # Retiré du dossier Démarrage par le pilote : il ne revient pas.
             (demarrage / installation.RACCOURCI_ECRANS).unlink()
             self.assertEqual(installation.tenir_a_jour(exe), [])
-        self.assertEqual(poses, [exe, exe.parent / installation.EXE_ECRANS])
+        self.assertEqual(poses, [exe, exe, exe.parent / installation.EXE_ECRANS])
+        self.assertTrue((menu / installation.RACCOURCI_PAGE).exists())
         self.assertEqual(entrees, [exe.parent] * 3)
 
     @unittest.skipUnless(sys.platform == "win32", "cmd")
@@ -3972,6 +3977,280 @@ class TestDisposition(unittest.TestCase):
 
 
 # Les voyants du Hornet dont le nom, montré tel quel en français, se traduit.
+class TestReglageEcrans(unittest.TestCase):
+    """La page Écrans du PC (reglage_ecrans.py, calage.py) : sur des écrans
+    décrits et un faux Saved Games/DCS ; rien du poste n'est lu, déplacé ni
+    rechargé. Le cas d'un pilote (Discord, 20/11/2026) : un petit écran
+    virtuel carré de 760 × 760 sous le principal, pour le seul MPCD."""
+
+    def setUp(self):
+        from tablette.installation import configurer_ecrans
+        TestInstallation.setUp(self)
+        configurer_ecrans(self.saved, ecrans=[TestInstallation.PRINCIPAL,
+                                              TestInstallation.VIRTUEL], ouvert=lambda: False)
+        self.ecrans = [PRINCIPAL, ecran(modes=MODES_VDD)]
+        self.choix = {"mode": "second_ecran", "physique": False}
+        self.poses, self.modes, self.minuteurs, self.commandes = [], [], [], []
+        self.lance = False
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def reglage(self, **autres):
+        from tablette.reglage_ecrans import ReglageEcrans
+
+        def disposer(places):
+            self.poses.append([(p.ecran.nom, p.x, p.y, p.largeur, p.hauteur) for p in places])
+            from dataclasses import replace
+            par_nom = {p.ecran.nom: p for p in places}
+            self.ecrans = [replace(e, x=par_nom[e.nom].x, y=par_nom[e.nom].y,
+                                   largeur=par_nom[e.nom].largeur or e.largeur,
+                                   hauteur=par_nom[e.nom].hauteur or e.hauteur)
+                           if e.nom in par_nom else e for e in self.ecrans]
+
+        def modes(voulus, frequence, commande=None):
+            self.modes.append((list(voulus), frequence))
+            return True
+
+        def ecrire(choix):
+            self.choix = dict(choix)
+        reglages = dict(lister=lambda: list(self.ecrans), disposer=disposer,
+                        ouvert=lambda: self.lance, commande=self.commandes.append, modes=modes,
+                        nombre_virtuels=lambda: 1, choix=lambda: dict(self.choix), ecrire=ecrire,
+                        attendre=lambda s: None,
+                        minuteur=lambda s, action: self.minuteurs.append((s, action)))
+        reglages.update(autres)
+        return ReglageEcrans(self.saved, **reglages)
+
+    PROPOSITION = {
+        "ecrans": [{"id": "\\\\.\\DISPLAY1", "x": 0, "y": 0},
+                   {"id": "\\\\.\\DISPLAY2", "x": 0, "y": 1440, "largeur": 760, "hauteur": 760}],
+        "fenetre": {"largeur": 2560, "hauteur": 2200},
+        "zones": {"CENTER_MFCD": {"x": 0, "y": 1440, "largeur": 760, "hauteur": 760}},
+    }
+
+    def test_l_etat_relu_tel_quel(self):
+        etat = self.reglage().etat()
+        self.assertEqual([(e["id"], e["virtuel"]) for e in etat["ecrans"]],
+                         [("\\\\.\\DISPLAY1", False), ("\\\\.\\DISPLAY2", True)])
+        self.assertEqual(etat["fenetre"], {"largeur": 5120, "hauteur": 1440})
+        self.assertTrue(etat["tablette"])
+        self.assertEqual(sorted(etat["zones"]), sorted(["LEFT_MFCD", "RIGHT_MFCD", "CENTER_MFCD",
+                                                        "TEDAC"]))
+        self.assertIn("OH58D", etat["par_appareil"])              # le Kiowa en 4:3, à part
+        self.assertIn([760, 760], [list(m) for m in etat["ecrans"][1]["modes"]])
+        self.assertFalse(etat["a_la_main"])
+        self.assertEqual(etat["apercu"]["problemes"], 0)
+        hornet = next(p for p in etat["profils"] if p["id"] == "fa18c")
+        ddi = next(z for z in hornet["zones"] if z["zone"] == "LEFT_MFCD")
+        self.assertEqual(len(ddi["reperes"]["haut"]), 5)
+
+    def test_ce_qui_va_changer_dit_avant_sans_rien_ecrire(self):
+        fichiers = [self.saved / "Config" / "MonitorSetup" / "tablette.lua",
+                    self.saved / "Config" / "options.lua"]
+        avant = [lire(f) for f in fichiers]
+        resultat = self.reglage().apercu(self.PROPOSITION)
+        textes = [str(t) for t in resultat["changements"]]
+        self.assertEqual(resultat["erreurs"], [])
+        self.assertIn("Écran virtuel Virtual Display Driver : 2560×1440 → 760×760", textes)
+        self.assertTrue(any("rechargé" in t for t in textes), textes)
+        self.assertIn("Écran Virtual Display Driver : de (2560, 0) à (0, 1440)", textes)
+        self.assertTrue(any("remis comme avant dans 20 s" in t for t in textes))
+        self.assertTrue(any(t.startswith("DCS : configuration « Tablette DCS », fenêtre "
+                                         "2560×2200") for t in textes), textes)
+        self.assertIn("Écran central : x=0 y=1440 760×760", textes)
+        self.assertIn("Écran gauche : plus exporté (l'écran reste dans le cockpit)", textes)
+        self.assertTrue(textes[-1].startswith("Écrans à votre main"))
+        self.assertEqual([lire(f) for f in fichiers], avant)
+        self.assertEqual(self.poses, [])
+        # Le schéma proposé : l'écran virtuel sous le principal, et sa zone dedans.
+        zones = resultat["apercu"]["zones"]
+        self.assertEqual([(z["nom"], z["problemes"]) for z in zones], [("CENTER_MFCD", [])])
+
+    def test_ce_qui_ne_peut_pas_marcher_est_refuse(self):
+        from tablette.reglage_ecrans import Refus
+        r = self.reglage()
+        for ecrans, mot in (([{"id": "\\\\.\\DISPLAY1", "x": 100, "y": 0}], "(0, 0)"),
+                            ([{"id": "\\\\.\\DISPLAY2", "x": 1000, "y": 0}], "chevauchent"),
+                            ([{"id": "\\\\.\\DISPLAY9", "x": 0, "y": 0}], "inconnu"),
+                            ([{"id": "\\\\.\\DISPLAY2", "x": 2560, "y": 0, "largeur": 100,
+                               "hauteur": 100}], "entre")):
+            with self.subTest(mot):
+                erreurs = r.apercu(dict(self.PROPOSITION, ecrans=ecrans))["erreurs"]
+                self.assertIn(mot, str(erreurs[0]))
+                with self.assertRaises(Refus):
+                    r.appliquer(dict(self.PROPOSITION, ecrans=ecrans))
+        self.lance = True                    # DCS ouvert : dit, et rien d'enregistré
+        self.assertIn("DCS est ouvert", str(r.apercu(self.PROPOSITION)["erreurs"][0]))
+        with self.assertRaises(Refus):
+            r.appliquer(self.PROPOSITION)
+        self.assertEqual(self.poses, [])
+
+    def test_enregistrer_puis_sans_confirmation_les_ecrans_reviennent(self):
+        from tablette.ecrans_dcs import lire_zones, options_affichage
+        r = self.reglage()
+        resultat = r.appliquer(self.PROPOSITION)
+        self.assertEqual(resultat["a_confirmer"], 20)
+        self.assertEqual(self.modes, [([(760, 760)], 240)])       # le pilote l'apprend
+        self.assertEqual(self.poses, [[("\\\\.\\DISPLAY2", 0, 1440, 760, 760)]])
+        self.assertEqual(options_affichage(self.saved), ("tablette", 2560, 2200))
+        texte = lire(self.saved / "Config" / "MonitorSetup" / "tablette.lua")
+        self.assertEqual(lire_zones(texte, 2560, 2200), {"CENTER_MFCD": (0, 1440, 760, 760)})
+        self.assertTrue(self.choix["a_la_main"])
+        self.assertTrue(r.en_attente())
+        # Pas confirmé à temps : l'écran virtuel reprend sa place et sa définition.
+        (secondes, expire), = self.minuteurs
+        self.assertEqual(secondes, 20)
+        expire()
+        self.assertEqual(self.poses[-1], [("\\\\.\\DISPLAY2", 2560, 0, 2560, 1440)])
+        self.assertFalse(r.en_attente())
+
+    def test_enregistrer_puis_garder(self):
+        r = self.reglage()
+        r.appliquer(self.PROPOSITION)
+        r.garder()
+        self.assertFalse(r.en_attente())
+        self.assertEqual(len(self.poses), 1)
+        # Revenir après avoir gardé : plus rien à remettre.
+        self.assertIsNone(r.annuler())
+        self.assertEqual(len(self.poses), 1)
+
+    def test_sans_toucher_aux_ecrans_rien_a_confirmer(self):
+        proposition = dict(self.PROPOSITION, ecrans=[], fenetre={"largeur": 5120,
+                                                                  "hauteur": 1440},
+                           zones={"CENTER_MFCD": {"x": 2560, "y": 0, "largeur": 760,
+                                                  "hauteur": 760}})
+        resultat = self.reglage().appliquer(proposition)
+        self.assertEqual((resultat["a_confirmer"], self.poses, self.minuteurs), (0, [], []))
+
+    def test_automatique_rend_la_main(self):
+        appels = []
+
+        def remettre(reparer, physique):
+            appels.append(("remettre", reparer))
+            return "ok", "en place", []
+
+        def configurer(saved_games, essai, moniteurs, ouvert, physique=True):
+            appels.append(("configurer", essai, len(moniteurs)))
+            return True, ["Écrit"]
+        self.choix["a_la_main"] = True
+        lignes = self.reglage(remettre=remettre, configurer=configurer).automatique()
+        self.assertNotIn("a_la_main", self.choix)
+        self.assertEqual(appels, [("remettre", True), ("configurer", False, 2)])
+        self.assertEqual([str(l) for l in lignes], ["Écran virtuel : en place", "Écrit"])
+
+    def test_nombre_d_ecrans_virtuels(self):
+        from tablette.reglage_ecrans import Refus
+        r = self.reglage()
+        r.nombre_virtuels(2)
+        self.assertEqual(self.commandes, ["SETDISPLAYCOUNT 2"])
+        with self.assertRaises(Refus):
+            r.nombre_virtuels(9)
+
+    def test_l_api_de_la_page_sur_le_pc_seulement(self):
+        from fastapi.testclient import TestClient
+
+        from tablette.app import create_app
+        from tablette.config import Config
+        montres = []
+
+        class FauxCalage:
+            def montrer(self, cadres):
+                montres.append(cadres)
+                return len(cadres)
+
+            def cacher(self):
+                montres.append([])
+        app = create_app(Config(saved_games=self.saved), FauxPont(), dossier_dcs=lambda: None,
+                         reglage=self.reglage(), calage=FauxCalage())
+        pc = TestClient(app)
+        self.assertEqual(pc.get("/ecrans").status_code, 200)
+        self.assertEqual(pc.get("/api/ecrans").json()["fenetre"]["largeur"], 5120)
+        apercu = pc.post("/api/ecrans/apercu", json=self.PROPOSITION).json()
+        self.assertEqual(apercu["erreurs"], [])
+        cadre = {"zone": "CENTER_MFCD", "titre": "MPCD", "x": 0, "y": 1440, "largeur": 760,
+                 "hauteur": 760}
+        self.assertEqual(pc.post("/api/ecrans/montrer", json={"cadres": [cadre]}).json(),
+                         {"montres": 1})
+        self.assertEqual(pc.post("/api/ecrans/montrer", json={"cadres": []}).json(),
+                         {"montres": 0})
+        refus = pc.post("/api/ecrans/enregistrer",
+                        json=dict(self.PROPOSITION, fenetre={"largeur": 10, "hauteur": 10}))
+        self.assertEqual(refus.status_code, 409)
+        self.assertIn("Fenêtre de DCS", refus.json()["detail"])
+        self.assertEqual(pc.post("/api/ecrans/enregistrer", json=self.PROPOSITION).json()
+                         ["a_confirmer"], 20)
+        self.assertEqual(pc.post("/api/ecrans/garder", json={}).status_code, 200)
+        # Une tablette du Wi-Fi : ni la page, ni rien qui déplace un écran.
+        tablette = TestClient(app, client=("192.168.1.20", 50000))
+        for methode, adresse in (("get", "/ecrans"), ("get", "/api/ecrans"),
+                                 ("post", "/api/ecrans/enregistrer"),
+                                 ("post", "/api/ecrans/montrer")):
+            with self.subTest(adresse):
+                reponse = getattr(tablette, methode)(adresse, **(
+                    {"json": self.PROPOSITION} if methode == "post" else {}))
+                self.assertEqual(reponse.status_code, 403)
+        self.assertEqual(tablette.get("/api/etat").status_code, 200)
+
+    def test_les_reperes_des_boutons_pour_le_calage(self):
+        from tablette.calage import cadres_valides, geometrie, reperes_d_ecran
+        ddi = appareils.fa18c.PROFIL.ecrans[0]
+        reperes = reperes_d_ecran(ddi)
+        self.assertEqual(sorted(reperes), ["bas", "droite", "gauche", "haut"])
+        self.assertEqual(reperes["haut"], [round(f, 4) for f in ddi.reperes_x])
+        # Sans source, également répartis.
+        f16 = reperes_d_ecran(appareils.f16c.PROFIL.ecrans[0])
+        self.assertEqual(f16["haut"], [round((i + 1) / 6, 4) for i in range(5)])
+        self.assertEqual(geometrie({"x": -1920, "y": 1440, "largeur": 760, "hauteur": 760}),
+                         "760x760+-1920+1440")
+        propres = cadres_valides([{"x": 0, "y": 0, "largeur": 760, "hauteur": 760,
+                                   "zone": "CENTER_MFCD", "reperes": {"haut": [0.2, 7]}},
+                                  {"x": "a", "y": 0, "largeur": 10, "hauteur": 10},
+                                  {"x": 0, "y": 0, "largeur": 5, "hauteur": 760}])
+        self.assertEqual(len(propres), 1)
+        self.assertEqual(propres[0]["reperes"]["haut"], [0.2])
+        self.assertEqual(propres[0]["couleur"], "#81c784")
+
+    def test_le_raccourci_ouvre_la_page_et_demarre_le_serveur_s_il_le_faut(self):
+        import contextlib
+        from tablette.__main__ import ouvrir_page_ecrans
+        reponses, demarrages, ouvertes = [False, False, True], [], []
+        with contextlib.redirect_stdout(io.StringIO()):
+            code = ouvrir_page_ecrans(repond=lambda: reponses.pop(0), demarrer=lambda:
+                                      demarrages.append(1), ouvrir=ouvertes.append,
+                                      attendre=lambda s: None)
+        self.assertEqual((code, demarrages, ouvertes),
+                         (0, [1], ["http://127.0.0.1:8320/ecrans"]))
+        # Déjà lancé : la page seulement. Jamais lancé : on le dit, rien d'ouvert.
+        ouvertes.clear()
+        self.assertEqual(ouvrir_page_ecrans(repond=lambda: True, demarrer=lambda: 1 / 0,
+                                            ouvrir=ouvertes.append), 0)
+        self.assertEqual(len(ouvertes), 1)
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(ouvrir_page_ecrans(repond=lambda: False, demarrer=lambda: None,
+                                                ouvrir=ouvertes.append, attendre=lambda s: None,
+                                                delai=3), 1)
+        self.assertEqual(len(ouvertes), 1)
+
+    def test_l_ecran_virtuel_apprend_une_definition(self):
+        from tablette.ecran_virtuel import nombre_de_virtuels, proposer_modes
+        dossier = self.saved / "VDD"
+        dossier.mkdir()
+        fichier = dossier / "vdd_settings.xml"
+        fichier.write_text("<vdd_settings><monitors><count>2</count></monitors><resolutions>"
+                           "<resolution><width>2560</width><height>1440</height>"
+                           "<refresh_rate>60</refresh_rate></resolution></resolutions>"
+                           "</vdd_settings>", encoding="utf-8")
+        commandes = []
+        self.assertTrue(proposer_modes([(760, 760)], 60, dossier, commandes.append))
+        self.assertEqual(commandes, ["RELOAD_DRIVER"])
+        self.assertIn("<width>760</width>", lire(fichier))
+        self.assertFalse(proposer_modes([(760, 760), (2560, 1440)], 60, dossier,
+                                        commandes.append))
+        self.assertEqual(commandes, ["RELOAD_DRIVER"])            # rien de neuf : pas rechargé
+        self.assertEqual(nombre_de_virtuels(lire(fichier)), 2)
+
+
 VOYANTS_FRANCAIS = ("FIRE G", "FIRE D", "TRAIN", "AOA HAUT", "AOA CENTRE", "AOA BAS", "ALT BASSE")
 
 
@@ -4022,13 +4301,14 @@ class TestLangues(unittest.TestCase):
 
     @staticmethod
     def cles_de_la_page():
-        """Les phrases de app.js données à tr(), celles de index.html marquées
-        data-t (texte), data-t-aria (aria-label), data-t-alt (alt), et les
-        voyants au nom français."""
+        """Les phrases de app.js et ecrans.js données à tr(), celles de
+        index.html et ecrans.html marquées data-t (texte), data-t-aria
+        (aria-label), data-t-alt (alt), et les voyants au nom français."""
         from html.parser import HTMLParser
         web = RACINE / "src" / "tablette" / "web"
-        cles = {re.sub(r"\\(.)", r"\1", m.group(1)[1:-1]) for m in re.finditer(
-            r"""\btr\(\s*('(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*")""", lire(web / "app.js"))}
+        cles = {re.sub(r"\\(.)", r"\1", m.group(1)[1:-1]) for script in ("app.js", "ecrans.js")
+                for m in re.finditer(r"""\btr\(\s*('(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*")""",
+                                     lire(web / script))}
         vides = ("br", "img", "meta", "link", "input")
 
         class Lecteur(HTMLParser):
@@ -4051,7 +4331,8 @@ class TestLangues(unittest.TestCase):
             def handle_data(self, donnees):
                 for niveau in self.pile:
                     niveau[1] += donnees
-        Lecteur().feed(lire(web / "index.html"))
+        for page in ("index.html", "ecrans.html"):
+            Lecteur().feed(lire(web / page))
         return cles | set(VOYANTS_FRANCAIS)
 
     def test_aucun_texte_du_serveur_sans_anglais(self):

@@ -542,6 +542,118 @@ def deplacer(places: Sequence[Tuple[Ecran, int, int]],
                                         code=code)
 
 
+@dataclass(frozen=True)
+class Place:
+    """Ce que le pilote demande pour un écran, depuis la page Écrans : sa
+    place, et pour un écran virtuel sa définition (None : inchangée — un
+    écran réel garde toujours la sienne)."""
+    ecran: Ecran
+    x: int
+    y: int
+    largeur: Optional[int] = None
+    hauteur: Optional[int] = None
+    frequence: Optional[int] = None
+
+    @property
+    def change(self) -> bool:
+        e = self.ecran
+        return ((self.x, self.y) != (e.x, e.y) or not e.actif
+                or (self.largeur or e.largeur, self.hauteur or e.hauteur)
+                != (e.largeur, e.hauteur))
+
+
+def disposer(places: Sequence[Place]) -> Optional[str]:
+    """Pose plusieurs écrans d'un coup (page Écrans) : place de chacun,
+    définition des écrans virtuels. Tout est préparé (CDS_NORESET), puis
+    appliqué ensemble : Windows refuse des écrans qui se chevaucheraient le
+    temps d'un déplacement sur deux. Enregistré. Rend la raison d'un refus,
+    ou None. Un écran réel ne change jamais de définition."""
+    user32 = _user32()
+    for p in places:
+        m = DEVMODEW()
+        m.dmSize = ctypes.sizeof(m)
+        m.dmFields = DM_POSITION
+        m.dmPositionX, m.dmPositionY = p.x, p.y
+        if p.ecran.virtuel and p.largeur and p.hauteur:
+            m.dmFields |= DM_PELSWIDTH | DM_PELSHEIGHT
+            m.dmPelsWidth, m.dmPelsHeight = p.largeur, p.hauteur
+            if p.frequence and p.frequence > 1:
+                m.dmFields |= DM_DISPLAYFREQUENCY
+                m.dmDisplayFrequency = p.frequence
+        code = user32.ChangeDisplaySettingsExW(p.ecran.nom, ctypes.byref(m), None,
+                                               CDS_UPDATEREGISTRY | CDS_NORESET, None)
+        if code != 0:
+            return Texte("Windows refuse ce réglage (code {code})", code=code)
+    code = user32.ChangeDisplaySettingsExW(None, None, None, 0, None)
+    return None if code == 0 else Texte("Windows n'a pas appliqué le réglage (code {code})",
+                                        code=code)
+
+
+# Le canal de commande du pilote Virtual Display Driver (Driver.cpp, 25.7.23 :
+# NamedPipeServer, HandleClient) : ouvert à tous (« D:(A;;GA;;;WD) »), une
+# commande en UTF-16 par connexion. RELOAD_DRIVER relit vdd_settings.xml
+# (définitions proposées), SETDISPLAYCOUNT n y écrit le nombre d'écrans
+# virtuels puis relit. Sans droits d'administrateur, comme VDD Control.
+CANAL_VDD = r"\\.\pipe\MTTVirtualDisplayPipe"
+ATTENTE_RECHARGE_S = 20
+
+
+def commande_vdd(commande: str, canal: str = CANAL_VDD) -> None:
+    """Envoie une commande au pilote. Lève OSError s'il ne répond pas
+    (pas installé, ou d'une version sans canal)."""
+    with open(canal, "r+b", buffering=0) as f:
+        f.write(commande.encode("utf-16-le"))
+
+
+def modes_a_ajouter(texte: str, voulus: Sequence[Tuple[int, int]], frequence: int) -> str:
+    """vdd_settings.xml avec, en plus, les définitions `voulues` (760 × 760
+    pour un petit écran carré…) : `reglages_vdd` pour chacune, rien de
+    retiré."""
+    for largeur, hauteur in voulus:
+        texte = reglages_vdd(texte, largeur, hauteur, frequence)
+    return texte
+
+
+def proposer_modes(voulus: Sequence[Tuple[int, int]], frequence: int,
+                   dossier: Optional[Path] = None,
+                   commande: Callable[[str], None] = commande_vdd) -> bool:
+    """Ajoute à l'écran virtuel les définitions qu'il ne propose pas encore,
+    puis fait relire ses réglages au pilote. Rend True s'il a fallu le
+    recharger (l'écran virtuel disparaît alors quelques secondes)."""
+    fichier = (dossier or dossier_vdd()) / "vdd_settings.xml"
+    avant = fichier.read_text(encoding="utf-8")
+    apres = modes_a_ajouter(avant, voulus, frequence)
+    if apres == avant:
+        return False
+    fichier.write_text(apres, encoding="utf-8")
+    commande("RELOAD_DRIVER")
+    return True
+
+
+def nombre_de_virtuels(texte: str) -> int:
+    """Combien d'écrans virtuels vdd_settings.xml demande au pilote."""
+    try:
+        racine = ElementTree.fromstring(texte)
+    except ElementTree.ParseError:
+        return 1
+    return _entier(racine.findtext("monitors/count")) or 1
+
+
+def attendre_virtuels(nombre: int, lister: Callable[[], List[Ecran]] = lister,
+                      attendre: Callable[[float], None] = time.sleep,
+                      delai: int = ATTENTE_RECHARGE_S) -> List[Ecran]:
+    """Après un rechargement du pilote : les écrans virtuels reviennent en
+    quelques secondes. Rend la liste des écrans une fois qu'ils y sont (ou
+    au bout du délai)."""
+    ecrans = lister()
+    for _ in range(delai):
+        if sum(e.virtuel and e.actif for e in ecrans) >= nombre:
+            break
+        attendre(1)
+        ecrans = lister()
+    return ecrans
+
+
 def places_si_principal(ecrans: Sequence[Ecran], choisi: Ecran) -> List[Tuple[Ecran, int, int]]:
     """Où va chaque écran du bureau quand `choisi` devient le principal :
     Windows le veut en (0, 0), les autres décalés d'autant, la disposition

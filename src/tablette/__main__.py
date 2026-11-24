@@ -3,6 +3,7 @@
     python -m tablette                  le serveur ; l'adresse à ouvrir sur l'iPad s'affiche
     python -m tablette installer        écran virtuel, scripts dans DCS, configuration d'écrans
     python -m tablette desinstaller     l'inverse (l'écran virtuel reste)
+    python -m tablette page-ecrans      la page Écrans du PC (démarre le serveur s'il le faut)
 
 Le serveur écoute sur toutes les interfaces : c'est la tablette, sur le
 Wi-Fi de la maison, qui doit l'atteindre. Au premier lancement, Windows
@@ -19,11 +20,12 @@ revient à celle de Windows. Accepté partout : `Installer.bat --langue en`.
 import argparse
 import logging
 import sys
+import time
 from pathlib import Path
-from typing import List, Optional
+from typing import Callable, List, Optional
 
 from . import VERSION, langues
-from .config import adresses_locales
+from .config import PAGE_ECRANS, PORT_WEB, adresses_locales
 from .langues import Texte
 
 
@@ -113,7 +115,8 @@ def servir(local: bool, miroir: bool, mise_a_jour: bool = True, captures: bool =
         for adresse in adresses_locales() or [Texte("<adresse de ce PC>")]:
             print(f"  http://{adresse}:{cfg.port_web}")
     print(Texte("Diagnostic : ci-dessus, puis ce qui change ; sur la tablette, toucher la "
-                "pastille en haut à gauche.") + "\n")
+                "pastille en haut à gauche."))
+    print(Texte("Régler soi-même les écrans : {adresse} (sur ce PC).", adresse=PAGE_ECRANS) + "\n")
     try:
         uvicorn.run(create_app(cfg, pont, video, affichage, diagnostic=diagnostic,
                                controle_hote=True),
@@ -122,6 +125,49 @@ def servir(local: bool, miroir: bool, mise_a_jour: bool = True, captures: bool =
     finally:
         diagnostic.arreter()
         pont.arreter()
+    return 0
+
+
+def serveur_repond(port: int = PORT_WEB) -> bool:
+    """Le serveur de DCS Tablette tourne-t-il déjà sur ce PC ?"""
+    import urllib.request
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/api/etat", timeout=1):
+            return True
+    except OSError:
+        return False
+
+
+def ouvrir_page_ecrans(repond: Callable[[], bool] = serveur_repond,
+                       demarrer: Optional[Callable[[], None]] = None,
+                       ouvrir: Optional[Callable[[str], object]] = None,
+                       attendre: Callable[[float], None] = time.sleep, delai: int = 40) -> int:
+    """`DCS-Tablette.exe page-ecrans` (raccourci « réglage des écrans ») : la
+    page Écrans dans le navigateur du PC ; DCS Tablette démarré d'abord dans
+    sa fenêtre s'il ne tourne pas. Rend 0, ou 1 s'il n'a pas démarré."""
+    if ouvrir is None:
+        import webbrowser
+        ouvrir = webbrowser.open
+    if not repond():
+        print(Texte("DCS Tablette démarre dans sa fenêtre…"))
+        if demarrer is None:
+            from .installation import exe_installe, lancer
+            if getattr(sys, "frozen", False):
+                lancer(exe_installe() or Path(sys.executable))
+            else:
+                import subprocess
+                subprocess.Popen([sys.executable, "-m", "tablette"],
+                                 creationflags=getattr(subprocess, "CREATE_NEW_CONSOLE", 0))
+        else:
+            demarrer()
+        for _ in range(delai):
+            attendre(1)
+            if repond():
+                break
+        else:
+            print(Texte("DCS Tablette n'a pas répondu : regarder sa fenêtre."))
+            return 1
+    ouvrir(PAGE_ECRANS)
     return 0
 
 
@@ -163,7 +209,7 @@ def main(arguments: Optional[List[str]] = None) -> int:
                          help=Texte("langue de la fenêtre, retenue : fr, en, ou auto (celle "
                                     "de Windows)"))
     commandes = options.add_subparsers(dest="commande",
-                                       metavar="{installer,desinstaller,ecrans}")
+                                       metavar="{installer,desinstaller,ecrans,page-ecrans}")
     installer = commandes.add_parser("installer",
                                      help=Texte("écran virtuel, scripts dans DCS, écrans de DCS"))
     installer.add_argument("--essai", action="store_true",
@@ -174,6 +220,8 @@ def main(arguments: Optional[List[str]] = None) -> int:
                               help=Texte("attendre Entrée avant de fermer la fenêtre"))
     commandes.add_parser("ecrans", help=Texte("remettre l'écran virtuel et les réglages de DCS "
                                               "en place (fait à chaque ouverture de Windows)"))
+    commandes.add_parser("page-ecrans", help=Texte("ouvrir la page Écrans du PC (régler soi-même "
+                                                   "écrans et zones)"))
     # Lancée par `installer`, en administrateur : le pilote de l'écran virtuel.
     pilote = commandes.add_parser("pilote-ecran-virtuel")
     pilote.add_argument("--mode", required=True, help="largeurxhauteur@fréquence")
@@ -189,6 +237,8 @@ def main(arguments: Optional[List[str]] = None) -> int:
             with open(choix.journal, "a", encoding="utf-8") as f:
                 f.write(ligne + "\n")
         return installer_pilote(mode, journal)
+    if choix.commande == "page-ecrans":
+        return ouvrir_page_ecrans()
     if choix.commande:
         from . import installation
         from .config import dossier_saved_games

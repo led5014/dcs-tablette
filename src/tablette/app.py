@@ -23,7 +23,7 @@ from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, Res
 
 from . import VERSION, appareils, ded, filtres, instruments, langues, planche
 from .appareils import ROGNAGE, Profil, f16c
-from .config import Config
+from .config import PAGE_ECRANS, Config
 from .dcs import PontDCS
 from .kneeboard import lire_page, lister_carnets, trouver
 from .langues import Texte, dans, raison
@@ -46,6 +46,10 @@ PAGE_SUIVANTE, PAGE_PRECEDENTE = 3001, 3002     # communes à tous les kneeboard
 # automatique). Un cookie plutôt qu'un réglage du serveur : chaque tablette ou
 # téléphone garde le sien, et deux appareils ouverts ne se le disputent pas.
 CHOIX = "tablette_appareil"
+
+# La page Écrans déplace des écrans de Windows et écrit les réglages de DCS :
+# seulement depuis le PC lui-même. « testclient » : le client des tests.
+LOCAUX = {"127.0.0.1", "::1", "testclient"}
 
 
 def langue_de(requete: Request) -> str:
@@ -91,7 +95,8 @@ def create_app(cfg: Optional[Config] = None, pont: Optional[PontDCS] = None,
                dossier_dcs: Optional[Callable[[], Optional[Path]]] = None,
                diagnostic=None, controle_hote: bool = False,
                table_ded: Optional[ded.TableDED] = None,
-               ecrans: Optional[Callable[[], list]] = None) -> FastAPI:
+               ecrans: Optional[Callable[[], list]] = None,
+               reglage=None, calage=None) -> FastAPI:
     """`affichage` : partagé avec le miroir du kneeboard sur le PC.
     `dossier_dcs` : où DCS est installé (pages des modules et des cartes).
     `diagnostic` : la console de diagnostic (diagnostic.py), lancée à côté.
@@ -99,7 +104,10 @@ def create_app(cfg: Optional[Config] = None, pont: Optional[PontDCS] = None,
     le serveur le met, les tests parlent à « testserver ».
     `table_ded` : la table du DED du F-16, téléchargée au premier besoin.
     `ecrans` : les écrans de Windows (ecran_virtuel.lister), pour l'aperçu
-    de leur disposition."""
+    de leur disposition.
+    `reglage` : la page Écrans du PC (reglage_ecrans.ReglageEcrans) ;
+    `calage` : ses cadres sur les vrais écrans (calage.Calage). Créés à la
+    première demande."""
     cfg = cfg or Config()
     pont = pont or PontDCS(cfg.port_ordres, cfg.port_etat)
     video = video or Video(cfg.saved_games, appareil=pont.dernier_appareil)
@@ -263,6 +271,96 @@ def create_app(cfg: Optional[Config] = None, pont: Optional[PontDCS] = None,
         resultat["appareil"] = (Texte("tous les appareils") if not connu
                                 else nom if profil is appareils.GENERIQUE else profil.libelle)
         return dans(resultat, langue)
+
+    # ------------------------------------------------------------ page Écrans du PC
+
+    outils = {"reglage": reglage, "calage": calage}
+
+    def sur_le_pc(requete: Request, langue: str = Depends(langue_de)) -> str:
+        """La page Écrans et son API, depuis le PC seulement : une tablette
+        du Wi-Fi ne déplace pas les écrans de Windows."""
+        if not requete.client or requete.client.host not in LOCAUX:
+            raise refus(403, Texte("Page réservée au PC où tourne DCS Tablette : l'ouvrir sur "
+                                   "lui, à l'adresse {adresse}.", adresse=PAGE_ECRANS), langue)
+        return langue
+
+    def le_reglage():
+        if outils["reglage"] is None:
+            from .reglage_ecrans import ReglageEcrans
+            outils["reglage"] = ReglageEcrans(cfg.saved_games)
+        return outils["reglage"]
+
+    def le_calage():
+        if outils["calage"] is None:
+            from .calage import Calage
+            outils["calage"] = Calage()
+        return outils["calage"]
+
+    def reglage_sur(action: Callable[[], Dict], langue: str) -> Dict:
+        """Une action de la page : son résultat, ou son refus dit en clair."""
+        from .reglage_ecrans import Refus
+        try:
+            return dans(action(), langue)
+        except Refus as e:
+            raise refus(409, e.args[0] if isinstance(e.args[0], Texte)
+                        else Texte("{erreur}", erreur=e.args[0]), langue)
+
+    @app.get("/ecrans")
+    def page_ecrans(langue: str = Depends(sur_le_pc)):
+        return FileResponse(WEB_DIR / "ecrans.html", headers=_SANS_CACHE)
+
+    @app.get("/ecrans.js")
+    def ecrans_js(langue: str = Depends(sur_le_pc)):
+        return FileResponse(WEB_DIR / "ecrans.js", media_type="application/javascript",
+                            headers=_SANS_CACHE)
+
+    @app.get("/api/ecrans")
+    def etat_ecrans(langue: str = Depends(sur_le_pc)) -> Dict:
+        """Les écrans, la fenêtre de DCS, les zones, le mode : tout relu."""
+        return reglage_sur(lambda: le_reglage().etat(langue), langue)
+
+    @app.post("/api/ecrans/apercu")
+    def apercu_ecrans(corps: Dict = Body(...), langue: str = Depends(sur_le_pc)) -> Dict:
+        """Ce que l'enregistrement changerait, et le schéma proposé : rien
+        n'est modifié."""
+        return reglage_sur(lambda: le_reglage().apercu(corps), langue)
+
+    @app.post("/api/ecrans/enregistrer")
+    def enregistrer_ecrans(corps: Dict = Body(...), langue: str = Depends(sur_le_pc)) -> Dict:
+        return reglage_sur(lambda: le_reglage().appliquer(corps), langue)
+
+    @app.post("/api/ecrans/garder")
+    def garder_ecrans(corps: Dict = Body(...), langue: str = Depends(sur_le_pc)) -> Dict:
+        """Confirmation des écrans posés ; `revenir` : les remettre tout de suite."""
+        def faire():
+            if corps.get("revenir"):
+                erreur = le_reglage().annuler()
+                return {"lignes": [erreur or Texte("Écrans remis comme avant.")]}
+            le_reglage().garder()
+            return {"lignes": [Texte("Écrans gardés.")]}
+        return reglage_sur(faire, langue)
+
+    @app.post("/api/ecrans/virtuels")
+    def virtuels_ecrans(corps: Dict = Body(...), langue: str = Depends(sur_le_pc)) -> Dict:
+        return reglage_sur(lambda: {"lignes": le_reglage().nombre_virtuels(
+            corps.get("nombre"))}, langue)
+
+    @app.post("/api/ecrans/automatique")
+    def automatique_ecrans(corps: Dict = Body(...), langue: str = Depends(sur_le_pc)) -> Dict:
+        resultat = reglage_sur(lambda: {"lignes": le_reglage().automatique()}, langue)
+        if diagnostic is not None:
+            diagnostic.relancer()
+        return resultat
+
+    @app.post("/api/ecrans/montrer")
+    def montrer_ecrans(corps: Dict = Body(...), langue: str = Depends(sur_le_pc)) -> Dict:
+        """Les zones sur les vrais écrans (calage.py), ou plus rien."""
+        cadres = corps.get("cadres") or []
+        if not cadres:
+            if outils["calage"] is not None:
+                outils["calage"].cacher()
+            return {"montres": 0}
+        return {"montres": le_calage().montrer(cadres)}
 
     @app.get("/api/profils")
     def profils(langue: str = Depends(langue_de)) -> List[Dict]:

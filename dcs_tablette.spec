@@ -33,6 +33,9 @@ a = Analysis(
         "tablette.diagnostic",
         "tablette.mise_a_jour",
         "tablette.miroir",
+        "tablette.apercu",
+        "tablette.reglage_ecrans",
+        "tablette.calage",
     ],
     excludes=[
         "matplotlib", "numpy", "pytest", "PyInstaller", "IPython", "notebook",
