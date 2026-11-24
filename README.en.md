@@ -179,6 +179,38 @@ again.
      full screen.
 3. Start DCS and a mission.
 
+### Setting up your displays yourself
+
+Got your own layout (a small display for a single MFD, physical MFD frames,
+triple screens…)? Start menu → **DCS Tablette - réglage des écrans** (DCS
+Tablette starts if it isn't running), or, on the PC,
+`http://127.0.0.1:8320/ecrans`. The page only opens on the PC itself: a
+tablet on the Wi-Fi can't move your displays.
+
+- **Your displays**, as Windows places them, with their position and size,
+  to drag with the mouse or set to the pixel. A real display only moves; a
+  virtual display can also change resolution (760 × 760, 800 × 800…: the
+  virtual display driver learns it and reloads, the displays flicker for a
+  few seconds). The number of virtual displays can be set too (up to 4).
+- **The DCS window**: it always starts at the top-left corner of the main
+  display; *Cover the main display and the areas* works out the right size.
+- **The areas** of the cockpit displays, for all aircraft, or separate ones
+  for aircraft whose displays aren't square (Kiowa, JF-17). *Stop exporting*
+  leaves a display in the cockpit.
+- **What will change** shows before anything is saved, with whatever would
+  go wrong in flight (area outside the displays or the DCS window, display
+  covered in black, kneeboard off screen).
+- **Show on my displays** puts every area on your real displays, to the
+  pixel, with the button marks of the chosen aircraft: enough to line it up
+  with a physical MFD frame. The frames follow every tweak (arrows: 1 pixel,
+  Shift: 10, Ctrl: the size).
+
+**Save** (DCS closed) writes "Tablette DCS" and sets up DCS, then switches
+your displays to **your own layout**: DCS Tablette no longer moves or
+rewrites anything, it only checks. Windows displays that were moved go back
+by themselves unless you confirm within 20 seconds. **Automatic** hands
+control back to DCS Tablette, which restores its layout.
+
 Browsers: the page avoids recent features, so it also runs on iPads stuck on
 an older iOS and on entry-level Android devices. Minimum: **iOS / iPadOS
 13** (iPad Air 2, iPad mini 4, iPad 5th generation and later) — before that,
@@ -199,7 +231,8 @@ multiplayer integrity check is not affected):
 | `Config\MonitorSetup\tablette.lua` | "Tablette DCS" monitor setup | — |
 | `Config\options.lua` | monitor setup, resolution, windowed | `options.lua.avant-tablette` |
 | `%LOCALAPPDATA%\Programs\DCS-Tablette` | the program (what the zip contains) | — |
-| Desktop, Start menu | "DCS Tablette" shortcut | — |
+| Desktop, Start menu | "DCS Tablette" shortcut; Start menu only, "DCS Tablette - réglage des écrans" | — |
+| `%LOCALAPPDATA%\DCS-Tablette\dossier_dcs.txt` | the DCS install folder, once seen: map charts and module pages with DCS closed | — |
 | Startup folder | "DCS Tablette (écrans)" shortcut: displays put back in place at every Windows sign-in (log in `%LOCALAPPDATA%\DCS-Tablette\ecrans.log`) | — |
 | Registry, `HKCU\…\Uninstall\DCS-Tablette` | the *Installed apps* entry | — |
 
@@ -239,6 +272,15 @@ starting the mission. If the chosen aircraft isn't the one DCS is flying,
 the dot turns orange and the buttons are disabled: from one module to
 another, the same number means a completely different button.
 
+Aircraft that share a page (FC3, Mirage F1, A-10C…) can be picked one by
+one, under their DCS name (Su-27, J-11A, Mirage-F1EE…): each with its own
+kneeboard (`Saved Games\DCS\Kneeboard\<aircraft>`).
+
+In the **Kneeboard** tab: the aircraft's pages, the charts of the mission's
+map then of every installed map (airfields), the other missions. ☆ puts a
+page in the **★ Favorites** notebook, right after the DCS kneeboard
+(remembered on each tablet).
+
 ## Diagnostics
 
 DCS Tablette checks everything the tablet needs, at launch and then every 10
@@ -259,11 +301,19 @@ images, PC network (Public or Private), tablet connected.
 Each item is *OK*, *repaired*, *waiting* (DCS not running…), *action needed*
 or *missing*, with the steps to follow. Anything that can be repaired safely
 is repaired automatically, and you are told: scripts from an older version,
-virtual display moved by a Windows update, monitor setup no longer matching
-the displays, DCS switched back to full screen or to another monitor setup
-(once DCS is closed: it rewrites its settings on exit). Nothing gets
-installed without asking: for a missing virtual display, run
-`Installer.bat`.
+monitor setup no longer matching the displays, DCS switched back to full
+screen or to another monitor setup (once DCS is closed: it rewrites its
+settings on exit). Nothing gets installed without asking: for a missing
+virtual display, run `Installer.bat`.
+
+**Windows displays** are only put back at DCS Tablette's launch, when
+Windows starts and on *Check*: a display you move while it runs is reported,
+never forced back. With **your own layout** (displays page), nothing is
+moved or rewritten anymore.
+
+PC network set to *Public* while the tablet connects just fine (firewall
+already allowed): the warning goes away by itself as soon as a tablet
+connects, or with *Don't report again*.
 
 ## Language
 
@@ -297,8 +347,13 @@ First, the diagnostics above. The most frequent cases:
   monitor setup at startup) and check in Options → System → Monitors that
   "Tablette DCS" is selected.
 - **The cockpit displays cover the view**: the virtual display is no longer
-  where it should be (Windows or graphics driver update). DCS Tablette puts
-  it back by itself; quit DCS and start it again.
+  where it should be (Windows or graphics driver update). Quit DCS, then
+  *Check* (or restart DCS Tablette): it puts it back.
+- **DCS Tablette moves my virtual display away from where I want it**:
+  displays page (Start menu → *DCS Tablette - réglage des écrans*), place
+  it, *Save*: your displays are then your own.
+- **Redo the setup from scratch**: the same page; *Automatic* goes back to
+  DCS Tablette's layout. No need to reinstall anymore.
 - **The DCS kneeboard lands on the virtual display**: that's intended. In
   the tablet's Kneeboard tab, "DCS kneeboard on" chooses where it appears
   when you open it: *PC* (a window mirrors it at the bottom right of the

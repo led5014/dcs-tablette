@@ -153,6 +153,32 @@ IN FLIGHT
      button below it flips the SOURCE switch (tactical situation or HUD
      repeat). "HDD + instr." puts it next to the instruments.
 
+SETTING UP YOUR DISPLAYS YOURSELF
+---------------------------------
+Your own layout (a small display for a single MFD, physical MFD frames,
+triple screens…): Start menu → "DCS Tablette - réglage des écrans" (DCS
+Tablette starts if it isn't running), or, on the PC,
+http://127.0.0.1:8320/ecrans. The page only opens on the PC itself.
+
+  - Your displays as Windows places them: position and size, with the
+    mouse or to the pixel. A real display only moves; a virtual display
+    can change resolution (760 × 760, 800 × 800…), and their number can be
+    set (up to 4).
+  - The DCS window, which starts at the top-left corner of the main
+    display.
+  - The areas of the cockpit displays, for all aircraft or separate ones
+    (Kiowa, JF-17).
+  - "What will change" before anything is saved, and what would go wrong
+    in flight.
+  - "Show on my displays": each area on your real displays, to the pixel,
+    with the button marks, to line it up with a physical MFD frame.
+
+"Save" (DCS closed) writes "Tablette DCS", sets up DCS, and switches your
+displays to "your own layout": DCS Tablette no longer moves or rewrites
+anything. Windows displays that were moved go back by themselves unless
+confirmed within 20 seconds. "Automatic" hands control back to DCS
+Tablette. No need to reinstall to redo your setup anymore.
+
 DIAGNOSTICS
 -----------
 DCS Tablette checks everything the tablet needs, at launch and then every
@@ -173,7 +199,9 @@ MISSING, and for those last two, the steps to follow. Anything that can be
 repaired safely is repaired automatically, and you are told:
   - scripts from an older version (after an update): copied again;
   - virtual display moved by a Windows or graphics driver update: put back
-    in place;
+    in place, but only at DCS Tablette's launch, when Windows starts and on
+    "Check" — a display you move while it runs is reported, never forced
+    back; with your own layout, nothing is moved anymore;
   - monitor setup no longer matching the displays: rewritten;
   - display to the left of the main one but vertically offset (or above
     the main one): top-aligned with the main display, with DCS closed, if
@@ -325,7 +353,8 @@ First, the diagnostics (see above): the DCS Tablette window, or the status
 dot on the tablet. They say what is missing and how to fix it.
 
 - The page won't open on the tablet: the PC's Wi-Fi may be set to a
-  "Public" network in Windows; switch it to "Private".
+  "Public" network in Windows; switch it to "Private". (The tablet connects
+  anyway? The warning goes away by itself, or "Don't report again".)
 - "DCS: no signal" while the displays do show up: search for DCS-TABLETTE
   in Saved Games\DCS\Logs\dcs.log; the tablet script says there whether it
   is ready, or why it can't start.
@@ -333,9 +362,11 @@ dot on the tablet. They say what is missing and how to fix it.
   monitor setup at startup), and check in Options → System → Monitors that
   "Tablette DCS" is selected.
 - The cockpit displays cover the view: the virtual display isn't where it
-  should be (a Windows or graphics card update can move it). DCS Tablette
-  puts it back by itself; quit DCS and start it again. If it can't, the
+  should be (a Windows or graphics card update can move it). Quit DCS, then
+  "Check" (or restart DCS Tablette): it puts it back. If it can't, the
   diagnostics say why.
+- DCS Tablette moves the virtual display away from where you want it:
+  displays page, place it, "Save": your displays are then your own.
 - DCS shows on another of your displays:
   - that display is to the left of the main one, higher or lower than it,
     or above the main one, in Settings → System → Display ("Identify"

@@ -153,6 +153,32 @@ EN VOL
      tactique ou recopie du HUD). « HDD + instr. » le met à côté des
      instruments.
 
+RÉGLER SOI-MÊME SES ÉCRANS
+--------------------------
+Votre propre disposition (petit écran pour un seul MFD, cadres de MFD
+physiques, triple écran…) : menu Démarrer → « DCS Tablette - réglage des
+écrans » (DCS Tablette démarre s'il ne tourne pas), ou, sur le PC,
+http://127.0.0.1:8320/ecrans. La page ne s'ouvre que sur le PC lui-même.
+
+  - Vos écrans tels que Windows les place : position et taille, à la
+    souris ou au pixel. Un écran réel ne change que de place ; un écran
+    virtuel peut changer de définition (760 × 760, 800 × 800…), et leur
+    nombre se règle (jusqu'à 4).
+  - La fenêtre de DCS, qui part du coin haut gauche de l'écran principal.
+  - Les zones des écrans du cockpit, pour tous les appareils ou à part
+    (Kiowa, JF-17).
+  - « Ce qui va changer » avant tout enregistrement, et ce qui coincera
+    en vol.
+  - « Montrer sur mes écrans » : chaque zone posée sur vos vrais écrans,
+    au pixel, avec les repères des boutons, pour la caler sur un cadre de
+    MFD physique.
+
+« Enregistrer » (DCS fermé) écrit « Tablette DCS », règle DCS, et passe vos
+écrans « à votre main » : DCS Tablette ne déplace ni ne réécrit plus rien.
+Des écrans de Windows déplacés reviennent d'eux-mêmes sans confirmation
+dans les 20 secondes. « Automatique » rend la main à DCS Tablette.
+Plus besoin de réinstaller pour refaire sa configuration.
+
 DIAGNOSTIC
 ----------
 DCS Tablette vérifie tout ce dont la tablette a besoin, à son lancement
@@ -174,7 +200,10 @@ MANQUE, et pour ces deux derniers la marche à suivre. Ce qui se répare sans
 risque l'est tout seul, et c'est dit :
   - scripts d'une ancienne version (après une mise à jour) recopiés ;
   - écran virtuel déplacé par une mise à jour de Windows ou du pilote
-    graphique : remis à sa place ;
+    graphique : remis à sa place, mais seulement au lancement de DCS
+    Tablette, à l'ouverture de Windows et sur « Vérifier » — un écran que
+    vous déplacez pendant qu'il tourne est signalé, jamais repris ; « à
+    votre main », plus rien n'est déplacé ;
   - configuration d'écrans qui ne tombe plus sur les écrans : réécrite ;
   - écran à gauche du principal mais décalé en hauteur (ou au-dessus du
     principal) : aligné en haut sur le principal, DCS fermé, si vous l'avez
@@ -328,7 +357,9 @@ D'abord, le diagnostic (voir plus haut) : la fenêtre de DCS Tablette, ou la
 pastille de la tablette. Il dit ce qui manque et comment le régler.
 
 - La page ne s'ouvre pas sur la tablette : le Wi-Fi du PC est peut-être en
-  réseau « Public » dans Windows ; le passer en « Privé ».
+  réseau « Public » dans Windows ; le passer en « Privé ». (La tablette se
+  connecte quand même ? L'alerte se tait toute seule, ou « Ne plus le
+  signaler ».)
 - « DCS : pas de signal » alors que les écrans s'affichent : chercher
   DCS-TABLETTE dans Saved Games\DCS\Logs\dcs.log ; le script de la tablette
   y dit s'il est prêt, ou pourquoi il ne peut pas démarrer.
@@ -337,8 +368,10 @@ pastille de la tablette. Il dit ce qui manque et comment le régler.
   → Moniteurs que « Tablette DCS » est choisi.
 - Les écrans du cockpit couvrent la vue : l'écran virtuel n'est pas à sa
   place (une mise à jour de Windows ou de la carte graphique peut le
-  déplacer). DCS Tablette le remet tout seul ; quitter DCS et le relancer.
-  S'il n'y arrive pas, le diagnostic dit pourquoi.
+  déplacer). Quitter DCS, puis « Vérifier » (ou relancer DCS Tablette) :
+  il le remet. S'il n'y arrive pas, le diagnostic dit pourquoi.
+- DCS Tablette remet l'écran virtuel ailleurs que là où vous le voulez :
+  page des écrans, placer, « Enregistrer » : vos écrans sont à votre main.
 - DCS s'affiche sur un autre de vos écrans :
   - cet écran est à gauche du principal, plus haut ou plus bas que lui, ou
     au-dessus du principal, dans Paramètres → Système → Écran

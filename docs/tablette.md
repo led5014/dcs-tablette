@@ -278,6 +278,85 @@ poste de développement, et sur des cas injectés (écran virtuel repassé en
 1920 × 1080, écran vertical à sa place, écran de gauche décalé) en
 768 × 1024 et 375 × 812 ; pas encore sur un iPad.
 
+Les écrans à la main du pilote (2.0.0, 24/11/2026). Retours d'un pilote
+(Discord, fils « Ajouter la possibilité de modifier la résolution de l'écran
+virtuel » et « Erreur réseau du PC », messages du 09 au 20/11/2026) :
+« j'essaie de placer mon écran virtuel où je veux, la tablette le remet où
+elle veut » ; « il manque une fenêtre qui explique ce que les exports vont
+devenir » ; « la partie export sur tablette est pas mal, ce qu'il manque
+c'est l'étape juste avant » ; sa disposition : principal 3440 × 1440, un
+second écran réel 1920 × 1080 dessous (cadres de MFD physiques), un écran
+virtuel de 760 × 760 pour le seul MPCD. Et un autre pilote, triple écran,
+dont la résolution avait été changée par l'installation.
+
+- **Plus rien ne bouge tout seul pendant que DCS Tablette tourne**
+  (`diagnostic.py`) : l'écran virtuel n'est remis (`ecran_virtuel.remettre`)
+  et les écrans réels alignés (`ranger`) qu'au lancement du serveur
+  (`demarrer` : `verifier(forcer=True)`), à l'ouverture de Windows et sur
+  « Vérifier ». Entre deux, « n'est pas à la place prévue », avec la page où
+  le garder. Avant, la boucle des 10 s le remettait aussitôt.
+- **« À ma main »** (`a_la_main` dans installation.json) : le diagnostic ne
+  déplace ni ne réécrit plus rien (`Diagnostic._a_la_main`) ; il vérifie
+  avec `apercu.calculer` (zones sur les écrans et dans la fenêtre de DCS,
+  écran couvert pour rien), DCS sur « Tablette DCS », fenêtré. L'ouverture
+  de Windows n'attend plus l'écran virtuel.
+- **La page Écrans du PC** (`reglage_ecrans.py`, `web/ecrans.html`,
+  `web/ecrans.js`, `GET /ecrans`, `/api/ecrans/*`) : réservée aux requêtes
+  venues du PC lui-même (`app.LOCAUX`), POST en JSON (pas de requête d'une
+  autre page sans aperçu). Une seule origine de coordonnées, le bureau de
+  Windows, dont le principal est en (0, 0) : c'est aussi celle de la fenêtre
+  de DCS et des zones. `apercu` dit ce que l'enregistrement changerait, en
+  clair, et calcule le schéma proposé (zones à part comprises, par
+  appareil) sans rien écrire ; `appliquer` refuse DCS ouvert, pose les écrans
+  (`ecran_virtuel.disposer` : tout préparé avec CDS_NORESET puis appliqué
+  d'un coup, Windows refusant des chevauchements d'un instant), relit ce que
+  Windows a fait et le dit s'il a recollé un écran ailleurs, écrit
+  `tablette.lua` et options.lua, passe « à ma main ». Écrans déplacés :
+  retour en arrière au bout de `DELAI_S` (20 s) sans « Garder », comme
+  Paramètres → Écran — une disposition qui cacherait la page ne reste pas.
+  « Automatique » retire `a_la_main`, remet l'écran virtuel et réécrit
+  « Tablette DCS » (comme Installer.bat). Menu Démarrer : « DCS Tablette -
+  réglage des écrans » (`DCS-Tablette.exe page-ecrans` : démarre le serveur
+  s'il ne répond pas, puis ouvre la page).
+- **Définition et nombre des écrans virtuels** : Virtual Display Driver ne
+  propose que les définitions de `vdd_settings.xml`. Le canal nommé
+  `\\.\pipe\MTTVirtualDisplayPipe` (Driver.cpp de la 25.7.23, relu :
+  `NamedPipeServer`, SDDL « D:(A;;GA;;;WD) », ouvert à tous ; commandes en
+  UTF-16, une par connexion) : `RELOAD_DRIVER` relit le fichier,
+  `SETDISPLAYCOUNT n` y écrit le nombre et relit. `C:\VirtualDisplayDriver`
+  hérite de C:\ « Utilisateurs authentifiés : modification » : écrit sans
+  administrateur (vérifié sur le poste de développement, icacls). Le pilote
+  rechargé, Windows renomme parfois ses écrans (\\.\DISPLAY11 → 12, vu) :
+  relus avant d'être posés. **Pas encore essayé en vrai** : le
+  rechargement et la pose d'une nouvelle définition (seulement le canal
+  ouvert sans droits et les tests sur écrans décrits).
+- **« Montrer sur mes écrans »** (`calage.py`) : une fenêtre Tk sans bordure
+  par zone, au premier plan, traversée par la souris, à la géométrie exacte
+  (pixels physiques : `capture` rend le processus « per monitor v2 »). Grille
+  au dixième, croix, repères des boutons (`reperes_d_ecran` : `reperes_x` /
+  `reperes_y` du profil, ou également répartis). Vu sur le poste de
+  développement : dans ce fil, Tk n'applique pas de lui-même la géométrie
+  demandée (cadres restés en (0, 0), puis sourds aux déplacements) ;
+  `update_idletasks` juste après la pose règle les deux. Vérifié par
+  EnumWindows : 200, 150 puis 230, 150 après trois Maj+→. Seuls au bout de
+  `DUREE_S` (120 s) sans nouvelles ; la page les entretient.
+- **Réseau Public** : une tablette qui se connecte prouve que Windows ne la
+  bloque pas (pare-feu autorisé en public) ; ce réseau est retenu
+  (`reseaux_publics`) et l'alerte se tait. « Ne plus le signaler »
+  (`POST /api/diagnostic/ignorer`) fait de même à la main.
+
+Les appareils d'un profil commun un par un (2.0.0 ; retour d'un pilote,
+10/11/2026 : « seul le Su-25T est chargé pour le FC3 ; on perd le Su-27, le
+Su-33, le J-11A, l'A-10A ; idem pour le Mirage F1 ») : `/api/profils` donne
+leurs `variantes` (`fc3:Su-27`), la page les range sous le libellé du profil
+(`optgroup`), `appareils.choix_manuel` les lit — le nom DCS désigne le
+dossier de kneeboard. Un ancien cookie (« fc3 ») garde le premier. Kneeboard
+(même pilote) : les planches de toutes les cartes installées après celles de
+la mission ; le dossier de DCS retenu (`capture.dossier_dcs_retenu`,
+`dossier_dcs.txt`) pour les avoir DCS fermé ; ☆ et le carnet « ★ Favoris »,
+retenus dans le navigateur de chaque tablette (carnet et rang de la page).
+Pas fait : les planches annotables depuis la tablette, demandées aussi.
+
 Réglages des écrans (`filtres.py`, 31/10/2026 ; demande : « augmenter le
 grain, un filtre par-dessus qui gère aussi la lum, plus grand panel de
 résolution, lum et grain »). Molette dans le coin bas gauche de chaque cadre

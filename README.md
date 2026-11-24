@@ -181,6 +181,40 @@ du principal, glissé à sa droite, bords du haut alignés ; relancer
      ⛶ pour le plein écran.
 3. Lancer DCS et une mission.
 
+### Régler soi-même ses écrans
+
+Vous avez votre propre disposition (petit écran pour un seul MFD, cadres de
+MFD physiques, triple écran…) ? Menu Démarrer → **DCS Tablette - réglage des
+écrans** (DCS Tablette démarre s'il ne tourne pas), ou, sur le PC,
+`http://127.0.0.1:8320/ecrans`. La page n'est ouverte qu'au PC lui-même :
+une tablette du Wi-Fi ne peut pas déplacer vos écrans.
+
+- **Vos écrans**, tels que Windows les place, avec leur position et leur
+  taille, à glisser à la souris ou à régler au pixel. Un écran réel ne change
+  que de place ; un écran virtuel peut aussi changer de définition
+  (760 × 760, 800 × 800… : le pilote de l'écran virtuel apprend la nouvelle
+  définition et se recharge, les écrans clignotent quelques secondes). Le
+  nombre d'écrans virtuels se règle aussi (jusqu'à 4).
+- **La fenêtre de DCS** : elle part toujours du coin haut gauche de l'écran
+  principal ; *Couvrir l'écran principal et les zones* calcule la taille
+  juste.
+- **Les zones** des écrans du cockpit, pour tous les appareils, ou à part
+  pour ceux dont les écrans ne sont pas carrés (Kiowa, JF-17). *Ne plus
+  exporter* laisse un écran dans le cockpit.
+- **Ce qui va changer** s'affiche avant tout enregistrement, avec ce qui
+  coincera en vol (zone hors des écrans ou de la fenêtre de DCS, écran
+  couvert de noir, kneeboard hors écran).
+- **Montrer sur mes écrans** pose chaque zone sur vos vrais écrans, au pixel
+  près, avec les repères des boutons de l'appareil choisi : de quoi la caler
+  sur un cadre de MFD physique. Les cadres suivent chaque retouche (flèches :
+  1 pixel, Maj : 10, Ctrl : la taille).
+
+**Enregistrer** (DCS fermé) écrit « Tablette DCS » et règle DCS, puis passe
+vos écrans **à votre main** : DCS Tablette ne déplace ni ne réécrit plus
+rien, il vérifie seulement. Des écrans de Windows déplacés reviennent d'eux-
+mêmes si vous ne confirmez pas dans les 20 secondes. **Automatique** rend la
+main à DCS Tablette, qui remet sa disposition.
+
 Navigateurs : la page évite les fonctions récentes, pour tourner aussi sur
 les iPad restés sous un ancien iOS et sur les Android d'entrée de gamme.
 Minimum : **iOS / iPadOS 13** (iPad Air 2, iPad mini 4, iPad 5e génération et
@@ -202,7 +236,8 @@ DCS (le contrôle d'intégrité du multijoueur n'est pas concerné) :
 | `Config\MonitorSetup\tablette.lua` | configuration d'écrans « Tablette DCS » | — |
 | `Config\options.lua` | configuration d'écrans, résolution, fenêtré | `options.lua.avant-tablette` |
 | `%LOCALAPPDATA%\Programs\DCS-Tablette` | le programme (ce que contient le zip) | — |
-| Bureau, menu Démarrer | raccourci « DCS Tablette » | — |
+| Bureau, menu Démarrer | raccourci « DCS Tablette » ; dans le menu Démarrer seulement, « DCS Tablette - réglage des écrans » | — |
+| `%LOCALAPPDATA%\DCS-Tablette\dossier_dcs.txt` | le dossier d'installation de DCS, une fois vu : les planches des cartes et les pages des modules, DCS fermé | — |
 | Dossier Démarrage | raccourci « DCS Tablette (écrans) » : écrans remis en place à chaque ouverture de Windows (journal dans `%LOCALAPPDATA%\DCS-Tablette\ecrans.log`) | — |
 | Registre, `HKCU\…\Uninstall\DCS-Tablette` | l'entrée d'*Applications installées* | — |
 
@@ -243,6 +278,15 @@ lancer la mission. Si l'appareil choisi n'est pas celui que DCS pilote, la
 pastille passe à l'orange et les boutons sont coupés : d'un module à
 l'autre, le même numéro désigne un tout autre bouton.
 
+Les appareils qui partagent une page (FC3, Mirage F1, A-10C…) s'y choisissent
+un par un, sous leur nom DCS (Su-27, J-11A, Mirage-F1EE…) : chacun avec son
+kneeboard (`Saved Games\DCS\Kneeboard\<appareil>`).
+
+Dans l'onglet **Kneeboard** : les pages de l'avion, les planches de la carte
+de la mission puis celles de toutes les cartes installées (aérodromes), les
+autres missions. ☆ met une page dans le carnet **★ Favoris**, juste après le
+kneeboard de DCS (retenu sur chaque tablette).
+
 ## Diagnostic
 
 DCS Tablette vérifie tout ce dont la tablette a besoin, à son lancement puis
@@ -264,12 +308,20 @@ connectée.
 
 Chaque point est *OK*, *réparé*, *en attente* (DCS pas lancé…), *à régler*
 ou *manque*, avec la marche à suivre. Ce qui se répare sans risque l'est
-tout seul, et c'est dit : scripts d'une ancienne version, écran virtuel
-déplacé par une mise à jour de Windows, configuration d'écrans qui ne tombe
-plus sur les écrans, DCS repassé en plein écran ou sur une autre
-configuration (une fois DCS fermé : il réécrit ses réglages en quittant).
-Rien n'est installé sans le demander : l'écran virtuel manquant, c'est
-`Installer.bat`.
+tout seul, et c'est dit : scripts d'une ancienne version, configuration
+d'écrans qui ne tombe plus sur les écrans, DCS repassé en plein écran ou sur
+une autre configuration (une fois DCS fermé : il réécrit ses réglages en
+quittant). Rien n'est installé sans le demander : l'écran virtuel manquant,
+c'est `Installer.bat`.
+
+Les **écrans de Windows** ne sont remis en place qu'au lancement de DCS
+Tablette, à l'ouverture de Windows et sur *Vérifier* : un écran que vous
+déplacez pendant qu'il tourne est signalé, jamais repris de force. Écrans
+**à votre main** (page des écrans) : plus rien n'est déplacé ni réécrit.
+
+Réseau du PC en *Public* alors que la tablette se connecte très bien (pare-
+feu déjà autorisé) : l'alerte se tait d'elle-même dès qu'une tablette se
+connecte, ou par *Ne plus le signaler*.
 
 ## Langue
 
@@ -304,8 +356,13 @@ D'abord, le diagnostic ci-dessus. Les cas les plus fréquents :
   configuration d'écrans qu'au démarrage) et vérifier dans Options → Système
   → Moniteurs que « Tablette DCS » est choisi.
 - **Les écrans du cockpit couvrent la vue** : l'écran virtuel n'est plus à
-  sa place (mise à jour de Windows ou du pilote graphique). DCS Tablette le
-  remet tout seul ; quitter DCS et le relancer.
+  sa place (mise à jour de Windows ou du pilote graphique). Quitter DCS,
+  puis *Vérifier* (ou relancer DCS Tablette) : il le remet en place.
+- **DCS Tablette remet mon écran virtuel ailleurs que là où je le veux** :
+  page des écrans (menu Démarrer → *DCS Tablette - réglage des écrans*),
+  placer, *Enregistrer* : vos écrans sont alors à votre main.
+- **Refaire la configuration depuis le début** : la même page ; *Automatique*
+  revient à la disposition de DCS Tablette. Plus besoin de réinstaller.
 - **Le kneeboard de DCS tombe sur l'écran virtuel** : c'est voulu. Dans
   l'onglet Kneeboard de la tablette, « Kneeboard DCS sur » choisit où il
   apparaît quand vous l'ouvrez : *PC* (une fenêtre le recopie en bas à
