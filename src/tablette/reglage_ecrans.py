@@ -399,6 +399,10 @@ class ReglageEcrans:
         posé d'un coup, et relu."""
         from .ecran_virtuel import Place
         lignes: List[Texte] = []
+        # La place d'origine de chaque écran, relevée AVANT un éventuel
+        # rechargement du pilote : c'est elle que le retour en arrière rend.
+        origines = {id(p): (p.ecran.x, p.ecran.y, p.ecran.largeur, p.ecran.hauteur,
+                            p.ecran.frequence) for p in places}
         nouvelles = sorted({(p.largeur, p.hauteur) for p in places
                             if p.ecran.virtuel and p.largeur
                             and (p.largeur, p.hauteur) not in {(m[0], m[1]) for m in p.ecran.modes}})
@@ -426,10 +430,11 @@ class ReglageEcrans:
                     if e is None and p.ecran.virtuel and virtuels:
                         e = virtuels.pop(0)
                     if e is not None:
-                        refaites.append(Place(e, p.x, p.y, p.largeur, p.hauteur, p.frequence))
+                        refaite = Place(e, p.x, p.y, p.largeur, p.hauteur, p.frequence)
+                        origines[id(refaite)] = origines[id(p)]
+                        refaites.append(refaite)
                 places = refaites
-        self._avant = [Place(p.ecran, p.ecran.x, p.ecran.y, p.ecran.largeur, p.ecran.hauteur,
-                             p.ecran.frequence) for p in places]
+        self._avant = [Place(p.ecran, *origines[id(p)]) for p in places]
         erreur = self._disposer(places)
         if erreur:
             self._remettre_avant()

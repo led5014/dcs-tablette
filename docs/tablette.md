@@ -326,10 +326,13 @@ dont la résolution avait été changée par l'installation.
   `SETDISPLAYCOUNT n` y écrit le nombre et relit. `C:\VirtualDisplayDriver`
   hérite de C:\ « Utilisateurs authentifiés : modification » : écrit sans
   administrateur (vérifié sur le poste de développement, icacls). Le pilote
-  rechargé, Windows renomme parfois ses écrans (\\.\DISPLAY11 → 12, vu) :
-  relus avant d'être posés. **Pas encore essayé en vrai** : le
-  rechargement et la pose d'une nouvelle définition (seulement le canal
-  ouvert sans droits et les tests sur écrans décrits).
+  rechargé, Windows renomme ses écrans (\\.\DISPLAY12 → 13, vu) : relus
+  avant d'être posés, et le retour en arrière rend la place relevée AVANT
+  le rechargement. Essayé en vrai le 24/11/2026 sur le poste de
+  développement (2560 × 1440 + écran virtuel à droite) : 760 × 760 appris,
+  pilote rechargé et écran posé en 2,6 s, revenu seul en 2560 × 1440 au
+  bout des 20 s sans confirmation. Écrire `vdd_settings.xml` le remet en
+  forme (`ElementTree.indent`), commentaires gardés.
 - **« Montrer sur mes écrans »** (`calage.py`) : une fenêtre Tk sans bordure
   par zone, au premier plan, traversée par la souris, à la géométrie exacte
   (pixels physiques : `capture` rend le processus « per monitor v2 »). Grille

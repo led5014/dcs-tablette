@@ -4150,6 +4150,25 @@ class TestReglageEcrans(unittest.TestCase):
         self.assertEqual(self.poses[-1], [("\\\\.\\DISPLAY2", 2560, 0, 2560, 1440)])
         self.assertFalse(r.en_attente())
 
+    def test_pilote_recharge_l_ecran_renomme_revient_a_sa_place_d_origine(self):
+        """Rechargé pour apprendre 760 × 760, le pilote rend un écran virtuel
+        renommé (DISPLAY11 → 12, vu sur le poste de développement) et
+        que Windows a pu poser ailleurs : sans confirmation, il revient à sa
+        place et à sa définition D'AVANT le rechargement."""
+        from dataclasses import replace
+
+        def modes(voulus, frequence, commande=None):
+            # Après le rechargement : renommé, et posé ailleurs en 1920 × 1080.
+            self.ecrans = [PRINCIPAL, replace(self.ecrans[1], nom="\\\\.\\DISPLAY12",
+                                              x=-1920, largeur=1920, hauteur=1080)]
+            return True
+        r = self.reglage(modes=modes)
+        r.appliquer(self.PROPOSITION)
+        self.assertEqual(self.poses[0], [("\\\\.\\DISPLAY12", 0, 1440, 760, 760)])
+        (_, expire), = self.minuteurs
+        expire()
+        self.assertEqual(self.poses[-1], [("\\\\.\\DISPLAY12", 2560, 0, 2560, 1440)])
+
     def test_enregistrer_puis_garder(self):
         r = self.reglage()
         r.appliquer(self.PROPOSITION)
