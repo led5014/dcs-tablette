@@ -218,6 +218,22 @@ def profil_par_id(id_: str) -> Optional[Profil]:
     return next((p for p in PROFILS if p.id == id_), None)
 
 
+def choix_manuel(choix: Optional[str]) -> Optional[Tuple[Profil, str]]:
+    """L'appareil choisi à la main dans le menu de la tablette : « fc3 », ou
+    une de ses variantes, « fc3:Su-27 ». Le nom DCS compte au-delà du profil :
+    c'est lui qui désigne le dossier de kneeboard (Kneeboard/Su-27) et les
+    zones à part. Retour d'un pilote, 10/11/2026 : « seul le Su-25T est chargé
+    pour le FC3 ; on perd le Su-27, le Su-33, le J-11A, l'A-10A ». None : pas
+    de choix, ou un choix inconnu."""
+    if not choix:
+        return None
+    id_, _, nom = choix.partition(":")
+    profil = profil_par_id(id_)
+    if profil is None:
+        return None
+    return profil, nom if nom in profil.noms_dcs else profil.noms_dcs[0]
+
+
 def viewports() -> List[str]:
     """Toutes les zones d'export utilisées par un profil, sans doublon."""
     vus: List[str] = []

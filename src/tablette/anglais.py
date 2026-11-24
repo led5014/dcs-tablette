@@ -1054,4 +1054,7 @@ PAGE = {
     "Écrans virtuels : pilote rechargé…": "Virtual displays: reloading the driver…",
     "Recaler les zones à part de {appareils} sur les zones communes":
         "Realign the separate areas of {appareils} on the shared areas",
+    # ------------------------------------------------------------ kneeboard : favoris
+    "★ Favoris": "★ Favorites",
+    "Page favorite": "Favorite page",
 }

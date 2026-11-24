@@ -25,7 +25,7 @@ import sys
 import time
 from ctypes import wintypes
 from pathlib import Path
-from typing import Dict, Optional, Tuple
+from typing import Callable, Dict, Optional, Tuple
 
 from PIL import Image
 
@@ -280,6 +280,30 @@ def dossier_dcs() -> Optional[Path]:
     user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
     chemin = _chemin_exe(pid.value)
     return Path(chemin).parent.parent if chemin else None
+
+
+def dossier_dcs_retenu(fichier: Optional[Path] = None,
+                       vu: Optional[Callable[[], Optional[Path]]] = None) -> Optional[Path]:
+    """Le dossier de DCS, même DCS fermé : le dernier vu (dossier_dcs) est
+    retenu dans %LOCALAPPDATA%/DCS-Tablette/dossier_dcs.txt. Sans lui, les
+    planches des cartes et les pages des modules restaient inaccessibles
+    tant que DCS n'avait pas tourné depuis le lancement du serveur."""
+    from .config import fichier_choix
+    fichier = fichier or fichier_choix().parent / "dossier_dcs.txt"
+    dossier = (vu or dossier_dcs)()
+    if dossier is not None:
+        try:
+            if not fichier.exists() or fichier.read_text(encoding="utf-8").strip() != str(dossier):
+                fichier.parent.mkdir(parents=True, exist_ok=True)
+                fichier.write_text(str(dossier), encoding="utf-8")
+        except OSError:
+            pass
+        return dossier
+    try:
+        retenu = Path(fichier.read_text(encoding="utf-8").strip())
+    except OSError:
+        return None
+    return retenu if retenu.is_dir() else None
 
 
 def origine_dcs() -> Optional[Tuple[int, int]]:

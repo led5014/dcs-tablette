@@ -894,6 +894,7 @@ body.en-kneeboard #modes { opacity: .45; }
   line-height: 1;
 }
 .kb-barre > button:disabled { opacity: .3; }
+.kb-barre > button.kb-favori.actif { color: var(--ambre); }
 #kb-num {
   flex: none;
   min-width: 64px;

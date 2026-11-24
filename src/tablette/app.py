@@ -114,7 +114,8 @@ def create_app(cfg: Optional[Config] = None, pont: Optional[PontDCS] = None,
     affichage = affichage or AffichageKneeboard()
     table_ded = table_ded or ded.TableDED()
     if dossier_dcs is None:
-        from .capture import dossier_dcs    # Windows seulement : chargé à la demande
+        # Windows seulement : chargé à la demande. Le dernier vu, même DCS fermé.
+        from .capture import dossier_dcs_retenu as dossier_dcs
     if ecrans is None:
         from .ecran_virtuel import lister as ecrans     # Windows seulement, lui aussi
     app = FastAPI(title="DCS Tablette")
@@ -158,9 +159,9 @@ def create_app(cfg: Optional[Config] = None, pont: Optional[PontDCS] = None,
         if dcs["connecte"] and dcs["appareil"]:
             memoire["profil"] = appareils.profil_pour(dcs["appareil"])
             memoire["nom"] = dcs["appareil"]
-        force = appareils.profil_par_id(choix) if choix else None
+        force = appareils.choix_manuel(choix)
         if force is not None:
-            return force, force.noms_dcs[0]
+            return force
         return memoire["profil"], memoire["nom"]
 
     def pilote_ailleurs(profil: Profil) -> Optional[str]:
@@ -211,7 +212,7 @@ def create_app(cfg: Optional[Config] = None, pont: Optional[PontDCS] = None,
                   if sur == AffichageKneeboard.TABLETTE and dcs_etat["connecte"] else None)
         return {"version": VERSION, "langue": langue,
                 "dcs": dcs_etat, "profil": profil.id, "libelle": dans(profil.libelle, langue),
-                "appareil": nom, "choisi": appareils.profil_par_id(choix or "") is not None,
+                "appareil": nom, "choisi": appareils.choix_manuel(choix) is not None,
                 "ailleurs": dans(pilote_ailleurs(profil), langue),
                 "kneeboard": {"sur": sur, "ouvert": ouvert},
                 "problemes": diagnostic.etat()["problemes"] if diagnostic else 0}
@@ -258,7 +259,7 @@ def create_app(cfg: Optional[Config] = None, pont: Optional[PontDCS] = None,
         jamais modifié."""
         from . import apercu
         profil, nom = actif(choix)
-        connu = (appareils.profil_par_id(choix or "") is not None
+        connu = (appareils.choix_manuel(choix) is not None
                  or pont.dernier_appareil() is not None)
         libelles = {}
         for e in profil.ecrans if connu else ():
@@ -364,8 +365,13 @@ def create_app(cfg: Optional[Config] = None, pont: Optional[PontDCS] = None,
 
     @app.get("/api/profils")
     def profils(langue: str = Depends(langue_de)) -> List[Dict]:
-        """Les appareils du menu de la tablette, par ordre alphabétique."""
-        liste = [{"id": p.id, "libelle": dans(p.libelle, langue)} for p in appareils.PROFILS]
+        """Les appareils du menu de la tablette, par ordre alphabétique. Un
+        profil commun à plusieurs appareils (FC3, Mirage F1, A-10C…) donne
+        aussi chacun d'eux, sous son nom DCS : `variantes`."""
+        liste = [{"id": p.id, "libelle": dans(p.libelle, langue),
+                  "variantes": [{"id": f"{p.id}:{nom}", "libelle": nom} for nom in p.noms_dcs]
+                  if len(p.noms_dcs) > 1 else []}
+                 for p in appareils.PROFILS]
         return sorted(liste, key=lambda p: p["libelle"].casefold())
 
     @app.get("/api/profil")

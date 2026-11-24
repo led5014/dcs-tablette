@@ -1480,12 +1480,26 @@ async function construireMenuAppareil() {
   select.textContent = '';
   select.append(auto);
   for (const p of liste) {
-    const opt = element('option', '', p.libelle);
-    opt.value = p.id;
-    opt.dataset.libelle = p.libelle;
-    select.append(opt);
+    // Un profil commun à plusieurs appareils (FC3, Mirage F1…) : chacun sous
+    // son nom DCS, pour avoir son kneeboard à lui (Kneeboard\Su-27).
+    const variantes = p.variantes || [];
+    const groupe = variantes.length ? element('optgroup') : select;
+    if (variantes.length) groupe.label = p.libelle;
+    for (const v of variantes.length ? variantes : [p]) {
+      const opt = element('option', '', v.libelle);
+      opt.value = v.id;
+      opt.dataset.libelle = variantes.length ? `${p.libelle} · ${v.libelle}` : p.libelle;
+      groupe.append(opt);
+    }
+    if (variantes.length) select.append(groupe);
   }
-  select.value = choixAppareil();
+  // Un ancien choix d'un profil commun (« fc3 ») : sa première variante.
+  const choix = choixAppareil();
+  select.value = choix;
+  if (select.selectedIndex < 0 && !choix.includes(':')) {
+    const premiere = [...select.options].find((o) => o.value.startsWith(choix + ':'));
+    if (premiere) select.value = premiere.value;
+  }
   if (select.selectedIndex < 0) select.value = 'auto';
 }
 
@@ -1534,7 +1548,8 @@ async function chargerCarnets(impose = null) {
   try {
     fichiers = await (await fetch('/api/kneeboard', { cache: 'no-store' })).json();
   } catch { fichiers = []; }
-  carnets = [KNEEBOARD_DCS, ...fichiers];
+  const favoris = carnetFavoris();
+  carnets = [KNEEBOARD_DCS, ...(favoris ? [favoris] : []), ...fichiers];
   const select = $('#kb-carnet');
   select.textContent = '';
   for (const c of carnets) {
@@ -1566,6 +1581,7 @@ function afficherPage(memoriser = true) {
   if (carnet.direct) {
     img.hidden = true;
     $('#kb-vide').hidden = true;
+    $('#kb-favori').hidden = true;
     $('#kb-num').textContent = 'DCS';
     const tournable = !profil || profil.kneeboard;
     $('#kb-prec').disabled = $('#kb-suiv').disabled = !tournable;
@@ -1577,15 +1593,77 @@ function afficherPage(memoriser = true) {
   if (vide) {
     $('#kb-num').textContent = '';
     $('#kb-prec').disabled = $('#kb-suiv').disabled = true;
+    $('#kb-favori').hidden = true;
     return;
   }
   page = Math.max(0, Math.min(page, carnet.pages - 1));
-  img.src = `${carnet.url}/${page}`;
+  img.src = adressePage(carnet, page);
   $('#kb-num').textContent = `${page + 1} / ${carnet.pages}`;
   $('#kb-prec').disabled = page === 0;
   $('#kb-suiv').disabled = page === carnet.pages - 1;
-  if (page + 1 < carnet.pages) new Image().src = `${carnet.url}/${page + 1}`;
+  if (page + 1 < carnet.pages) new Image().src = adressePage(carnet, page + 1);
   if (memoriser) retenir('page', page);
+  majFavori();
+}
+
+// --------------------------------------------------------------- favoris
+// Une page marquée ★ se retrouve dans le carnet « Favoris », juste après le
+// kneeboard de DCS, d'où qu'elle vienne (avion, carte, mission). Demande d'un
+// pilote, 10/11/2026. Retenus sur chaque tablette (mémoire du navigateur) :
+// le carnet et le rang de la page, et son titre pour s'y retrouver.
+
+function lireFavoris() {
+  try {
+    const liste = JSON.parse(lire('kneeboard.favoris', '[]'));
+    return Array.isArray(liste) ? liste.filter((f) => f && f.carnet && Number.isInteger(f.rang)) : [];
+  } catch { return []; }
+}
+
+function carnetFavoris() {
+  const favoris = lireFavoris();
+  return favoris.length ? { id: 'favoris', titre: tr('★ Favoris'), pages: favoris.length, favoris }
+    : null;
+}
+
+function adressePage(c, rang) {
+  if (c.favoris) {
+    const f = c.favoris[rang];
+    return `/api/kneeboard/${encodeURIComponent(f.carnet)}/${f.rang}`;
+  }
+  return `${c.url}/${rang}`;
+}
+
+// La page affichée, telle qu'un favori la désigne.
+function pageAffichee() {
+  if (!carnet || carnet.direct || !carnet.pages) return null;
+  if (carnet.favoris) return carnet.favoris[page];
+  return { carnet: carnet.id, rang: page, titre: `${carnet.titre} · ${page + 1}` };
+}
+
+function majFavori() {
+  const b = $('#kb-favori');
+  const p = pageAffichee();
+  b.hidden = !p;
+  if (!p) return;
+  const marque = lireFavoris().some((f) => f.carnet === p.carnet && f.rang === p.rang);
+  b.textContent = marque ? '★' : '☆';
+  b.classList.toggle('actif', marque);
+}
+
+function basculerFavori() {
+  const p = pageAffichee();
+  if (!p) return;
+  const favoris = lireFavoris();
+  const i = favoris.findIndex((f) => f.carnet === p.carnet && f.rang === p.rang);
+  if (i >= 0) favoris.splice(i, 1);
+  else favoris.push(p);
+  retenir('kneeboard.favoris', JSON.stringify(favoris));
+  // Le carnet des favoris change : la liste est refaite, la page reste.
+  const ici = carnet.id;
+  if (ici === 'favoris') page = Math.min(page, Math.max(0, favoris.length - 1));
+  retenir('carnet', favoris.length || ici !== 'favoris' ? ici : 'avion');
+  retenir('page', page);
+  chargerCarnets();
 }
 
 // --------------------------------------------------------------- kneeboard de DCS
@@ -1665,6 +1743,7 @@ function brancherKneeboard() {
   });
   $('#kb-prec').addEventListener('click', () => tourner(-1));
   $('#kb-suiv').addEventListener('click', () => tourner(1));
+  $('#kb-favori').addEventListener('click', basculerFavori);
   for (const b of document.querySelectorAll('#kb-sur button')) {
     b.addEventListener('click', () => {
       kneeboardSur = b.dataset.sur;

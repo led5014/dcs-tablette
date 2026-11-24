@@ -170,12 +170,16 @@ def lister_carnets(saved_games: Path, appareil: str,
     if avion:
         carnets.append(Carnet("avion", Texte("Kneeboard de l'avion"), list(avion)))
 
+    # Les planches de la carte de la mission d'abord, puis celles de toutes
+    # les cartes installées (demande d'un pilote, 10/11/2026 : « accéder aux
+    # planchettes des airports depuis la tablette », même sans mission).
     carte = carte_de(en_cours) if en_cours else None
-    planches = _cartes(str(dcs)).get(carte) if dcs and carte else None
-    if planches is not None:
+    toutes = _cartes(str(dcs)) if dcs else {}
+    for nom in ([carte] if carte in toutes else []) + sorted(c for c in toutes if c != carte):
+        planches = toutes[nom]
         pages = _images(planches / appareil) + _images(planches)
         if pages:
-            carnets.append(Carnet(f"carte:{carte}", Texte("Cartes : {carte}", carte=carte),
+            carnets.append(Carnet(f"carte:{nom}", Texte("Cartes : {carte}", carte=nom),
                                   list(pages)))
 
     dossier_missions = saved_games / "Missions"

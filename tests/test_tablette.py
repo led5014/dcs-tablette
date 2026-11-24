@@ -1634,6 +1634,31 @@ class TestApiTablette(unittest.TestCase):
         self.client.cookies.clear()
         self.assertEqual(self.client.get("/api/profil").json()["id"], "f16c")
 
+    def test_chaque_appareil_d_un_profil_commun_dans_le_menu(self):
+        """Retour d'un pilote, 10/11/2026 : « Appareil FC3 » choisi à la main
+        chargeait toujours le Su-25T, et le Mirage F1 le seul F1CE ; le
+        kneeboard du Su-27 ou du F1EE restait inaccessible sans DCS."""
+        profils = {p["id"]: p for p in self.client.get("/api/profils").json()}
+        fc3 = [v["id"] for v in profils["fc3"]["variantes"]]
+        self.assertIn("fc3:Su-27", fc3)
+        self.assertIn("fc3:J-11A", fc3)
+        self.assertIn("mirage_f1:Mirage-F1EE", [v["id"] for v in profils["mirage_f1"]["variantes"]])
+        self.assertEqual(profils["fa18c"]["variantes"], [])        # un seul appareil
+        self.client.cookies.set("tablette_appareil", "fc3:Su-27")
+        e = self.client.get("/api/etat").json()
+        self.assertEqual((e["profil"], e["appareil"], e["choisi"]), ("fc3", "Su-27", True))
+        # Le kneeboard de l'avion : celui du Su-27, pas du Su-25T.
+        (self.saved / "Kneeboard" / "Su-27").mkdir(parents=True)
+        (self.saved / "Kneeboard" / "Su-27" / "carte.png").write_bytes(PNG)
+        carnets = self.client.get("/api/kneeboard").json()
+        self.assertEqual([(c["id"], c["pages"]) for c in carnets], [("avion", 1)])
+        # Un ancien choix (« fc3 », avant les variantes) : le premier, comme avant.
+        self.client.cookies.set("tablette_appareil", "fc3")
+        self.assertEqual(self.client.get("/api/etat").json()["appareil"], "Su-25T")
+        # Une variante inconnue : le premier aussi, jamais une erreur.
+        self.client.cookies.set("tablette_appareil", "fc3:Su-99")
+        self.assertEqual(self.client.get("/api/etat").json()["appareil"], "Su-25T")
+
     def test_coins_des_ecrans_selon_l_appareil(self):
         """Arrondis mesurés sur le Hornet seulement ; l'Apache est quasi carré."""
         hornet = appareils.profil_par_id("fa18c").description()["ecrans"]
@@ -1843,6 +1868,12 @@ class TestApiTablette(unittest.TestCase):
         tampon = io.BytesIO()
         Image.new("RGB", (4, 6), "white").save(tampon, "BMP")
         (terrain / "Kneeboard" / "01_kobuleti.bmp").write_bytes(tampon.getvalue())
+        # Une autre carte installée : ses planches aussi, après celles de la
+        # mission (retour d'un pilote, 10/11/2026 : les aérodromes sans mission).
+        syrie = dcs / "Mods" / "terrains" / "Syria"
+        (syrie / "Kneeboard").mkdir(parents=True)
+        (syrie / "entry.lua").write_text('local self_ID = "Syria";\n')
+        (syrie / "Kneeboard" / "incirlik.png").write_bytes(PNG)
 
         carnets = lister_carnets(self.saved, "FA-18C_hornet", dcs)
         noms = {c.id: [p.name if isinstance(p, Path) else p[1] for p in c.pages] for c in carnets}
@@ -1850,7 +1881,8 @@ class TestApiTablette(unittest.TestCase):
             "KNEEBOARD/FA-18C_hornet/IMAGES/carte.png", "KNEEBOARD/IMAGES/freq.png",
             "1.png", "perso.png", "commune.png"])
         self.assertEqual(noms["carte:Caucasus"], ["00_map.png", "01_kobuleti.bmp"])
-        self.assertEqual([c.titre for c in carnets][:2], ["Kneeboard de l'avion", "Cartes : Caucasus"])
+        self.assertEqual([c.titre for c in carnets][:3], ["Kneeboard de l'avion", "Cartes : Caucasus",
+                                                          "Cartes : Syria"])
 
         # Par l'API, DCS une fois connu : la planche BMP arrive en PNG.
         self.dossier_dcs = dcs
@@ -1859,6 +1891,19 @@ class TestApiTablette(unittest.TestCase):
         self.assertEqual(Image.open(io.BytesIO(r.content)).size, (4, 6))
         self.dossier_dcs = None             # DCS fermé : le dernier dossier connu sert
         self.assertEqual(self.client.get("/api/kneeboard").json()[1]["id"], "carte:Caucasus")
+
+    def test_le_dossier_de_dcs_retenu_quand_dcs_est_ferme(self):
+        """Sans lui, cartes et pages des modules n'apparaissaient qu'une fois
+        DCS lancé pendant que le serveur tournait."""
+        from tablette.capture import dossier_dcs_retenu
+        fichier = self.saved / "DCS-Tablette" / "dossier_dcs.txt"
+        dcs = self.saved / "DCSWorld"
+        dcs.mkdir()
+        self.assertIsNone(dossier_dcs_retenu(fichier, vu=lambda: None))
+        self.assertEqual(dossier_dcs_retenu(fichier, vu=lambda: dcs), dcs)
+        self.assertEqual(dossier_dcs_retenu(fichier, vu=lambda: None), dcs)      # DCS fermé
+        dcs.rmdir()                                                             # désinstallé
+        self.assertIsNone(dossier_dcs_retenu(fichier, vu=lambda: None))
 
     def test_kneeboard_de_dcs_sur_pc_ou_tablette(self):
         from fastapi.testclient import TestClient
